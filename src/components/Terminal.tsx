@@ -59,6 +59,7 @@ Agents: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo`;
 export function Terminal() {
   const qc = useQueryClient();
   const dispatchFn = useServerFn(dispatch);
+  const routeFn = useServerFn(routePrompt);
   const decideFn = useServerFn(decideApproval);
   const pinFn = useServerFn(pinDirective);
   const verifyFn = useServerFn(verifyChain);

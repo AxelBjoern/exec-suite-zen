@@ -127,6 +127,7 @@ export function Terminal() {
     if (cmd === "/manual") return openPanel({ kind: "manual" });
     if (cmd === "/leads") return openPanel({ kind: "leads" });
     if (cmd === "/library") return openPanel({ kind: "library" });
+    if (cmd === "/context") return openPanel({ kind: "context" });
     if (cmd === "/verify") {
       setBusy(true);
       try {

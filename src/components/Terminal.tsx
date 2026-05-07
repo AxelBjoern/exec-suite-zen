@@ -203,6 +203,12 @@ export function Terminal() {
       const v = input;
       setInput("");
       exec(v);
+    } else if (e.key === "Tab") {
+      const sugg = suggestForInput(input);
+      if (sugg.length) {
+        e.preventDefault();
+        setInput(sugg[0].template);
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       const ni = Math.min(history.length - 1, histIdx + 1);

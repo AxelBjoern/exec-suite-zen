@@ -9,7 +9,7 @@ import {
   shouldGate,
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
-import { buildSystemPrompt } from "@/lib/agent-prompts";
+import { buildSystemPrompt, renderCompanyContext } from "@/lib/agent-prompts";
 
 const LOVABLE_AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";

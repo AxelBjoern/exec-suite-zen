@@ -443,5 +443,3 @@ export const verifyChain = createServerFn({ method: "GET" }).handler(async () =>
   return { ok: true, count: data.length, head: prev };
 });
 
-// Re-export internal verb set for client-side hint UI.
-export const _INTERNAL_VERBS = INTERNAL_VERBS;

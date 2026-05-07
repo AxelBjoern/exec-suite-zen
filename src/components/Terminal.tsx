@@ -655,7 +655,8 @@ function ThreadPanel({
             const sender = m.role === "user" ? "Operator" : senderAgent?.role ?? "Agent";
             const aj = m.artifact_json as any;
             const isConsult = aj && aj.kind === "consult";
-            const isArtifact = aj && !isConsult && Array.isArray(aj.sections);
+            const isChat = aj && aj.kind === "chat";
+            const isArtifact = aj && !isConsult && !isChat && Array.isArray(aj.sections);
             return (
               <div key={m.id} className="border-l-2 border-primary/60 pl-4">
                 <div className="flex items-baseline justify-between">
@@ -668,6 +669,12 @@ function ThreadPanel({
                   <ArtifactCard artifact={aj} onRunCommand={onRunCommand} />
                 ) : isConsult ? (
                   <ConsultCard agentRole={sender} consult={aj} />
+                ) : isChat ? (
+                  <ChatReplyCard
+                    markdown={aj.reply_markdown ?? m.content}
+                    suggestedNext={aj.suggested_next_commands ?? []}
+                    onRunCommand={onRunCommand}
+                  />
                 ) : (
                   <div className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed font-serif">
                     {m.content}

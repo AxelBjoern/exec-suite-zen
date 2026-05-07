@@ -14,7 +14,449 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          consult_with: string[]
+          created_at: string
+          id: string
+          mandate: string
+          name: string
+          role: string
+          slug: string
+          sort_order: number
+          system_prompt: string
+          tone: string
+        }
+        Insert: {
+          consult_with?: string[]
+          created_at?: string
+          id?: string
+          mandate: string
+          name: string
+          role: string
+          slug: string
+          sort_order?: number
+          system_prompt: string
+          tone: string
+        }
+        Update: {
+          consult_with?: string[]
+          created_at?: string
+          id?: string
+          mandate?: string
+          name?: string
+          role?: string
+          slug?: string
+          sort_order?: number
+          system_prompt?: string
+          tone?: string
+        }
+        Relationships: []
+      }
+      approvals: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          id: string
+          notes: string | null
+          reviewer: string | null
+          status: string
+          task_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          notes?: string | null
+          reviewer?: string | null
+          status?: string
+          task_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          notes?: string | null
+          reviewer?: string | null
+          status?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approvals_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          actor: string
+          agent_slug: string | null
+          created_at: string
+          hash_self: string
+          id: number
+          payload: Json
+          prev_hash: string | null
+          target: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string
+          agent_slug?: string | null
+          created_at?: string
+          hash_self: string
+          id?: number
+          payload?: Json
+          prev_hash?: string | null
+          target?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string
+          agent_slug?: string | null
+          created_at?: string
+          hash_self?: string
+          id?: number
+          payload?: Json
+          prev_hash?: string | null
+          target?: string | null
+        }
+        Relationships: []
+      }
+      directives: {
+        Row: {
+          active: boolean
+          agent_id: string
+          body: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          active?: boolean
+          agent_id: string
+          body: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          active?: boolean
+          agent_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directives_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      icps: {
+        Row: {
+          created_at: string
+          criteria: Json
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          criteria?: Json
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          criteria?: Json
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      lead_replies: {
+        Row: {
+          body: string
+          classification: string | null
+          created_at: string
+          draft_response: string | null
+          id: string
+          lead_id: string | null
+        }
+        Insert: {
+          body: string
+          classification?: string | null
+          created_at?: string
+          draft_response?: string | null
+          id?: string
+          lead_id?: string | null
+        }
+        Update: {
+          body?: string
+          classification?: string | null
+          created_at?: string
+          draft_response?: string | null
+          id?: string
+          lead_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_replies_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string | null
+          enrichment: Json | null
+          full_name: string | null
+          icp_id: string | null
+          id: string
+          linkedin_url: string | null
+          status: string
+          title: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          enrichment?: Json | null
+          full_name?: string | null
+          icp_id?: string | null
+          id?: string
+          linkedin_url?: string | null
+          status?: string
+          title?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          enrichment?: Json | null
+          full_name?: string | null
+          icp_id?: string | null
+          id?: string
+          linkedin_url?: string | null
+          status?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_icp_id_fkey"
+            columns: ["icp_id"]
+            isOneToOne: false
+            referencedRelation: "icps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          agent_id: string | null
+          content: string
+          created_at: string
+          id: string
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          thread_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sequences: {
+        Row: {
+          created_at: string
+          current_step: number
+          id: string
+          lead_id: string | null
+          steps: Json
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number
+          id?: string
+          lead_id?: string | null
+          steps?: Json
+        }
+        Update: {
+          created_at?: string
+          current_step?: number
+          id?: string
+          lead_id?: string | null
+          steps?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sequences_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          agent_id: string | null
+          approved_at: string | null
+          approved_by: string | null
+          body: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          requires_approval: boolean
+          status: string
+          thread_id: string | null
+          title: string
+        }
+        Insert: {
+          agent_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          requires_approval?: boolean
+          status?: string
+          thread_id?: string | null
+          title: string
+        }
+        Update: {
+          agent_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          body?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          requires_approval?: boolean
+          status?: string
+          thread_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      templates: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          name: string
+          prompt: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          prompt: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          prompt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      threads: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          mode: string
+          title: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          mode?: string
+          title?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          mode?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "threads_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -373,11 +373,17 @@ export function Terminal() {
             )}
             {activePanel?.kind === "tasks" && <TasksPanel />}
             {activePanel?.kind === "approvals" && <ApprovalsPanel onDecide={async (id, decision) => {
-              await decideFn({ data: { approval_id: id, decision } });
+              const r = await decideFn({ data: { approval_id: id, decision } });
               qc.invalidateQueries({ queryKey: ["approvals"] });
               qc.invalidateQueries({ queryKey: ["tasks"] });
               qc.invalidateQueries({ queryKey: ["audit"] });
-              toast.success(`Approval ${decision}`);
+              if ((r as any)?.external?.sent === false) {
+                toast.error("Approved but external action failed", { description: (r as any).external.error });
+              } else if ((r as any)?.external?.sent) {
+                toast.success("Approved & sent");
+              } else {
+                toast.success(`Approval ${decision}`);
+              }
             }} />}
             {activePanel?.kind === "audit" && <AuditPanel />}
             {activePanel?.kind === "leads" && <LeadsPanel />}

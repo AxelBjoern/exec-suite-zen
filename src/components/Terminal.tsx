@@ -44,6 +44,7 @@ const HELP = `Available commands:
   /audit                      open hash-chained audit log
   /manual                     open instruction manual
   /leads                      open lead-gen pipeline
+  /context                    edit company context (memory)
   /directive <agent> <text>   pin a standing directive
   /clear                      clear scrollback
   /verify                     verify the audit chain

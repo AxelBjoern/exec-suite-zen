@@ -13,7 +13,7 @@ import {
   listDirectives,
   verifyChain,
   getThread,
-} from "@/server/terminal.functions";
+} from "@/serverfns/terminal.functions";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];
 

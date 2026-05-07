@@ -223,6 +223,7 @@ export function buildSystemPrompt(opts: {
   consultFor?: { primaryRole: string; primaryReply: string };
   companyContext?: string;
   recentDecisions?: { title: string; decision: string; created_at: string }[];
+  freeform?: boolean;
 }): string {
   const role = ROLES[opts.agentSlug];
   const directiveBlock = opts.directives.length

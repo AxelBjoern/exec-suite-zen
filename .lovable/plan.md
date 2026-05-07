@@ -1,129 +1,66 @@
-## VDNX Operations Terminal
+## Goal
 
-A Bloomberg-grade command terminal where you operate the AI executive team via keystrokes. Built per **VDNX Agent Instruction Manual v3.1** — every action reinforces **Authority · Auditability · Atomicity**.
+Right now the terminal only exposes commands via `/help` text. Users have to memorize agent slugs and verbs. We'll add a **Command Library** — a browsable, searchable catalog of every command, plus a Ctrl+K palette so any command is one keystroke away.
 
-### The shift: Hub → Terminal
-The interface is no longer a click-driven dashboard. It is a **keyboard-first terminal**: a persistent command line at the bottom of the screen, dense data panels above, monospace ledger feeds, and instant agent dispatch through typed commands. Mouse works, but a power user never has to leave the keyboard.
+## What gets added
 
-### Terminal command grammar
-```
-:<agent> <verb> [args]            → dispatch to one agent
-:board <verb> [args]              → boardroom (primary + auto consults)
-/help                              → list commands
-/agents                            → roster
-/manual                            → instruction manual
-/tasks [filter]                    → task inbox
-/approvals                         → pending approval queue
-/audit [filter]                    → audit log stream
-/leads [filter]                    → lead gen pipeline
-/directive <agent> <text>          → pin a standing directive
-/template <agent> <name>           → run a templated brief (Weekly Report, OKRs, Board Deck, Content Calendar…)
-/clear /focus /split               → terminal layout controls
-↑ ↓                                → command history
-Tab                                → autocomplete agents, verbs, templates
-Ctrl+K                             → command palette (fuzzy)
-Ctrl+1..0                          → jump to agent panel
-```
+### 1. Central command catalog (`src/lib/command-library.ts`)
+A single source of truth, organized into four categories:
 
-Examples:
-- `:cfo brief FY26 burn scenarios base/best/worst`
-- `:board approve Q3 GTM plan`
-- `:social draft thought-leadership post on hash-chained audit trails`
-- `/template ceo board-deck Q3`
-- `/directive sales target ADGM-licensed funds only`
+- **System** — `/help`, `/clear`, `/agents`, `/tasks`, `/approvals`, `/audit`, `/leads`, `/manual`, `/verify`, `/directive <agent> <text>`
+- **Agent verbs** (per agent, 10 agents × ~5 verbs):
+  - CEO: `brief`, `decide`, `memo`, `review`, `prioritize`
+  - CFO: `brief` (burn/runway), `model`, `forecast`, `variance`, `board-pack`
+  - COO: `sop`, `runbook`, `incident`, `okr`, `status`
+  - CTO: `architect`, `rfc`, `postmortem`, `roadmap`, `review-pr`
+  - CMO: `campaign`, `positioning`, `launch`, `narrative`, `calendar`
+  - CCO: `policy`, `kyc-review`, `risk-memo`, `audit-prep`, `disclosure`
+  - Sales: `outbound`, `proposal`, `pipeline`, `discovery`, `close-plan`
+  - LinkedIn: `post`, `comment-strategy`, `dm-sequence`, `profile-audit`
+  - Social: `thread`, `caption`, `calendar`, `trend-brief`
+  - SEO: `keyword-map`, `brief`, `audit`, `backlink-plan`
+- **Boardroom** — `:board <agent> <verb>` with example consults
+- **Shortcuts** — Ctrl+K (palette), ↑/↓ (history), Tab (autocomplete), Esc (clear input)
 
-Unknown commands are rejected with a hint — never silently guessed.
+Each entry: `{ id, category, syntax, summary, example, requiresAgent?, requiresArgs? }`.
 
-### Terminal layout
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ VDNX TERMINAL · AUTHORITY · AUDITABILITY · ATOMICITY      [bell] [user] │
-├────────────┬─────────────────────────────────────┬───────────────────────┤
-│ ROSTER     │  ACTIVE PANEL (agent thread /       │  CONTEXT              │
-│ CEO   ●    │  boardroom / tasks / audit / leads) │  - Mandate            │
-│ CFO   ●    │                                     │  - Directives         │
-│ COO   ○    │  Markdown rendered in serif         │  - Consult-with chips │
-│ CTO   ●    │  body; code/data in mono            │  - Recent activity    │
-│ CMO   ●    │                                     │                       │
-│ CCO   ●    │                                     │                       │
-│ SALES ●    │                                     │                       │
-│ LEADGEN ●  │                                     │                       │
-│ SOCIAL ●   │                                     │                       │
-│ SEO   ●    │                                     │                       │
-├────────────┴─────────────────────────────────────┴───────────────────────┤
-│ AUDIT TICKER · 14:02 CFO task#812 completed · 14:01 CEO directive added │
-├──────────────────────────────────────────────────────────────────────────┤
-│ : _                                                          [⏎ dispatch]│
-└──────────────────────────────────────────────────────────────────────────┘
-```
-- **Roster rail (left)**: 10 agents, status dot (idle / working / awaiting approval), unread count.
-- **Active panel (center)**: tabbed; multiple agent threads open at once, drag to split-pane two side-by-side.
-- **Context rail (right)**: live mandate, active directives, consult-with chips, recent activity.
-- **Audit ticker**: bottom strip, scrolling append-only events (every directive, task, approval, message) — visual reinforcement of Auditability.
-- **Command line**: persistent at the bottom, always focused unless typing in an open input.
+### 2. Library panel (`/library` command + roster button)
+A new `Panel` kind `library` rendered as a 2-column reading view:
+- Left rail: category filters (System / Agent verbs / Boardroom / Shortcuts) + per-agent filter chips.
+- Right: searchable list. Each row shows syntax in mono, summary, and a "Run" button that prefills the command line (or executes if it has no required args).
+- Sticky search box at top (`/` focuses it, like GitHub).
 
-### Foundational principles wired into the terminal
-- **Authority** — outputs flagged "executive-facing" land in `/approvals`. Status stays `pending` until a human ✓. The command line shows `[REQUIRES APPROVAL]` before dispatch when relevant.
-- **Auditability** — every command produces an `audit_log` row (actor, agent, verb, args, payload_hash, prev_hash, timestamp). The ticker streams it live; `/audit` opens the full log with filters.
-- **Atomicity** — task execution is transactional: the task row, audit entry, notification, and (if applicable) approval row are written in one transaction or none at all.
+Also expose it from:
+- The Roster sidebar (footer button next to "Manual v3.1")
+- `/help` output (link line: "type /library for the full catalog")
 
-### The executive team (10 agents — Manual v3.1)
-Same roster as v3.1: CEO · CFO · COO · CTO · CMO · CCO · Head of Sales · LinkedIn Lead Gen Specialist · Social Media Marketing Expert (expanded) · SEO Expert. Each agent's system prompt = company overview + foundational principles + core values + universal Situation→Analysis→Options→Recommendation→Next Steps standard + role spec + active directives.
+### 3. Ctrl+K command palette
+A modal (cmdk-style, built with existing `Dialog` + simple filter — no new deps) that:
+- Opens on `Ctrl/Cmd+K` from anywhere in the terminal.
+- Fuzzy-filters the same catalog by syntax + summary + agent role.
+- Enter → if command is complete, execute via `exec()`; if it needs args, prefill input and close.
+- ↑/↓ to navigate, Esc to close.
 
-### Escalation matrix v3.1 (auto-applied by `:board`)
-CEO → all C-level · CFO → CEO · COO → CEO · CTO → CEO, CCO · CMO → CEO · CCO → CEO, CTO, CFO · Sales → CEO, CMO, CCO · Social → CMO · LinkedIn → Sales, CMO. `:board <verb>` auto-loops the right consults; you can override with `:board+cfo+cco …`.
+### 4. Inline autocomplete (small, scoped)
+When the input starts with `:` or `/`, show a thin dropdown above the command line listing matching catalog entries (max 6). Tab accepts top suggestion. This reuses the catalog so suggestions stay in sync.
 
-### Modes (panels you can open in the active area)
-- **Agent thread** — solo conversation in the agent's voice.
-- **Boardroom** — multi-agent sequential responses for one directive.
-- **Tasks** — table; assign, monitor, approve, deep-link to thread.
-- **Approvals** — queue of executive-facing outputs awaiting human ✓.
-- **Audit** — append-only log, filter by agent / actor / type / time range.
-- **Leads** — kanban (New → Contacted → Replied → Booked → Closed) + lead detail.
-- **Manual** — Instruction Manual v3.1 rendered as an internal memo.
+## Files touched
 
-### LinkedIn Outreach & Lead Generation (commands)
-- `/leads new` — open ICP builder
-- `/leads enrich <url|csv>` — Firecrawl enrichment of public profile/company pages
-- `/leads sequence <leadId>` — agent drafts 3–5 step institutional sequence
-- `/leads triage <leadId>` — paste reply, classify + draft response
-- `/leads brief` — daily morning brief task
+- **new** `src/lib/command-library.ts` — catalog + types + helpers (`searchCommands`, `commandsForAgent`).
+- **new** `src/components/CommandPalette.tsx` — Ctrl+K modal.
+- **new** `src/components/LibraryPanel.tsx` — full-page library view.
+- **edit** `src/components/Terminal.tsx`:
+  - Add `library` to `Panel` union, route it in tab content + `panelLabel`.
+  - Add `/library` to `exec()`.
+  - Mount `<CommandPalette />`, wire global Ctrl+K listener.
+  - Add small autocomplete dropdown above the input (uses catalog).
+  - Add Roster footer button "Command Library".
+  - Update `HELP` string to mention `/library` and Ctrl+K.
 
-### Visual direction — Terminal × private bank
-- Near-black navy bg (`oklch` near `#070D1A`), ivory body, **muted gold** (committed/approved), **amber** (pending/preview), **red** (gate failure / rejection).
-- **JetBrains Mono** for command line, ledger rows, hashes, ticker.
-- **Playfair Display** for receipts, agent dossier headers, the Manual.
-- **Inter** for chat body and forms.
-- Hairline gold rules, small-caps section labels, dense data feel without losing editorial polish.
-- Receipts and approval cards styled like notarised documents.
+No backend / schema changes. No new dependencies.
 
-### Technical plan
-- **Backend**: Lovable Cloud
-  - `agents` — 10 seeded roles with full Manual v3.1 content + `consult_with[]`
-  - `threads`, `messages`, `directives`
-  - `tasks` — id, agent_id, thread_id, title, status, result, completed_at, requires_approval, approved_by, approved_at
-  - `approvals` — id, task_id, status, reviewer, decided_at, notes
-  - `audit_log` — append-only (actor, action, target, payload_hash, prev_hash, created_at), enforced via RLS (no update/delete)
-  - `notifications`
-  - `templates` — id, agent_id, name, prompt (Weekly Report, OKRs, Board Deck, Content Calendar…)
-  - Lead Gen: `icps`, `leads`, `sequences`, `lead_replies`
-- **Command parser** (client) — deterministic grammar, synonym map, autocomplete index. Unknown → reject with hint.
-- **Server functions** (TanStack Start `createServerFn`):
-  - `dispatch(command)` — resolves agent + verb, runs AI Gateway, writes message, creates task if needed, appends audit_log atomically.
-  - `listAgents`, `getThread`, `pinDirective`, `runTemplate`, `approveTask`, `enrichLead`, `draftSequence`, `triageReply`, `verifyAudit(hash)` (read-only chain check).
-- **Connectors**: Firecrawl for enrichment.
-- **AI**: Lovable AI Gateway. `google/gemini-2.5-flash` default; `gemini-2.5-pro` for boardroom synthesis, board decks, long task execution. AI is strictly draft-layer — never marks a task `approved`.
-- **Routing**: `/` terminal (single page; panels open inside it); `/manual`; `/verify/$hash` public read-only audit receipt; deep links like `/agent/$slug`, `/tasks/$id`, `/leads/$id` open the right panel inside the terminal.
-- **Frontend**: TanStack Start, `cmdk` for command palette, `react-markdown`, `sonner` for toasts, keyboard shortcuts via custom hook.
+## Out of scope
 
-### Build order
-1. Enable Lovable Cloud, schema + seed 10 agents (Manual v3.1) + consult-with relationships.
-2. Terminal shell: navy/gold/mono tokens, roster rail, active panel area, context rail, audit ticker, persistent command line.
-3. Command parser + autocomplete + history + Ctrl+K palette.
-4. `dispatch` server function → AI Gateway → message + audit_log (atomic).
-5. Solo agent threads with Situation/Analysis/Options/Recommendation/Next Steps.
-6. Directives + Templates (Weekly Report, OKRs, Board Deck, Content Calendar).
-7. Tasks + Approvals queue + Audit log + Notifications (toast, bell, browser push).
-8. Boardroom mode with auto-loaded consults.
-9. Lead Gen panel: ICPs, Firecrawl enrichment, sequence composer, reply triage, kanban, daily brief.
-10. Polish: split panes, gate-failure states, mobile fallback (command line collapses to single panel).
+- No changes to dispatch logic, agents, audit, or approvals.
+- No editing of catalog from the UI (it's code-defined for now; can move to DB later).
+- No fix to the SSR clock hydration warning (separate issue).

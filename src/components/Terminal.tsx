@@ -31,6 +31,7 @@ type Panel =
   | { kind: "leads" }
   | { kind: "manual" }
   | { kind: "library" }
+  | { kind: "context" }
   | { kind: "agents" };
 
 const HELP = `Available commands:

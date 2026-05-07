@@ -127,6 +127,75 @@ export type Database = {
         }
         Relationships: []
       }
+      company_context: {
+        Row: {
+          current_priorities: string
+          icp: string
+          id: string
+          mission: string
+          notes: string
+          positioning: string
+          principles: string
+          singleton: boolean
+          updated_at: string
+        }
+        Insert: {
+          current_priorities?: string
+          icp?: string
+          id?: string
+          mission?: string
+          notes?: string
+          positioning?: string
+          principles?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Update: {
+          current_priorities?: string
+          icp?: string
+          id?: string
+          mission?: string
+          notes?: string
+          positioning?: string
+          principles?: string
+          singleton?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      decision_log: {
+        Row: {
+          agent_slug: string | null
+          amendments: Json
+          created_at: string
+          decision: string
+          id: string
+          rationale: string | null
+          thread_id: string | null
+          title: string
+        }
+        Insert: {
+          agent_slug?: string | null
+          amendments?: Json
+          created_at?: string
+          decision: string
+          id?: string
+          rationale?: string | null
+          thread_id?: string | null
+          title: string
+        }
+        Update: {
+          agent_slug?: string | null
+          amendments?: Json
+          created_at?: string
+          decision?: string
+          id?: string
+          rationale?: string | null
+          thread_id?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       directives: {
         Row: {
           active: boolean
@@ -270,6 +339,7 @@ export type Database = {
           created_at: string
           id: string
           role: string
+          summary: string | null
           thread_id: string
         }
         Insert: {
@@ -279,6 +349,7 @@ export type Database = {
           created_at?: string
           id?: string
           role: string
+          summary?: string | null
           thread_id: string
         }
         Update: {
@@ -288,6 +359,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string
+          summary?: string | null
           thread_id?: string
         }
         Relationships: [

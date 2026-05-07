@@ -1,76 +1,110 @@
-## Goal
 
-Let operators type free-form prompts in the terminal — not just `:agent verb args`. Verbs keep working; prompts become the primary interaction.
+# Autonomous Agents — Phase 4
 
-## Input grammar (additive, nothing removed)
+Goal: agents stop being purely reactive. Internal action items execute themselves, and recurring/event-driven jobs fire agents on a schedule.
 
-| Input | Behavior |
-|---|---|
-| `:cfo brief FY26 burn` | Existing structured verb dispatch (unchanged) |
-| `@cfo what's our runway if we hire 5 engineers?` | Solo dispatch to CFO with free-form prompt |
-| `@board should we raise a Series A now?` | Forced boardroom dispatch, router picks lead |
-| `what's our runway if we hire 5 engineers?` | Auto-routed: router picks 1 agent (solo) or N agents (boardroom) |
-| `/help`, `/tasks`, etc. | Unchanged |
+## 1. Auto-execute action items (the agent chain)
 
-Rule of thumb: starts with `:` → verb path. Starts with `@` → addressed prompt. Anything else → auto-route.
+Today: `dispatch()` produces an artifact with `action_items[]`. Items with `auto_dispatch=true && !shouldGate(...)` are inserted as `tasks` rows with `status="todo"` — but nothing runs them.
 
-## Routing layer (new)
+Change: introduce a **task runner** that picks up internal todo tasks and dispatches them through the owning agent as freeform prompts.
 
-A small server function `routePrompt(prompt)` calls the LLM with a tool that returns:
+- New server fn `runTask({ task_id })` in `terminal.functions.ts`:
+  - Loads task → builds a freeform prompt from `title + body`.
+  - Calls existing `dispatch({ agent_slug: owner_agent, freeform: true, prompt, parent_task_id, thread_id })`.
+  - Marks task `running` → `done` (or `blocked` on error). Logs `tool_call` for traceability.
+- After `dispatch()` finishes creating internal child tasks, enqueue an Inngest event `agent/task.ready` per child instead of leaving them as static todos. The Inngest function calls `runTask`. This gives durable retries and avoids long synchronous chains in one HTTP request.
+- Depth guard: refuse to chain past `max_depth = 3` (stored on task as `depth` int column) to prevent runaway loops.
+- External / approval-gated tasks remain blocked until operator approves — runner ignores them.
 
+UI: `Terminal.tsx` shows a small "auto-running N child tasks" trace; `LibraryPanel` / tasks list gets a status pill (todo/running/done/blocked) and a manual "Run now" button.
+
+## 2. Auto-route default
+
+Already implemented for the terminal. Confirm + polish:
+- Show the `RouteDecision` (primary + consults + inferred verb) as a one-line trace above the agent reply.
+- Add a small toggle "Auto-route" (default ON) in Terminal header so operator can disable if they want strict `:agent verb` mode.
+
+## 3. Inngest scheduler + watchers
+
+Use the **Inngest** connector (durable, retryable, event-driven). One serve endpoint hosts every function.
+
+### Setup
+- Connect Inngest via `standard_connectors--connect` (`inngest`).
+- New server route `src/routes/api/public/inngest.ts` exposing `serve({ client, functions })` — handles GET/POST/PUT.
+- Operator must hit the URL once to sync (we'll surface a "Sync Inngest" button in the UI that opens the endpoint).
+
+### Built-in functions
+
+1. **`daily-standup`** — cron `0 8 * * *`
+   - Fans out to COO (`:coo daily_ops`) and CFO (`:cfo cash_pulse` if defined, else freeform "give a 1-paragraph cash pulse").
+   - Posts artifacts to a dedicated thread tagged `kind=standup` (new optional `threads.kind` column).
+
+2. **`weekly-ceo-review`** — cron `0 9 * * 1` (Mon 9am)
+   - Runs `:ceo strategy weekly review` boardroom-style with consults from CFO/COO.
+
+3. **`task-runner`** — event `agent/task.ready`
+   - Calls `runTask({ task_id })` (above). Retries on failure.
+
+4. **Watcher `approval-blocked-watcher`** — event `agent/approval.created` or cron `*/15 * * * *` poll
+   - For approvals pending > 24h, sends a freeform prompt to the owner agent: "Your approval is overdue, draft a follow-up summary." (Notification only — does not auto-approve.)
+
+5. **Watcher `tool-call-failed`** — event `agent/tool_call.failed`
+   - Routes the failure to the owner agent for a freeform "diagnose and propose fix" reply.
+
+Events are emitted from inside `dispatch()` / `decideApproval()` / the Resend block via the documented gateway POST `https://connector-gateway.lovable.dev/inngest/e/`.
+
+### Operator-defined schedules
+
+New table `schedules`:
 ```
-{ mode: "solo" | "boardroom", primary_agent: slug, consult_agents: slug[], reasoning: string }
+id uuid pk
+name text
+cron text                -- e.g. "0 9 * * *"
+agent_slug text
+mode text                -- 'verb' | 'prompt' | 'boardroom'
+verb text null
+args text null
+prompt text null
+active bool default true
+last_run_at timestamptz null
+created_at timestamptz default now()
 ```
 
-Heuristics in the router prompt:
-- Single-domain question → solo, pick best-fit agent
-- Cross-functional / strategic / "should we…" → boardroom, pick lead + 2–3 consults
-- Always include the agent roster + one-line mandates so it picks intelligently
+A single Inngest function `operator-schedule-tick` runs every minute, queries due active schedules, dispatches them, updates `last_run_at`. (We don't dynamically register cron functions — one tick handler covers all custom schedules.)
 
-For `@agent ...`, skip the router; use that agent (solo) unless `@board` is also present.
-For `@board ...`, run the router but force `mode: "boardroom"`.
+UI: new `SchedulesPanel` (sidebar tab) with a list + "Add schedule" form (name, cron, agent picker, mode + verb/prompt). Inline next-run preview using a small cron parser (`cronstrue` for human text, `cron-parser` for next date — both pure JS, Worker-safe).
 
-## Agent execution (artifact-or-chat)
+## 4. Files to add / change
 
-The dispatch handler currently always produces a structured artifact via `ARTIFACT_TOOL`. We extend it so the agent can choose:
+Add:
+- `supabase/migrations/<ts>_autonomy.sql` — `schedules` table (RLS open to match project pattern), `tasks.depth int default 0`, optional `threads.kind text`.
+- `src/routes/api/public/inngest.ts` — Inngest serve endpoint.
+- `src/server/inngest.server.ts` — Inngest client + function definitions (daily-standup, weekly-ceo-review, task-runner, watchers, operator-schedule-tick).
+- `src/server/inngest-events.server.ts` — typed `sendEvent(name, data)` helper using gateway URL.
+- `src/serverfns/schedules.functions.ts` — list/create/toggle/delete schedules.
+- `src/serverfns/tasks.functions.ts` — `runTask`, `listRunnableTasks`, manual-run endpoint.
+- `src/components/SchedulesPanel.tsx` — UI for schedules.
 
-- Add a second tool `CHAT_TOOL` that returns `{ reply_markdown, suggested_next_commands[] }` for short conversational answers.
-- Update the system prompt: "If the request is a quick question, use chat_reply. If it warrants a full deliverable (plan, model, memo, RFC), use produce_artifact."
-- For verb dispatches, force `tool_choice = produce_artifact` (preserves current behavior — every verb still yields an artifact).
-- For free-form prompts, leave `tool_choice = auto` so the model picks.
+Edit:
+- `src/serverfns/terminal.functions.ts` — emit `agent/task.ready` after creating internal child tasks; emit `agent/tool_call.failed` on Resend errors; expose `runTask`.
+- `src/components/Terminal.tsx` — auto-route toggle + router trace line.
+- `src/components/LibraryPanel.tsx` (or wherever tasks render) — status pill + "Run now".
+- `src/lib/agent-schemas.ts` — add `depth` to ActionItem (optional, for telemetry only).
 
-Chat replies render inline in the thread panel (markdown) without the artifact card; artifact replies render the existing ArtifactCard. Both still hash-chain into the audit log and write to `decision_log`.
+## 5. Secrets / connectors
 
-## Verb inference (lightweight)
+- Inngest connector — user clicks Connect (provides `LOVABLE_API_KEY`, `INNGEST_API_KEY`, `INNGEST_SIGNING_KEY` automatically).
+- After deploy, operator clicks "Sync Inngest" button (opens the serve URL) so Inngest registers functions.
 
-When a free-form prompt routes to an agent, we still need a `verb` for storage. Approach:
-- The router also returns an optional `inferred_verb` from that agent's verb list, defaulting to `"respond"` if none fits.
-- `respond` is added as a generic verb in `INTERNAL_VERBS` (auto-dispatch, no approval gate by default) — external actions (email/publish) still require explicit `:agent <external-verb>` syntax to keep the approval gate tight.
+## 6. Out of scope
 
-## UI changes
+- Auto-approving external actions (emails to real recipients still gated).
+- Streaming partial agent output.
+- Multi-tenant scheduling (single workspace assumed).
 
-`src/components/Terminal.tsx`:
-- New `exec()` branches for `@agent ...`, `@board ...`, and bare-text prompts.
-- Show a one-line "ROUTING → CFO (solo)" or "ROUTING → BOARDROOM lead=CEO consults=CFO,CMO" trace before dispatch.
-- Update `/help` text and palette hints.
-- Autocomplete: when input starts with `@`, suggest agent slugs (`@ceo`, `@cfo`, `@board`, …).
+## Technical notes
 
-`src/lib/command-library.ts`:
-- Add a `prompt` category with examples like `@cfo runway if we hire 5 engineers` so the palette teaches the new syntax.
-
-## Files touched
-
-- `src/serverfns/terminal.functions.ts` — add `routePrompt` server fn; extend `dispatch` to accept `{ mode: "verb" | "prompt", prompt?: string }` and pass `CHAT_TOOL` alongside `ARTIFACT_TOOL`.
-- `src/lib/agent-schemas.ts` — add `CHAT_TOOL` schema; add `respond` to `INTERNAL_VERBS`; add `RouteDecision` schema.
-- `src/lib/agent-prompts.ts` — add `buildRouterPrompt()` (roster + mandates + routing rules); update `buildSystemPrompt()` with the artifact-or-chat instruction.
-- `src/components/Terminal.tsx` — new input parsing, routing trace, `@`-autocomplete, updated `/help`.
-- `src/components/ArtifactCard.tsx` (or thread renderer) — render chat replies as markdown when artifact is absent.
-- `src/lib/command-library.ts` — palette entries for prompt syntax.
-
-No DB migration needed (reuses `threads`, `messages`, `decision_log`, `audit_log`).
-
-## Out of scope
-
-- Streaming responses (still single-shot tool call).
-- Multi-turn conversation refinement inside one thread (already supported via existing thread continuation).
-- Changing approval gating for external verbs.
+- Depth guard prevents agent A → B → A → B loops; tasks deeper than `max_depth` are marked `blocked` with reason `"max chain depth"`.
+- Operator-defined schedules use minute-tick polling instead of dynamic Inngest cron registration to keep things simple and editable from the UI.
+- All cron/Inngest endpoints live under `/api/public/*` so they bypass auth on published deployments; Inngest verifies signatures via `INNGEST_SIGNING_KEY` automatically.

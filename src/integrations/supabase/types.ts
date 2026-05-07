@@ -423,6 +423,7 @@ export type Database = {
           id: string
           owner_agent: string | null
           parent_task_id: string | null
+          payload: Json | null
           requires_approval: boolean
           status: string
           thread_id: string | null
@@ -439,6 +440,7 @@ export type Database = {
           id?: string
           owner_agent?: string | null
           parent_task_id?: string | null
+          payload?: Json | null
           requires_approval?: boolean
           status?: string
           thread_id?: string | null
@@ -455,6 +457,7 @@ export type Database = {
           id?: string
           owner_agent?: string | null
           parent_task_id?: string | null
+          payload?: Json | null
           requires_approval?: boolean
           status?: string
           thread_id?: string | null
@@ -540,6 +543,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tool_calls: {
+        Row: {
+          agent_slug: string | null
+          created_at: string
+          error: string | null
+          id: string
+          request: Json
+          response: Json | null
+          status: string
+          task_id: string | null
+          tool: string
+        }
+        Insert: {
+          agent_slug?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          request?: Json
+          response?: Json | null
+          status?: string
+          task_id?: string | null
+          tool: string
+        }
+        Update: {
+          agent_slug?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          request?: Json
+          response?: Json | null
+          status?: string
+          task_id?: string | null
+          tool?: string
+        }
+        Relationships: []
       }
     }
     Views: {

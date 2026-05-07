@@ -14,6 +14,8 @@ import {
   verifyChain,
   getThread,
 } from "@/serverfns/terminal.functions";
+import { fetchUrlSnapshot } from "@/serverfns/integrations/research.functions";
+import { queueEmail } from "@/serverfns/integrations/email.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
 import { ContextPanel } from "@/components/ContextPanel";

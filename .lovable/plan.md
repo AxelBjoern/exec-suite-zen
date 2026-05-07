@@ -105,7 +105,18 @@ When any agent runs, retrieve recent **structured decisions** from `audit_log` t
 
 ---
 
-## PHASE 3 — External hands (real execution)
+## PHASE 3 — External hands (real execution) — IN PROGRESS
+
+**Shipped now:**
+- `:seo audit <url>` and `:sales research <url>` — live URL fetch + meta/H1/word-count snapshot, then auto-fed to the owning agent for analysis. Read-only, no approval.
+- `:sales email <to> <subject>` and `:cmo announce <to> <subject>` — queues an email task with `payload.kind = "email"`, gated through `/approvals`.
+- Approving an email-task auto-sends via Resend (`RESEND_API_KEY`, optional `RESEND_FROM`). Failures surface as toast + leave the task `blocked`. Every send logged in new `tool_calls` table.
+- New `tool_calls` table (request/response audit) and `tasks.payload jsonb` for queued external actions.
+
+**Pending (future):** GitHub, LinkedIn, lead pipeline activation.
+
+---
+
 
 Once Phases 1+2 prove the loop, wire real tools. Pattern is consistent: agent emits a `tool_call` → queued in `/approvals` (unless directive says auto) → on approve, server function executes → result logged in `audit_log` → linked back to originating task.
 

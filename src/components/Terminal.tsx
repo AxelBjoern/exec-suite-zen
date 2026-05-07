@@ -38,7 +38,10 @@ type Panel =
   | { kind: "agents" };
 
 const HELP = `Available commands:
-  :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
+  <free-form prompt>          auto-route — router picks the right agent or boardroom
+  @<agent> <prompt>           ask one agent in plain language (e.g. @cfo runway if we hire 5 engineers?)
+  @board <prompt>             force a boardroom debate (router picks the lead)
+  :<agent> <verb> [args]      structured verb dispatch (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
   :seo audit <url>            fetch+analyze a URL (read-only)
   :sales research <url>       prospect/company discovery (read-only)

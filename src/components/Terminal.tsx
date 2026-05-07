@@ -112,6 +112,7 @@ export function Terminal() {
     if (cmd === "/audit") return openPanel({ kind: "audit" });
     if (cmd === "/manual") return openPanel({ kind: "manual" });
     if (cmd === "/leads") return openPanel({ kind: "leads" });
+    if (cmd === "/library") return openPanel({ kind: "library" });
     if (cmd === "/verify") {
       setBusy(true);
       try {

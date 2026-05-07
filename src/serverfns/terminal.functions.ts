@@ -341,6 +341,8 @@ export const dispatch = createServerFn({ method: "POST" })
           agentTone: consult.tone,
           baseSystemPrompt: consult.system_prompt,
           directives: [],
+          companyContext,
+          recentDecisions: recentDecisions ?? [],
           consultFor: { primaryRole: primary.role, primaryReply: primaryMd },
         });
         try {

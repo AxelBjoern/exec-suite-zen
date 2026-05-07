@@ -215,11 +215,22 @@ export const listDirectives = createServerFn({ method: "GET" })
 async function callTool<T>(opts: {
   system: string;
   user: string;
-  tool: typeof ARTIFACT_TOOL | typeof CONSULT_TOOL;
+  tool?: any;
+  tools?: any[];
+  toolChoice?: "auto" | { name: string };
   model?: string;
-}): Promise<T> {
+}): Promise<{ name: string; result: T }> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY missing");
+  const tools = opts.tools ?? (opts.tool ? [opts.tool] : []);
+  const tool_choice =
+    opts.toolChoice === "auto"
+      ? "auto"
+      : opts.toolChoice
+        ? { type: "function", function: { name: opts.toolChoice.name } }
+        : tools.length === 1
+          ? { type: "function", function: { name: tools[0].function.name } }
+          : "auto";
   const res = await fetch(LOVABLE_AI, {
     method: "POST",
     headers: {
@@ -232,8 +243,8 @@ async function callTool<T>(opts: {
         { role: "system", content: opts.system },
         { role: "user", content: opts.user },
       ],
-      tools: [opts.tool],
-      tool_choice: { type: "function", function: { name: opts.tool.function.name } },
+      tools,
+      tool_choice,
     }),
   });
   if (!res.ok) {
@@ -248,7 +259,7 @@ async function callTool<T>(opts: {
     throw new Error("AI did not return a structured tool call");
   }
   try {
-    return JSON.parse(call.function.arguments) as T;
+    return { name: call.function.name, result: JSON.parse(call.function.arguments) as T };
   } catch (e: any) {
     throw new Error(`Failed to parse tool args: ${e.message}`);
   }

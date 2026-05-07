@@ -643,8 +643,9 @@ function ThreadPanel({
 
         {!threadId && (
           <div className="font-mono text-sm text-muted-foreground border border-dashed border-rule p-6">
-            No thread yet. From the command line below, dispatch:
-            <div className="text-primary mt-2">:{agentSlug} brief &lt;your topic&gt;</div>
+            No thread yet. From the command line below, try:
+            <div className="text-primary mt-2">@{agentSlug} &lt;ask anything in plain language&gt;</div>
+            <div className="text-primary">:{agentSlug} brief &lt;your topic&gt;</div>
             {boardroom && <div className="text-primary">:board {agentSlug} &lt;verb&gt; ...</div>}
           </div>
         )}

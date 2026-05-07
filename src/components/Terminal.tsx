@@ -20,7 +20,7 @@ import { queueEmail } from "@/serverfns/integrations/email.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
 import { ContextPanel } from "@/components/ContextPanel";
-import { ArtifactCard, ConsultCard } from "@/components/ArtifactCard";
+import { ArtifactCard, ConsultCard, ChatReplyCard } from "@/components/ArtifactCard";
 import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];

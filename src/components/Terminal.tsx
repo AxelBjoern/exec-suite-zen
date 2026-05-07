@@ -362,6 +362,7 @@ function panelLabel(p: Panel, agents: Agent[]): string {
   if (p.kind === "audit") return "AUDIT";
   if (p.kind === "leads") return "LEADS";
   if (p.kind === "manual") return "MANUAL";
+  if (p.kind === "library") return "LIBRARY";
   const a = agents.find(x => x.slug === p.agentSlug);
   const tag = p.kind === "boardroom" ? "BOARD" : a?.slug.toUpperCase();
   return `${tag} · ${p.title}`;

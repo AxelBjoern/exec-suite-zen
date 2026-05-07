@@ -2,7 +2,7 @@
 // Used by dispatch() server function. Output contract enforced via tool-calling
 // (see agent-schemas.ts), not via "please return JSON".
 
-export const COMPANY_CONTEXT = `
+export const DEFAULT_COMPANY_CONTEXT = `
 COMPANY CONTEXT — VDNX
 VDNX is an institutional Company Operating System unifying governance, equity,
 operations, and compliance into one audited platform.
@@ -16,6 +16,29 @@ Every output you produce will be reviewed by the operator and either approved,
 amended, or rejected. Be specific, decision-grade, and complete. No filler.
 Founder-grade urgency. Active voice.
 `.trim();
+
+export function renderCompanyContext(ctx: {
+  mission?: string;
+  principles?: string;
+  icp?: string;
+  positioning?: string;
+  current_priorities?: string;
+  notes?: string;
+} | null | undefined): string {
+  if (!ctx) return DEFAULT_COMPANY_CONTEXT;
+  const lines = ["COMPANY CONTEXT — VDNX"];
+  if (ctx.mission) lines.push(`Mission: ${ctx.mission}`);
+  if (ctx.principles) lines.push(`Principles: ${ctx.principles}`);
+  if (ctx.positioning) lines.push(`Positioning: ${ctx.positioning}`);
+  if (ctx.icp) lines.push(`ICP: ${ctx.icp}`);
+  if (ctx.current_priorities) lines.push(`Current priorities: ${ctx.current_priorities}`);
+  if (ctx.notes) lines.push(`Notes: ${ctx.notes}`);
+  lines.push("");
+  lines.push("Every output is reviewed by the operator. Be decision-grade, specific, complete. Founder-grade urgency. Active voice.");
+  return lines.join("\n");
+}
+
+export const COMPANY_CONTEXT = DEFAULT_COMPANY_CONTEXT;
 
 export const UNIVERSAL_STANDARD = `
 UNIVERSAL OUTPUT STANDARD
@@ -161,15 +184,24 @@ export function buildSystemPrompt(opts: {
   directives: string[];
   boardroomMode?: boolean;
   consultFor?: { primaryRole: string; primaryReply: string };
+  companyContext?: string;
+  recentDecisions?: { title: string; decision: string; created_at: string }[];
 }): string {
   const role = ROLES[opts.agentSlug];
   const directiveBlock = opts.directives.length
     ? `\n\nACTIVE STANDING DIRECTIVES:\n${opts.directives.map(d => `- ${d}`).join("\n")}`
     : "";
+  const recentBlock = opts.recentDecisions?.length
+    ? `\n\nRECENT VDNX DECISIONS (do not contradict without flagging):\n${opts.recentDecisions
+        .slice(0, 6)
+        .map(d => `- [${new Date(d.created_at).toISOString().slice(0, 10)}] ${d.title}: ${d.decision}`)
+        .join("\n")}`
+    : "";
+  const ctx = opts.companyContext ?? DEFAULT_COMPANY_CONTEXT;
 
   if (opts.consultFor) {
     return [
-      COMPANY_CONTEXT,
+      ctx,
       "",
       role?.identity ?? opts.baseSystemPrompt,
       "",
@@ -185,11 +217,12 @@ export function buildSystemPrompt(opts: {
       `  - amendments: array of concrete changes (empty if you fully agree).`,
       `  - blocking: true if you would veto this without changes.`,
       directiveBlock,
+      recentBlock,
     ].join("\n");
   }
 
   return [
-    COMPANY_CONTEXT,
+    ctx,
     "",
     role?.identity ?? opts.baseSystemPrompt,
     "",
@@ -200,5 +233,6 @@ export function buildSystemPrompt(opts: {
     "",
     UNIVERSAL_STANDARD,
     directiveBlock,
+    recentBlock,
   ].join("\n");
 }

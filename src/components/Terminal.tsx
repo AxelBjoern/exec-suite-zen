@@ -16,6 +16,7 @@ import {
 } from "@/serverfns/terminal.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
+import { ContextPanel } from "@/components/ContextPanel";
 import { ArtifactCard, ConsultCard } from "@/components/ArtifactCard";
 import { suggestForInput } from "@/lib/command-library";
 
@@ -30,6 +31,7 @@ type Panel =
   | { kind: "leads" }
   | { kind: "manual" }
   | { kind: "library" }
+  | { kind: "context" }
   | { kind: "agents" };
 
 const HELP = `Available commands:
@@ -42,6 +44,7 @@ const HELP = `Available commands:
   /audit                      open hash-chained audit log
   /manual                     open instruction manual
   /leads                      open lead-gen pipeline
+  /context                    edit company context (memory)
   /directive <agent> <text>   pin a standing directive
   /clear                      clear scrollback
   /verify                     verify the audit chain
@@ -125,6 +128,7 @@ export function Terminal() {
     if (cmd === "/manual") return openPanel({ kind: "manual" });
     if (cmd === "/leads") return openPanel({ kind: "leads" });
     if (cmd === "/library") return openPanel({ kind: "library" });
+    if (cmd === "/context") return openPanel({ kind: "context" });
     if (cmd === "/verify") {
       setBusy(true);
       try {
@@ -330,6 +334,7 @@ export function Terminal() {
                 onPrefill={(t) => { setInput(t); inputRef.current?.focus(); }}
               />
             )}
+            {activePanel?.kind === "context" && <ContextPanel />}
           </div>
 
           {/* Scrollback */}
@@ -418,6 +423,7 @@ function panelLabel(p: Panel, agents: Agent[]): string {
   if (p.kind === "leads") return "LEADS";
   if (p.kind === "manual") return "MANUAL";
   if (p.kind === "library") return "LIBRARY";
+  if (p.kind === "context") return "CONTEXT";
   const a = agents.find(x => x.slug === p.agentSlug);
   const tag = p.kind === "boardroom" ? "BOARD" : a?.slug.toUpperCase();
   return `${tag} · ${p.title}`;

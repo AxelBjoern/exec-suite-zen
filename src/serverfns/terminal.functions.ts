@@ -9,7 +9,7 @@ import {
   shouldGate,
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
-import { buildSystemPrompt } from "@/lib/agent-prompts";
+import { buildSystemPrompt, renderCompanyContext } from "@/lib/agent-prompts";
 
 const LOVABLE_AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
@@ -289,6 +289,16 @@ export const dispatch = createServerFn({ method: "POST" })
       .from("directives").select("body").eq("agent_id", primary.id).eq("active", true);
     const directives = (dirs ?? []).map((d: any) => d.body as string);
 
+    // Phase 2: load company context + recent decisions
+    const { data: ctxRow } = await supabaseAdmin
+      .from("company_context").select("*").limit(1).maybeSingle();
+    const companyContext = renderCompanyContext(ctxRow);
+    const { data: recentDecisions } = await supabaseAdmin
+      .from("decision_log")
+      .select("title, decision, created_at")
+      .order("created_at", { ascending: false })
+      .limit(6);
+
     const userPrompt = `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
 
     // Primary agent → structured artifact
@@ -299,6 +309,8 @@ export const dispatch = createServerFn({ method: "POST" })
       agentTone: primary.tone,
       baseSystemPrompt: primary.system_prompt,
       directives,
+      companyContext,
+      recentDecisions: recentDecisions ?? [],
     });
 
     const artifact = await callTool<Artifact>({
@@ -329,6 +341,8 @@ export const dispatch = createServerFn({ method: "POST" })
           agentTone: consult.tone,
           baseSystemPrompt: consult.system_prompt,
           directives: [],
+          companyContext,
+          recentDecisions: recentDecisions ?? [],
           consultFor: { primaryRole: primary.role, primaryReply: primaryMd },
         });
         try {
@@ -420,6 +434,19 @@ export const dispatch = createServerFn({ method: "POST" })
         consults: consults.length,
         requires_approval: requiresApproval,
       },
+    });
+
+    // Phase 2: log decision for cross-thread recall
+    const finalSection = artifact.sections.find(s =>
+      /final decision|recommendation|summary/i.test(s.heading)
+    ) ?? artifact.sections[0];
+    await supabaseAdmin.from("decision_log").insert({
+      thread_id: threadId,
+      agent_slug: primary.slug,
+      title: artifact.title.slice(0, 200),
+      decision: (finalSection?.body_md ?? "").slice(0, 1000),
+      rationale: `${data.verb} ${data.args}`.slice(0, 500),
+      amendments: consults.flatMap(c => c.consult.amendments ?? []),
     });
 
     return {

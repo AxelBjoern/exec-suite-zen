@@ -59,6 +59,43 @@ should pick up immediately. Mark auto_dispatch=false for anything external
 human approval.
 `.trim();
 
+export const FREEFORM_STANDARD = `
+RESPONSE MODE — choose ONE tool:
+- "chat_reply": for quick questions, clarifications, status checks, opinions, or
+  anything that does NOT warrant a full deliverable. Be concise and direct.
+- "emit_artifact": when the operator is asking for a plan, model, memo, RFC,
+  brief, sequence, calendar, audit, decision, or any multi-section deliverable
+  they would actually ship.
+Pick the lighter tool when in doubt. Never call both. Never return free text.
+`.trim();
+
+export function buildRouterPrompt(opts: {
+  agents: { slug: string; role: string; mandate: string }[];
+  companyContext: string;
+  forceBoardroom?: boolean;
+}): string {
+  const roster = opts.agents
+    .map(a => `- ${a.slug.padEnd(9)} ${a.role} — ${a.mandate}`)
+    .join("\n");
+  return [
+    opts.companyContext,
+    "",
+    "You are the VDNX Router. Read the operator prompt and pick the best agent(s) to handle it.",
+    "",
+    "AGENT ROSTER:",
+    roster,
+    "",
+    "ROUTING RULES:",
+    `- mode="solo" for single-domain questions (one agent answers).`,
+    `- mode="boardroom" for cross-functional, strategic, or "should we…" calls — pick a lead and 1–3 peers.`,
+    opts.forceBoardroom ? `- The operator explicitly invoked @board, so mode MUST be "boardroom".` : "",
+    `- inferred_verb: pick a short verb that fits the prompt (e.g. "brief", "model", "rfc", "campaign", "audit"); use "respond" if nothing fits.`,
+    `- consult_agents: empty for solo; for boardroom include 1–3 distinct slugs (not the primary).`,
+    "",
+    `Call the "route_prompt" tool exactly once.`,
+  ].filter(Boolean).join("\n");
+}
+
 type RolePrompt = {
   identity: string;
   deliverable: string;

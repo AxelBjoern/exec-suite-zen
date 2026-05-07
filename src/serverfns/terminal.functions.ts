@@ -125,23 +125,52 @@ export const decideApproval = createServerFn({ method: "POST" })
       .eq("id", data.approval_id)
       .select("*, tasks(*)")
       .single();
+    let externalResult: any = null;
     if (appr?.task_id && data.decision === "approved") {
+      const task: any = (appr as any).tasks;
+      const payload = task?.payload;
+      if (payload?.kind === "email") {
+        try {
+          const apiKey = process.env.RESEND_API_KEY;
+          if (!apiKey) throw new Error("RESEND_API_KEY not configured. Add it in Lovable Cloud → Secrets.");
+          const from = payload.from ?? process.env.RESEND_FROM ?? "VDNX <onboarding@resend.dev>";
+          const res = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              from, to: [payload.to], subject: payload.subject,
+              html: payload.html ?? undefined, text: payload.text ?? undefined,
+            }),
+          });
+          const body = await res.json().catch(() => ({}));
+          await supabaseAdmin.from("tool_calls").insert({
+            task_id: task.id, agent_slug: task.owner_agent, tool: "email.send",
+            request: { ...payload, from }, response: body,
+            status: res.ok ? "ok" : "error",
+            error: res.ok ? null : `Resend ${res.status}`,
+          });
+          if (!res.ok) throw new Error(`Resend ${res.status}: ${JSON.stringify(body).slice(0, 300)}`);
+          externalResult = { sent: true, id: (body as any).id };
+        } catch (e: any) {
+          externalResult = { sent: false, error: e.message };
+        }
+      }
       await supabaseAdmin
         .from("tasks")
         .update({
           approved_by: "operator",
           approved_at: new Date().toISOString(),
-          status: "done",
-          completed_at: new Date().toISOString(),
+          status: externalResult?.sent === false ? "blocked" : "done",
+          completed_at: externalResult?.sent === false ? null : new Date().toISOString(),
         })
         .eq("id", appr.task_id);
     }
     await appendAudit({
       action: `approval.${data.decision}`,
       target: data.approval_id,
-      payload: { notes: data.notes ?? null },
+      payload: { notes: data.notes ?? null, external: externalResult },
     });
-    return { ok: true };
+    return { ok: true, external: externalResult };
   });
 
 export const pinDirective = createServerFn({ method: "POST" })

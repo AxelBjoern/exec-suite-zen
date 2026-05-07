@@ -14,6 +14,8 @@ import {
   verifyChain,
   getThread,
 } from "@/serverfns/terminal.functions";
+import { fetchUrlSnapshot } from "@/serverfns/integrations/research.functions";
+import { queueEmail } from "@/serverfns/integrations/email.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
 import { ContextPanel } from "@/components/ContextPanel";
@@ -37,18 +39,14 @@ type Panel =
 const HELP = `Available commands:
   :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
+  :seo audit <url>            fetch+analyze a URL (read-only)
+  :sales research <url>       prospect/company discovery (read-only)
+  :sales email <to> <subj>    queue an email (gated in /approvals)
+  :cmo announce <to> <subj>   queue a campaign email (gated in /approvals)
   /library                    browse the full command library
-  /agents                     show roster
-  /tasks                      open task inbox
-  /approvals                  open approval queue
-  /audit                      open hash-chained audit log
-  /manual                     open instruction manual
-  /leads                      open lead-gen pipeline
-  /context                    edit company context (memory)
+  /agents · /tasks · /approvals · /audit · /leads · /context · /manual
   /directive <agent> <text>   pin a standing directive
-  /clear                      clear scrollback
-  /verify                     verify the audit chain
-  /help                       this list
+  /clear · /verify · /help
 
 Shortcuts: ⌘K palette · ↑/↓ history · Tab autocomplete
 
@@ -60,6 +58,8 @@ export function Terminal() {
   const decideFn = useServerFn(decideApproval);
   const pinFn = useServerFn(pinDirective);
   const verifyFn = useServerFn(verifyChain);
+  const researchFn = useServerFn(fetchUrlSnapshot);
+  const queueEmailFn = useServerFn(queueEmail);
 
   const agentsQ = useQuery({ queryKey: ["agents"], queryFn: () => listAgents() });
   const auditQ = useQuery({
@@ -151,6 +151,56 @@ export function Terminal() {
       } catch (e: any) { pushOut(e.message, "err"); }
       finally { setBusy(false); }
       return;
+    }
+
+    // Phase 3 — research (read-only, no approval)
+    {
+      const m = cmd.match(/^:(seo|sales)\s+(audit|research|discovery)\s+(.+)$/i);
+      if (m) {
+        const [, slug, , target] = m;
+        setBusy(true);
+        pushOut(`RESEARCH → ${slug.toUpperCase()} ${target}`, "sys");
+        try {
+          const snap = await researchFn({ data: { url: target.trim(), agent_slug: slug } });
+          pushOut(JSON.stringify(snap, null, 2), "out");
+          // Now feed snapshot into the agent for analysis
+          const r = await dispatchFn({
+            data: {
+              raw: "", agent_slug: slug, verb: "analyze",
+              args: `URL: ${snap.url}\nTitle: ${snap.title}\nDescription: ${snap.description}\nH1: ${snap.h1s.join(" | ")}\nWords: ${snap.approxWordCount}, Links: ${snap.linkCount}, Images: ${snap.imgCount}`,
+              thread_id: null, boardroom: false,
+            },
+          });
+          openPanel({ kind: "thread", agentSlug: slug, threadId: r.thread_id!, title: `${slug.toUpperCase()} · research` });
+          pushOut(`research commit · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+          qc.invalidateQueries({ queryKey: ["audit"] });
+        } catch (e: any) { pushOut(e.message, "err"); toast.error(e.message); }
+        finally { setBusy(false); }
+        return;
+      }
+    }
+
+    // Phase 3 — email (gated)
+    {
+      const m = cmd.match(/^:(sales|cmo)\s+(email|announce)\s+(\S+)\s+(.+?)(?:\s*\|\|\s*(.+))?$/i);
+      if (m) {
+        const [, slug, , to, subject, html] = m;
+        setBusy(true);
+        try {
+          await queueEmailFn({ data: {
+            to, subject,
+            html: html ?? `<p>${subject}</p>`,
+            agent_slug: slug,
+          }});
+          pushOut(`email queued for approval → ${to} · "${subject}"`, "sys");
+          toast.warning("Email awaiting approval", { description: "Open /approvals to send." });
+          openPanel({ kind: "approvals" });
+          qc.invalidateQueries({ queryKey: ["approvals"] });
+          qc.invalidateQueries({ queryKey: ["tasks"] });
+        } catch (e: any) { pushOut(e.message, "err"); toast.error(e.message); }
+        finally { setBusy(false); }
+        return;
+      }
     }
 
     // boardroom: ":board <agent> <verb> args"
@@ -319,11 +369,17 @@ export function Terminal() {
             )}
             {activePanel?.kind === "tasks" && <TasksPanel />}
             {activePanel?.kind === "approvals" && <ApprovalsPanel onDecide={async (id, decision) => {
-              await decideFn({ data: { approval_id: id, decision } });
+              const r = await decideFn({ data: { approval_id: id, decision } });
               qc.invalidateQueries({ queryKey: ["approvals"] });
               qc.invalidateQueries({ queryKey: ["tasks"] });
               qc.invalidateQueries({ queryKey: ["audit"] });
-              toast.success(`Approval ${decision}`);
+              if ((r as any)?.external?.sent === false) {
+                toast.error("Approved but external action failed", { description: (r as any).external.error });
+              } else if ((r as any)?.external?.sent) {
+                toast.success("Approved & sent");
+              } else {
+                toast.success(`Approval ${decision}`);
+              }
             }} />}
             {activePanel?.kind === "audit" && <AuditPanel />}
             {activePanel?.kind === "leads" && <LeadsPanel />}

@@ -4,12 +4,16 @@ import { createHash } from "crypto";
 import {
   ARTIFACT_TOOL,
   CONSULT_TOOL,
+  CHAT_TOOL,
+  ROUTE_TOOL,
   type Artifact,
   type Consult,
+  type ChatReply,
+  type RouteDecision,
   shouldGate,
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
-import { buildSystemPrompt, renderCompanyContext } from "@/lib/agent-prompts";
+import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
 
 const LOVABLE_AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";

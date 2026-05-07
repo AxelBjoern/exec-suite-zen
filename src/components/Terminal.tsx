@@ -14,6 +14,9 @@ import {
   verifyChain,
   getThread,
 } from "@/serverfns/terminal.functions";
+import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
+import { LibraryPanel } from "@/components/LibraryPanel";
+import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];
 
@@ -25,11 +28,13 @@ type Panel =
   | { kind: "audit" }
   | { kind: "leads" }
   | { kind: "manual" }
+  | { kind: "library" }
   | { kind: "agents" };
 
 const HELP = `Available commands:
   :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
+  /library                    browse the full command library
   /agents                     show roster
   /tasks                      open task inbox
   /approvals                  open approval queue
@@ -40,6 +45,8 @@ const HELP = `Available commands:
   /clear                      clear scrollback
   /verify                     verify the audit chain
   /help                       this list
+
+Shortcuts: ⌘K palette · ↑/↓ history · Tab autocomplete
 
 Agents: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo`;
 

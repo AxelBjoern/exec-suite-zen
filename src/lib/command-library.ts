@@ -29,11 +29,11 @@ type Verb = { verb: string; summary: string; example?: string };
 
 const VERBS: Record<string, Verb[]> = {
   ceo: [
-    { verb: "brief",      summary: "Executive brief on a topic.", example: "FY26 strategic priorities" },
-    { verb: "decide",     summary: "Render a binding decision with rationale.", example: "Greenlight ADGM expansion" },
-    { verb: "memo",       summary: "Draft a CEO memo to the org." },
-    { verb: "review",     summary: "Review a plan and stress-test it." },
-    { verb: "prioritize", summary: "Rank initiatives against the mandate." },
+    { verb: "strategy",            summary: "Full strategic plan for a horizon or theme.", example: "Q3 2026" },
+    { verb: "board_deck",          summary: "Complete board presentation.", example: "Series A" },
+    { verb: "vision",              summary: "Vision + narrative refresh.", example: "2027" },
+    { verb: "capital_allocation",  summary: "Capital deployment plan across bets.", example: "2026" },
+    { verb: "quarterly_goals",     summary: "Company priorities + OKRs for the quarter.", example: "Q3" },
   ],
   cfo: [
     { verb: "brief",      summary: "Finance brief: burn, runway, unit economics.", example: "FY26 burn scenarios base/best/worst" },

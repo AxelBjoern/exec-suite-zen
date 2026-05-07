@@ -269,7 +269,7 @@ export function buildSystemPrompt(opts: {
     "",
     role?.deliverable ?? "",
     "",
-    UNIVERSAL_STANDARD,
+    opts.freeform ? FREEFORM_STANDARD : UNIVERSAL_STANDARD,
     directiveBlock,
     recentBlock,
   ].join("\n");

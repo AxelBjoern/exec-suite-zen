@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   dispatch,
+  routePrompt,
   listAgents,
   listAudit,
   listTasks,

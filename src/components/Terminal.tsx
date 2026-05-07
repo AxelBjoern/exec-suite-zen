@@ -335,6 +335,7 @@ export function Terminal() {
               />
             )}
             {activePanel?.kind === "context" && <ContextPanel />}
+          </div>
 
           {/* Scrollback */}
           <div ref={sbRef} className="border-t border-rule bg-panel/30 h-44 overflow-auto px-5 py-2 font-mono text-[12px] leading-relaxed">

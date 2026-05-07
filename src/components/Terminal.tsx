@@ -422,6 +422,17 @@ function panelLabel(p: Panel, agents: Agent[]): string {
   return `${tag} · ${p.title}`;
 }
 
+function Clock() {
+  const [now, setNow] = useState<string>("");
+  useEffect(() => {
+    const tick = () => setNow(new Date().toLocaleString("en-GB", { hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span suppressHydrationWarning>{now || "—"}</span>;
+}
+
 /* ───────── Panels ───────── */
 
 function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) => void }) {

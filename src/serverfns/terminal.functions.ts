@@ -301,31 +301,41 @@ export const dispatch = createServerFn({ method: "POST" })
     thread_id?: string | null;
     boardroom?: boolean;
     parent_task_id?: string | null;
+    prompt?: string | null;
+    freeform?: boolean;
   }) => d)
   .handler(async ({ data }) => {
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);
     if (!primary) throw new Error(`Unknown agent: ${data.agent_slug}`);
 
+    const isFreeform = !!data.freeform && !!data.prompt;
+
     // Resolve / create thread
     let threadId = data.thread_id ?? null;
     if (!threadId) {
+      const titleSeed = isFreeform
+        ? `${primary.role}: ${data.prompt}`
+        : `${primary.role}: ${data.verb} ${data.args}`;
       const { data: t } = await supabaseAdmin
         .from("threads")
         .insert({
           agent_id: primary.id,
           mode: data.boardroom ? "boardroom" : "solo",
-          title: `${primary.role}: ${data.verb} ${data.args}`.slice(0, 120),
+          title: titleSeed.slice(0, 120),
         })
         .select().single();
       threadId = t!.id;
     }
 
     // Persist operator command
+    const operatorContent = isFreeform
+      ? (data.boardroom ? `@board ${data.prompt}` : `@${data.agent_slug} ${data.prompt}`)
+      : `:${data.agent_slug} ${data.verb} ${data.args}`.trim();
     await supabaseAdmin.from("messages").insert({
       thread_id: threadId,
       role: "user",
-      content: `:${data.agent_slug} ${data.verb} ${data.args}`.trim(),
+      content: operatorContent,
     });
 
     // Active directives
@@ -343,9 +353,11 @@ export const dispatch = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(6);
 
-    const userPrompt = `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
+    const userPrompt = isFreeform
+      ? `Operator prompt:\n${data.prompt}\n\nRespond now using exactly one of the available tools.`
+      : `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
 
-    // Primary agent → structured artifact
+    // Primary agent system prompt
     const primarySystem = buildSystemPrompt({
       agentSlug: primary.slug,
       agentRole: primary.role,
@@ -355,13 +367,51 @@ export const dispatch = createServerFn({ method: "POST" })
       directives,
       companyContext,
       recentDecisions: recentDecisions ?? [],
+      freeform: isFreeform && !data.boardroom,
     });
 
-    const artifact = await callTool<Artifact>({
-      system: primarySystem,
-      user: userPrompt,
-      tool: ARTIFACT_TOOL,
-    });
+    // Free-form solo path: model picks chat_reply OR emit_artifact
+    if (isFreeform && !data.boardroom) {
+      const r = await callTool<any>({
+        system: primarySystem,
+        user: userPrompt,
+        tools: [CHAT_TOOL, ARTIFACT_TOOL],
+        toolChoice: "auto",
+      });
+      if (r.name === "chat_reply") {
+        const chat = r.result as ChatReply;
+        await supabaseAdmin.from("messages").insert({
+          thread_id: threadId,
+          agent_id: primary.id,
+          role: "agent",
+          content: chat.reply_markdown,
+          artifact_json: { kind: "chat", ...chat } as any,
+        });
+        const audit = await appendAudit({
+          action: "agent.chatted",
+          agent_slug: primary.slug,
+          target: threadId,
+          payload: { prompt: data.prompt, length: chat.reply_markdown.length },
+        });
+        return {
+          thread_id: threadId,
+          chat,
+          consults: [],
+          requires_approval: false,
+          audit_hash: audit.hash_self,
+          child_task_ids: [],
+        };
+      }
+      // else fall through with artifact result
+      var artifact = r.result as Artifact;
+    } else {
+      const r = await callTool<Artifact>({
+        system: primarySystem,
+        user: userPrompt,
+        tool: ARTIFACT_TOOL,
+      });
+      var artifact = r.result;
+    }
 
     const primaryMd = artifactToMarkdown(artifact);
     await supabaseAdmin.from("messages").insert({
@@ -390,11 +440,12 @@ export const dispatch = createServerFn({ method: "POST" })
           consultFor: { primaryRole: primary.role, primaryReply: primaryMd },
         });
         try {
-          const c = await callTool<Consult>({
+          const cr = await callTool<Consult>({
             system: consultSystem,
             user: userPrompt,
             tool: CONSULT_TOOL,
           });
+          const c = cr.result;
           await supabaseAdmin.from("messages").insert({
             thread_id: threadId,
             agent_id: consult.id,
@@ -425,7 +476,7 @@ export const dispatch = createServerFn({ method: "POST" })
       parent_task_id: data.parent_task_id ?? null,
       owner_agent: primary.slug,
       title: artifact.title.slice(0, 200),
-      body: data.args,
+      body: isFreeform ? (data.prompt ?? "") : data.args,
       status: requiresApproval ? "blocked" : "done",
       requires_approval: requiresApproval,
       completed_at: requiresApproval ? null : new Date().toISOString(),
@@ -472,6 +523,7 @@ export const dispatch = createServerFn({ method: "POST" })
       payload: {
         verb: data.verb,
         args: data.args,
+        prompt: data.prompt ?? null,
         title: artifact.title,
         action_items: artifact.action_items.length,
         child_tasks: childTaskIds.length,
@@ -481,7 +533,7 @@ export const dispatch = createServerFn({ method: "POST" })
     });
 
     // Phase 2: log decision for cross-thread recall
-    const finalSection = artifact.sections.find(s =>
+    const finalSection = artifact.sections.find((s: any) =>
       /final decision|recommendation|summary/i.test(s.heading)
     ) ?? artifact.sections[0];
     await supabaseAdmin.from("decision_log").insert({
@@ -489,7 +541,7 @@ export const dispatch = createServerFn({ method: "POST" })
       agent_slug: primary.slug,
       title: artifact.title.slice(0, 200),
       decision: (finalSection?.body_md ?? "").slice(0, 1000),
-      rationale: `${data.verb} ${data.args}`.slice(0, 500),
+      rationale: (isFreeform ? `prompt: ${data.prompt}` : `${data.verb} ${data.args}`).slice(0, 500),
       amendments: consults.flatMap(c => c.consult.amendments ?? []),
     });
 
@@ -501,6 +553,40 @@ export const dispatch = createServerFn({ method: "POST" })
       audit_hash: audit.hash_self,
       child_task_ids: childTaskIds,
     };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Router: pick agent(s) for a free-form prompt
+// ─────────────────────────────────────────────────────────────────────────
+
+export const routePrompt = createServerFn({ method: "POST" })
+  .inputValidator((d: { prompt: string; force_boardroom?: boolean }) => d)
+  .handler(async ({ data }) => {
+    const { data: agents } = await supabaseAdmin
+      .from("agents").select("slug,role,mandate").order("sort_order");
+    const { data: ctxRow } = await supabaseAdmin
+      .from("company_context").select("*").limit(1).maybeSingle();
+    const companyContext = renderCompanyContext(ctxRow) || DEFAULT_COMPANY_CONTEXT;
+
+    const system = buildRouterPrompt({
+      agents: (agents ?? []) as any,
+      companyContext,
+      forceBoardroom: data.force_boardroom,
+    });
+    const r = await callTool<RouteDecision>({
+      system,
+      user: `Operator prompt:\n${data.prompt}\n\nReturn the routing decision now.`,
+      tool: ROUTE_TOOL,
+    });
+    const decision = r.result;
+    if (data.force_boardroom) decision.mode = "boardroom";
+    // Sanity: filter consult slugs to known agents and exclude primary
+    const known = new Set((agents ?? []).map((a: any) => a.slug));
+    decision.consult_agents = (decision.consult_agents ?? [])
+      .filter(s => known.has(s) && s !== decision.primary_agent)
+      .slice(0, 3);
+    if (decision.mode === "solo") decision.consult_agents = [];
+    return decision;
   });
 
 export const verifyChain = createServerFn({ method: "GET" }).handler(async () => {

@@ -1,8 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createHash } from "crypto";
+import {
+  ARTIFACT_TOOL,
+  CONSULT_TOOL,
+  type Artifact,
+  type Consult,
+  shouldGate,
+  INTERNAL_VERBS,
+} from "@/lib/agent-schemas";
+import { buildSystemPrompt } from "@/lib/agent-prompts";
 
 const LOVABLE_AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const DEFAULT_MODEL = "google/gemini-2.5-flash";
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");
@@ -165,9 +175,16 @@ export const listDirectives = createServerFn({ method: "GET" })
     return dirs ?? [];
   });
 
-const EXEC_KEYWORDS = ["draft", "post", "memo", "board deck", "press", "announce", "publish", "pricing"];
+// ─────────────────────────────────────────────────────────────────────────
+// AI Gateway calls — structured tool-calling
+// ─────────────────────────────────────────────────────────────────────────
 
-async function callAI(opts: { system: string; user: string; model?: string }) {
+async function callTool<T>(opts: {
+  system: string;
+  user: string;
+  tool: typeof ARTIFACT_TOOL | typeof CONSULT_TOOL;
+  model?: string;
+}): Promise<T> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY missing");
   const res = await fetch(LOVABLE_AI, {
@@ -177,22 +194,59 @@ async function callAI(opts: { system: string; user: string; model?: string }) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: opts.model ?? "google/gemini-2.5-flash",
+      model: opts.model ?? DEFAULT_MODEL,
       messages: [
         { role: "system", content: opts.system },
         { role: "user", content: opts.user },
       ],
+      tools: [opts.tool],
+      tool_choice: { type: "function", function: { name: opts.tool.function.name } },
     }),
   });
   if (!res.ok) {
     const body = await res.text();
     if (res.status === 429) throw new Error("Rate limit reached. Wait a moment and retry.");
     if (res.status === 402) throw new Error("AI credits exhausted. Add credits in Lovable Cloud → AI.");
-    throw new Error(`AI Gateway ${res.status}: ${body}`);
+    throw new Error(`AI Gateway ${res.status}: ${body.slice(0, 500)}`);
   }
   const json = await res.json();
-  return json.choices?.[0]?.message?.content ?? "";
+  const call = json.choices?.[0]?.message?.tool_calls?.[0];
+  if (!call?.function?.arguments) {
+    throw new Error("AI did not return a structured tool call");
+  }
+  try {
+    return JSON.parse(call.function.arguments) as T;
+  } catch (e: any) {
+    throw new Error(`Failed to parse tool args: ${e.message}`);
+  }
 }
+
+function artifactToMarkdown(a: Artifact): string {
+  const sections = a.sections
+    .map(s => `### ${s.heading}\n\n${s.body_md}`)
+    .join("\n\n");
+  const items = a.action_items.length
+    ? `\n\n### Action Items\n\n| # | Task | Owner | Deliverable | Due | Auto |\n|---|------|-------|-------------|-----|------|\n${a.action_items
+        .map((it, i) => `| ${i + 1} | ${it.task} | ${it.owner_agent.toUpperCase()} | ${it.deliverable} | ${it.due} | ${it.auto_dispatch ? "✓" : "gate"} |`)
+        .join("\n")}`
+    : "";
+  const next = a.suggested_next_commands.length
+    ? `\n\n### Next\n${a.suggested_next_commands.map(c => `- \`${c}\``).join("\n")}`
+    : "";
+  return `# ${a.title}\n\n${sections}${items}${next}`;
+}
+
+function consultToMarkdown(c: Consult, agentRole: string): string {
+  const head = `**${agentRole} — ${c.position.toUpperCase()}${c.blocking ? " · BLOCKING" : ""}**`;
+  const am = c.amendments.length
+    ? `\n\n**Amendments:**\n${c.amendments.map(a => `- ${a}`).join("\n")}`
+    : "";
+  return `${head}\n\n${c.rationale}${am}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Dispatch: solo or boardroom, with tool-calling and action-item fan-out
+// ─────────────────────────────────────────────────────────────────────────
 
 export const dispatch = createServerFn({ method: "POST" })
   .inputValidator((d: {
@@ -202,6 +256,7 @@ export const dispatch = createServerFn({ method: "POST" })
     args: string;
     thread_id?: string | null;
     boardroom?: boolean;
+    parent_task_id?: string | null;
   }) => d)
   .handler(async ({ data }) => {
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
@@ -222,7 +277,7 @@ export const dispatch = createServerFn({ method: "POST" })
       threadId = t!.id;
     }
 
-    // Persist user command
+    // Persist operator command
     await supabaseAdmin.from("messages").insert({
       thread_id: threadId,
       role: "user",
@@ -232,83 +287,148 @@ export const dispatch = createServerFn({ method: "POST" })
     // Active directives
     const { data: dirs } = await supabaseAdmin
       .from("directives").select("body").eq("agent_id", primary.id).eq("active", true);
-    const directiveBlock = dirs?.length
-      ? `\n\nActive standing directives:\n${dirs.map((d: any) => `- ${d.body}`).join("\n")}`
-      : "";
+    const directives = (dirs ?? []).map((d: any) => d.body as string);
 
-    const userPrompt = `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nRespond using the executive structure.`;
+    const userPrompt = `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
 
-    // Primary agent reply
-    const primaryReply = await callAI({
-      system: primary.system_prompt + directiveBlock,
-      user: userPrompt,
+    // Primary agent → structured artifact
+    const primarySystem = buildSystemPrompt({
+      agentSlug: primary.slug,
+      agentRole: primary.role,
+      agentMandate: primary.mandate,
+      agentTone: primary.tone,
+      baseSystemPrompt: primary.system_prompt,
+      directives,
     });
 
+    const artifact = await callTool<Artifact>({
+      system: primarySystem,
+      user: userPrompt,
+      tool: ARTIFACT_TOOL,
+    });
+
+    const primaryMd = artifactToMarkdown(artifact);
     await supabaseAdmin.from("messages").insert({
       thread_id: threadId,
       agent_id: primary.id,
       role: "agent",
-      content: primaryReply,
+      content: primaryMd,
+      artifact_json: artifact as any,
     });
 
-    // Boardroom: loop in consults
-    const allReplies: { slug: string; name: string; content: string }[] = [
-      { slug: primary.slug, name: primary.name, content: primaryReply },
-    ];
+    // Boardroom consults
+    const consults: { slug: string; role: string; consult: Consult }[] = [];
     if (data.boardroom && primary.consult_with?.length) {
       for (const slug of primary.consult_with as string[]) {
         const consult = agents!.find(a => a.slug === slug);
         if (!consult) continue;
-        const consultReply = await callAI({
-          system: consult.system_prompt + directiveBlock,
-          user: `${userPrompt}\n\n---\nThe ${primary.role} has stated:\n${primaryReply}\n\nRespond from your seat — agree, disagree, add, escalate.`,
-          model: "google/gemini-2.5-pro",
+        const consultSystem = buildSystemPrompt({
+          agentSlug: consult.slug,
+          agentRole: consult.role,
+          agentMandate: consult.mandate,
+          agentTone: consult.tone,
+          baseSystemPrompt: consult.system_prompt,
+          directives: [],
+          consultFor: { primaryRole: primary.role, primaryReply: primaryMd },
         });
-        await supabaseAdmin.from("messages").insert({
-          thread_id: threadId,
-          agent_id: consult.id,
-          role: "agent",
-          content: consultReply,
-        });
-        allReplies.push({ slug: consult.slug, name: consult.name, content: consultReply });
+        try {
+          const c = await callTool<Consult>({
+            system: consultSystem,
+            user: userPrompt,
+            tool: CONSULT_TOOL,
+          });
+          await supabaseAdmin.from("messages").insert({
+            thread_id: threadId,
+            agent_id: consult.id,
+            role: "agent",
+            content: consultToMarkdown(c, consult.role),
+            artifact_json: { kind: "consult", ...c } as any,
+          });
+          consults.push({ slug: consult.slug, role: consult.role, consult: c });
+        } catch (e: any) {
+          await supabaseAdmin.from("messages").insert({
+            thread_id: threadId,
+            agent_id: consult.id,
+            role: "agent",
+            content: `*${consult.role} unable to respond: ${e.message}*`,
+          });
+        }
       }
     }
 
-    // Approval flag
-    const requiresApproval = EXEC_KEYWORDS.some(k =>
-      `${data.verb} ${data.args}`.toLowerCase().includes(k)
-    );
+    // Approval gate (artifact-level) — model flag OR keyword heuristic
+    const requiresApproval =
+      artifact.requires_external_approval || shouldGate(data.verb, data.args);
 
-    // Task row
-    const { data: task } = await supabaseAdmin.from("tasks").insert({
+    // Parent task row
+    const { data: parentTask } = await supabaseAdmin.from("tasks").insert({
       agent_id: primary.id,
       thread_id: threadId,
-      title: `${primary.role}: ${data.verb}`.slice(0, 120),
+      parent_task_id: data.parent_task_id ?? null,
+      owner_agent: primary.slug,
+      title: artifact.title.slice(0, 200),
       body: data.args,
       status: requiresApproval ? "blocked" : "done",
       requires_approval: requiresApproval,
       completed_at: requiresApproval ? null : new Date().toISOString(),
     }).select().single();
 
-    if (requiresApproval && task) {
+    if (requiresApproval && parentTask) {
       await supabaseAdmin.from("approvals").insert({
-        task_id: task.id,
+        task_id: parentTask.id,
         status: "pending",
       });
+    }
+
+    // Fan out action items as child tasks
+    const childTaskIds: string[] = [];
+    for (const item of artifact.action_items ?? []) {
+      const owner = agents!.find(a => a.slug === item.owner_agent);
+      if (!owner) continue;
+      const isInternal =
+        item.auto_dispatch && !shouldGate(item.task, item.deliverable);
+      const { data: child } = await supabaseAdmin.from("tasks").insert({
+        agent_id: owner.id,
+        thread_id: threadId,
+        parent_task_id: parentTask?.id ?? null,
+        owner_agent: owner.slug,
+        title: item.task.slice(0, 200),
+        body: `${item.deliverable}\n\nDue: ${item.due}`,
+        status: isInternal ? "todo" : "blocked",
+        requires_approval: !isInternal,
+        auto_dispatched: isInternal,
+      }).select().single();
+      if (child) childTaskIds.push(child.id);
+      if (!isInternal && child) {
+        await supabaseAdmin.from("approvals").insert({
+          task_id: child.id,
+          status: "pending",
+        });
+      }
     }
 
     const audit = await appendAudit({
       action: data.boardroom ? "boardroom.dispatched" : "agent.dispatched",
       agent_slug: primary.slug,
       target: threadId,
-      payload: { verb: data.verb, args: data.args, requires_approval: requiresApproval },
+      payload: {
+        verb: data.verb,
+        args: data.args,
+        title: artifact.title,
+        action_items: artifact.action_items.length,
+        child_tasks: childTaskIds.length,
+        consults: consults.length,
+        requires_approval: requiresApproval,
+      },
     });
 
     return {
       thread_id: threadId,
-      replies: allReplies,
+      artifact,
+      consults,
       requires_approval: requiresApproval,
       audit_hash: audit.hash_self,
+      child_task_ids: childTaskIds,
     };
   });
 
@@ -322,3 +442,6 @@ export const verifyChain = createServerFn({ method: "GET" }).handler(async () =>
   }
   return { ok: true, count: data.length, head: prev };
 });
+
+// Re-export internal verb set for client-side hint UI.
+export const _INTERNAL_VERBS = INTERNAL_VERBS;

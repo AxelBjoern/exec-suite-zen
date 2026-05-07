@@ -289,6 +289,16 @@ export const dispatch = createServerFn({ method: "POST" })
       .from("directives").select("body").eq("agent_id", primary.id).eq("active", true);
     const directives = (dirs ?? []).map((d: any) => d.body as string);
 
+    // Phase 2: load company context + recent decisions
+    const { data: ctxRow } = await supabaseAdmin
+      .from("company_context").select("*").limit(1).maybeSingle();
+    const companyContext = renderCompanyContext(ctxRow);
+    const { data: recentDecisions } = await supabaseAdmin
+      .from("decision_log")
+      .select("title, decision, created_at")
+      .order("created_at", { ascending: false })
+      .limit(6);
+
     const userPrompt = `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
 
     // Primary agent → structured artifact
@@ -299,6 +309,8 @@ export const dispatch = createServerFn({ method: "POST" })
       agentTone: primary.tone,
       baseSystemPrompt: primary.system_prompt,
       directives,
+      companyContext,
+      recentDecisions: recentDecisions ?? [],
     });
 
     const artifact = await callTool<Artifact>({

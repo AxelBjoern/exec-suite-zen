@@ -237,7 +237,7 @@ export function Terminal() {
           </div>
         </div>
         <div className="font-mono text-[11px] text-muted-foreground">
-          {new Date().toLocaleString("en-GB", { hour12: false })}
+          <Clock />
         </div>
       </header>
 

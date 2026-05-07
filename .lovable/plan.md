@@ -1,110 +1,95 @@
+# Phase 4 (revised): Monday Board → Weekly Plan → Daily Reports
 
-# Autonomous Agents — Phase 4
+The autonomous loop is reframed around your actual operating cadence: one Monday boardroom sets the week, you approve it, agents execute it Tue–Fri, and each agent reports to you every morning.
 
-Goal: agents stop being purely reactive. Internal action items execute themselves, and recurring/event-driven jobs fire agents on a schedule.
+## The weekly loop
 
-## 1. Auto-execute action items (the agent chain)
-
-Today: `dispatch()` produces an artifact with `action_items[]`. Items with `auto_dispatch=true && !shouldGate(...)` are inserted as `tasks` rows with `status="todo"` — but nothing runs them.
-
-Change: introduce a **task runner** that picks up internal todo tasks and dispatches them through the owning agent as freeform prompts.
-
-- New server fn `runTask({ task_id })` in `terminal.functions.ts`:
-  - Loads task → builds a freeform prompt from `title + body`.
-  - Calls existing `dispatch({ agent_slug: owner_agent, freeform: true, prompt, parent_task_id, thread_id })`.
-  - Marks task `running` → `done` (or `blocked` on error). Logs `tool_call` for traceability.
-- After `dispatch()` finishes creating internal child tasks, enqueue an Inngest event `agent/task.ready` per child instead of leaving them as static todos. The Inngest function calls `runTask`. This gives durable retries and avoids long synchronous chains in one HTTP request.
-- Depth guard: refuse to chain past `max_depth = 3` (stored on task as `depth` int column) to prevent runaway loops.
-- External / approval-gated tasks remain blocked until operator approves — runner ignores them.
-
-UI: `Terminal.tsx` shows a small "auto-running N child tasks" trace; `LibraryPanel` / tasks list gets a status pill (todo/running/done/blocked) and a manual "Run now" button.
-
-## 2. Auto-route default
-
-Already implemented for the terminal. Confirm + polish:
-- Show the `RouteDecision` (primary + consults + inferred verb) as a one-line trace above the agent reply.
-- Add a small toggle "Auto-route" (default ON) in Terminal header so operator can disable if they want strict `:agent verb` mode.
-
-## 3. Inngest scheduler + watchers
-
-Use the **Inngest** connector (durable, retryable, event-driven). One serve endpoint hosts every function.
-
-### Setup
-- Connect Inngest via `standard_connectors--connect` (`inngest`).
-- New server route `src/routes/api/public/inngest.ts` exposing `serve({ client, functions })` — handles GET/POST/PUT.
-- Operator must hit the URL once to sync (we'll surface a "Sync Inngest" button in the UI that opens the endpoint).
-
-### Built-in functions
-
-1. **`daily-standup`** — cron `0 8 * * *`
-   - Fans out to COO (`:coo daily_ops`) and CFO (`:cfo cash_pulse` if defined, else freeform "give a 1-paragraph cash pulse").
-   - Posts artifacts to a dedicated thread tagged `kind=standup` (new optional `threads.kind` column).
-
-2. **`weekly-ceo-review`** — cron `0 9 * * 1` (Mon 9am)
-   - Runs `:ceo strategy weekly review` boardroom-style with consults from CFO/COO.
-
-3. **`task-runner`** — event `agent/task.ready`
-   - Calls `runTask({ task_id })` (above). Retries on failure.
-
-4. **Watcher `approval-blocked-watcher`** — event `agent/approval.created` or cron `*/15 * * * *` poll
-   - For approvals pending > 24h, sends a freeform prompt to the owner agent: "Your approval is overdue, draft a follow-up summary." (Notification only — does not auto-approve.)
-
-5. **Watcher `tool-call-failed`** — event `agent/tool_call.failed`
-   - Routes the failure to the owner agent for a freeform "diagnose and propose fix" reply.
-
-Events are emitted from inside `dispatch()` / `decideApproval()` / the Resend block via the documented gateway POST `https://connector-gateway.lovable.dev/inngest/e/`.
-
-### Operator-defined schedules
-
-New table `schedules`:
-```
-id uuid pk
-name text
-cron text                -- e.g. "0 9 * * *"
-agent_slug text
-mode text                -- 'verb' | 'prompt' | 'boardroom'
-verb text null
-args text null
-prompt text null
-active bool default true
-last_run_at timestamptz null
-created_at timestamptz default now()
+```text
+MON 08:00  Board meeting → weekly plan draft  →  awaits your approval
+           │
+           ▼ (you approve in Terminal)
+MON–FRI    Agents auto-execute approved action items
+           │
+           ▼
+TUE–FRI    Daily standup report per agent at 08:00
+           │
+           ▼
+FRI 17:00  End-of-week recap → seeds next Monday's board
 ```
 
-A single Inngest function `operator-schedule-tick` runs every minute, queries due active schedules, dispatches them, updates `last_run_at`. (We don't dynamically register cron functions — one tick handler covers all custom schedules.)
+Three moving parts: **Monday board**, **weekly plan + approval**, **daily reports**. Everything else (watchers, ad-hoc dispatch, auto-route) stays as already built.
 
-UI: new `SchedulesPanel` (sidebar tab) with a list + "Add schedule" form (name, cron, agent picker, mode + verb/prompt). Inline next-run preview using a small cron parser (`cronstrue` for human text, `cron-parser` for next date — both pure JS, Worker-safe).
+## 1. Monday board meeting (cron: 0 8 * * 1)
 
-## 4. Files to add / change
+Inngest function `monday-board` runs a real boardroom dispatch:
+- CEO is primary, consults CFO + COO + CMO (whichever exist).
+- Prompt is generated from: company_context, last week's `decision_log`, open `tasks`, blocked `approvals`, and the previous Friday recap.
+- Output is a single artifact titled "Week of {date} — Plan" with `action_items[]` covering the week (owner_agent, task, deliverable, due, auto_dispatch).
+- The whole artifact is wrapped in **one parent approval** (`kind: "weekly_plan"`) — not one approval per item. You approve the week as a block.
+- Posted to a dedicated thread `kind=board` so it's easy to find.
 
-Add:
-- `supabase/migrations/<ts>_autonomy.sql` — `schedules` table (RLS open to match project pattern), `tasks.depth int default 0`, optional `threads.kind text`.
+## 2. Weekly plan approval
+
+New UI: **"This week" panel** at top of Terminal on Mondays.
+- Shows the plan artifact + every proposed action item with owner.
+- Buttons: **Approve week**, **Reject**, **Edit** (strike items before approving).
+- On approve: all child tasks flip from `blocked` → `todo` and emit `agent/task.ready` events. Inngest `task-runner` then calls `runTask()` per child with retries + depth guard (max 3).
+- External actions (email, etc.) still hit their own per-task approval gate when their time comes — weekly approval ≠ blanket approval to send things on your behalf.
+
+## 3. Daily reports (cron: 0 8 * * 2-5)
+
+Inngest function `daily-agent-reports` fans out to every active agent:
+- Each agent runs a freeform dispatch: *"Report progress on your open tasks. List what's done, what's blocked, what you propose next. Flag anything needing operator decision."*
+- Output goes to a `kind=standup` thread, one message per agent, grouped under a single date header.
+- Any "needs operator decision" item creates a lightweight `suggestion` row (new table) shown in a **Today's suggestions** strip in the Terminal — one-tap approve/dismiss.
+- No daily report on Mondays (board covers it) or weekends.
+
+## 4. Friday recap (cron: 0 17 * * 5)
+
+`weekly-recap` runs CEO solo with the week's `decision_log` + completed/blocked tasks. Stores artifact in a `kind=recap` thread. The next Monday board reads it.
+
+## 5. Watchers (kept from prior plan)
+
+- `approval-overdue-watcher` (*/15 * * * *): if any approval has been pending >24h, ping CEO with a freeform prompt summarizing it.
+- `tool-call-failed` (event): on Resend / external failure, route to owner agent for diagnosis + proposal.
+
+## 6. Operator-defined schedules
+
+Same `schedules` table + `SchedulesPanel` as before, for any custom recurring prompt you want outside the weekly rhythm. `operator-schedule-tick` runs every minute, dispatches due rows.
+
+## Schema additions
+
+- `tasks.depth int default 0` — chain depth guard.
+- `tasks.kind text` — `'plan_item' | 'standup' | 'ad_hoc'` (for filtering).
+- `threads.kind text default 'solo'` — `'board' | 'standup' | 'recap' | 'solo'`.
+- `approvals.kind text default 'task'` — `'weekly_plan' | 'task'`.
+- `suggestions` table: id, agent_slug, thread_id, title, body, status (`open|approved|dismissed`), created_at.
+- `schedules` table (as before).
+
+## Files
+
+**Add**
 - `src/routes/api/public/inngest.ts` — Inngest serve endpoint.
-- `src/server/inngest.server.ts` — Inngest client + function definitions (daily-standup, weekly-ceo-review, task-runner, watchers, operator-schedule-tick).
-- `src/server/inngest-events.server.ts` — typed `sendEvent(name, data)` helper using gateway URL.
-- `src/serverfns/schedules.functions.ts` — list/create/toggle/delete schedules.
-- `src/serverfns/tasks.functions.ts` — `runTask`, `listRunnableTasks`, manual-run endpoint.
-- `src/components/SchedulesPanel.tsx` — UI for schedules.
+- `src/server/inngest.server.ts` — client + functions (`monday-board`, `daily-agent-reports`, `weekly-recap`, `task-runner`, `approval-overdue-watcher`, `tool-call-failed`, `operator-schedule-tick`).
+- `src/server/inngest-events.server.ts` — gateway POST helper.
+- `src/serverfns/tasks.functions.ts` — `runTask`, `approveWeeklyPlan`.
+- `src/serverfns/suggestions.functions.ts` — list / decide.
+- `src/serverfns/schedules.functions.ts` — CRUD.
+- `src/components/WeeklyPlanPanel.tsx` — Monday review/approve UI.
+- `src/components/DailySuggestions.tsx` — today's items strip.
+- `src/components/SchedulesPanel.tsx` — operator schedules.
 
-Edit:
-- `src/serverfns/terminal.functions.ts` — emit `agent/task.ready` after creating internal child tasks; emit `agent/tool_call.failed` on Resend errors; expose `runTask`.
-- `src/components/Terminal.tsx` — auto-route toggle + router trace line.
-- `src/components/LibraryPanel.tsx` (or wherever tasks render) — status pill + "Run now".
-- `src/lib/agent-schemas.ts` — add `depth` to ActionItem (optional, for telemetry only).
+**Edit**
+- `src/serverfns/terminal.functions.ts` — `dispatch()` writes parent approval as `kind:'weekly_plan'` for board mode; on weekly approval, fan-out emits `agent/task.ready`.
+- `src/components/Terminal.tsx` — mount `WeeklyPlanPanel` + `DailySuggestions` above command bar; show router trace + auto-route toggle.
+- `src/lib/agent-schemas.ts` — add `weekly_plan` artifact hint.
 
-## 5. Secrets / connectors
+## Out of scope
 
-- Inngest connector — user clicks Connect (provides `LOVABLE_API_KEY`, `INNGEST_API_KEY`, `INNGEST_SIGNING_KEY` automatically).
-- After deploy, operator clicks "Sync Inngest" button (opens the serve URL) so Inngest registers functions.
+- Auto-approving external actions (email/etc still gated).
+- Streaming agent responses.
+- Multi-tenant scheduling.
 
-## 6. Out of scope
+## Setup before code
 
-- Auto-approving external actions (emails to real recipients still gated).
-- Streaming partial agent output.
-- Multi-tenant scheduling (single workspace assumed).
-
-## Technical notes
-
-- Depth guard prevents agent A → B → A → B loops; tasks deeper than `max_depth` are marked `blocked` with reason `"max chain depth"`.
-- Operator-defined schedules use minute-tick polling instead of dynamic Inngest cron registration to keep things simple and editable from the UI.
-- All cron/Inngest endpoints live under `/api/public/*` so they bypass auth on published deployments; Inngest verifies signatures via `INNGEST_SIGNING_KEY` automatically.
+Connect the **Inngest connector** (provides `LOVABLE_API_KEY`, `INNGEST_API_KEY`, `INNGEST_SIGNING_KEY` automatically). Nothing else to add.

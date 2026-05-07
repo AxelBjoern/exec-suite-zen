@@ -157,6 +157,56 @@ export function Terminal() {
       return;
     }
 
+    // Phase 3 — research (read-only, no approval)
+    {
+      const m = cmd.match(/^:(seo|sales)\s+(audit|research|discovery)\s+(.+)$/i);
+      if (m) {
+        const [, slug, , target] = m;
+        setBusy(true);
+        pushOut(`RESEARCH → ${slug.toUpperCase()} ${target}`, "sys");
+        try {
+          const snap = await researchFn({ data: { url: target.trim(), agent_slug: slug } });
+          pushOut(JSON.stringify(snap, null, 2), "out");
+          // Now feed snapshot into the agent for analysis
+          const r = await dispatchFn({
+            data: {
+              raw: "", agent_slug: slug, verb: "analyze",
+              args: `URL: ${snap.url}\nTitle: ${snap.title}\nDescription: ${snap.description}\nH1: ${snap.h1s.join(" | ")}\nWords: ${snap.approxWordCount}, Links: ${snap.linkCount}, Images: ${snap.imgCount}`,
+              thread_id: null, boardroom: false,
+            },
+          });
+          openPanel({ kind: "thread", agentSlug: slug, threadId: r.thread_id!, title: `${slug.toUpperCase()} · research` });
+          pushOut(`research commit · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+          qc.invalidateQueries({ queryKey: ["audit"] });
+        } catch (e: any) { pushOut(e.message, "err"); toast.error(e.message); }
+        finally { setBusy(false); }
+        return;
+      }
+    }
+
+    // Phase 3 — email (gated)
+    {
+      const m = cmd.match(/^:(sales|cmo)\s+(email|announce)\s+(\S+)\s+(.+?)(?:\s*\|\|\s*(.+))?$/i);
+      if (m) {
+        const [, slug, , to, subject, html] = m;
+        setBusy(true);
+        try {
+          await queueEmailFn({ data: {
+            to, subject,
+            html: html ?? `<p>${subject}</p>`,
+            agent_slug: slug,
+          }});
+          pushOut(`email queued for approval → ${to} · "${subject}"`, "sys");
+          toast.warning("Email awaiting approval", { description: "Open /approvals to send." });
+          openPanel({ kind: "approvals" });
+          qc.invalidateQueries({ queryKey: ["approvals"] });
+          qc.invalidateQueries({ queryKey: ["tasks"] });
+        } catch (e: any) { pushOut(e.message, "err"); toast.error(e.message); }
+        finally { setBusy(false); }
+        return;
+      }
+    }
+
     // boardroom: ":board <agent> <verb> args"
     if (cmd.startsWith(":board ")) {
       const rest = cmd.slice(":board ".length).trim();

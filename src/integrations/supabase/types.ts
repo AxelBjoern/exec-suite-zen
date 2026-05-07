@@ -265,6 +265,7 @@ export type Database = {
       messages: {
         Row: {
           agent_id: string | null
+          artifact_json: Json | null
           content: string
           created_at: string
           id: string
@@ -273,6 +274,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
+          artifact_json?: Json | null
           content: string
           created_at?: string
           id?: string
@@ -281,6 +283,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
+          artifact_json?: Json | null
           content?: string
           created_at?: string
           id?: string
@@ -341,10 +344,13 @@ export type Database = {
           agent_id: string | null
           approved_at: string | null
           approved_by: string | null
+          auto_dispatched: boolean
           body: string | null
           completed_at: string | null
           created_at: string
           id: string
+          owner_agent: string | null
+          parent_task_id: string | null
           requires_approval: boolean
           status: string
           thread_id: string | null
@@ -354,10 +360,13 @@ export type Database = {
           agent_id?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          auto_dispatched?: boolean
           body?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
+          owner_agent?: string | null
+          parent_task_id?: string | null
           requires_approval?: boolean
           status?: string
           thread_id?: string | null
@@ -367,10 +376,13 @@ export type Database = {
           agent_id?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          auto_dispatched?: boolean
           body?: string | null
           completed_at?: string | null
           created_at?: string
           id?: string
+          owner_agent?: string | null
+          parent_task_id?: string | null
           requires_approval?: boolean
           status?: string
           thread_id?: string | null

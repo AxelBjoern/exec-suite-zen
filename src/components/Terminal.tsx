@@ -16,6 +16,7 @@ import {
 } from "@/serverfns/terminal.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
+import { ArtifactCard, ConsultCard } from "@/components/ArtifactCard";
 import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];
@@ -307,10 +308,10 @@ export function Terminal() {
           <div className="flex-1 overflow-auto">
             {activePanel?.kind === "agents" && <AgentsPanel agents={agents} onOpen={openPanel} />}
             {activePanel?.kind === "thread" && (
-              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} />
+              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} onRunCommand={exec} />
             )}
             {activePanel?.kind === "boardroom" && (
-              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} boardroom />
+              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} boardroom onRunCommand={exec} />
             )}
             {activePanel?.kind === "tasks" && <TasksPanel />}
             {activePanel?.kind === "approvals" && <ApprovalsPanel onDecide={async (id, decision) => {
@@ -465,8 +466,8 @@ function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) =
 }
 
 function ThreadPanel({
-  agentSlug, threadId, agents, boardroom,
-}: { agentSlug: string; threadId: string | null; agents: Agent[]; boardroom?: boolean }) {
+  agentSlug, threadId, agents, boardroom, onRunCommand,
+}: { agentSlug: string; threadId: string | null; agents: Agent[]; boardroom?: boolean; onRunCommand?: (cmd: string) => void }) {
   const agent = agents.find(a => a.slug === agentSlug);
   const dirsQ = useQuery({
     queryKey: ["directives", agentSlug],
@@ -499,9 +500,11 @@ function ThreadPanel({
 
         <div className="space-y-6">
           {threadQ.data?.messages.map((m: any) => {
-            const sender = m.role === "user"
-              ? "Operator"
-              : agents.find(a => a.id === m.agent_id)?.role ?? "Agent";
+            const senderAgent = m.role === "user" ? null : agents.find(a => a.id === m.agent_id);
+            const sender = m.role === "user" ? "Operator" : senderAgent?.role ?? "Agent";
+            const aj = m.artifact_json as any;
+            const isConsult = aj && aj.kind === "consult";
+            const isArtifact = aj && !isConsult && Array.isArray(aj.sections);
             return (
               <div key={m.id} className="border-l-2 border-primary/60 pl-4">
                 <div className="flex items-baseline justify-between">
@@ -510,9 +513,15 @@ function ThreadPanel({
                     {new Date(m.created_at).toLocaleTimeString("en-GB", { hour12: false })}
                   </div>
                 </div>
-                <div className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed font-serif">
-                  {m.content}
-                </div>
+                {isArtifact ? (
+                  <ArtifactCard artifact={aj} onRunCommand={onRunCommand} />
+                ) : isConsult ? (
+                  <ConsultCard agentRole={sender} consult={aj} />
+                ) : (
+                  <div className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed font-serif">
+                    {m.content}
+                  </div>
+                )}
               </div>
             );
           })}

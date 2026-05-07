@@ -14,6 +14,9 @@ import {
   verifyChain,
   getThread,
 } from "@/serverfns/terminal.functions";
+import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
+import { LibraryPanel } from "@/components/LibraryPanel";
+import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];
 
@@ -25,11 +28,13 @@ type Panel =
   | { kind: "audit" }
   | { kind: "leads" }
   | { kind: "manual" }
+  | { kind: "library" }
   | { kind: "agents" };
 
 const HELP = `Available commands:
   :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
+  /library                    browse the full command library
   /agents                     show roster
   /tasks                      open task inbox
   /approvals                  open approval queue
@@ -40,6 +45,8 @@ const HELP = `Available commands:
   /clear                      clear scrollback
   /verify                     verify the audit chain
   /help                       this list
+
+Shortcuts: ⌘K palette · ↑/↓ history · Tab autocomplete
 
 Agents: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo`;
 
@@ -70,11 +77,22 @@ export function Terminal() {
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
   const [busy, setBusy] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const sbRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { sbRef.current?.scrollTo({ top: sbRef.current.scrollHeight }); }, [scrollback]);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(p => !p);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   function pushOut(text: string, kind: "in" | "out" | "err" | "sys" = "out") {
     setScrollback(s => [...s, { kind, text }]);
@@ -105,6 +123,7 @@ export function Terminal() {
     if (cmd === "/audit") return openPanel({ kind: "audit" });
     if (cmd === "/manual") return openPanel({ kind: "manual" });
     if (cmd === "/leads") return openPanel({ kind: "leads" });
+    if (cmd === "/library") return openPanel({ kind: "library" });
     if (cmd === "/verify") {
       setBusy(true);
       try {
@@ -184,6 +203,12 @@ export function Terminal() {
       const v = input;
       setInput("");
       exec(v);
+    } else if (e.key === "Tab") {
+      const sugg = suggestForInput(input);
+      if (sugg.length) {
+        e.preventDefault();
+        setInput(sugg[0].template);
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       const ni = Math.min(history.length - 1, histIdx + 1);
@@ -212,7 +237,7 @@ export function Terminal() {
           </div>
         </div>
         <div className="font-mono text-[11px] text-muted-foreground">
-          {new Date().toLocaleString("en-GB", { hour12: false })}
+          <Clock />
         </div>
       </header>
 
@@ -238,6 +263,13 @@ export function Terminal() {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => openPanel({ kind: "library" })}
+            className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left flex items-center justify-between"
+          >
+            <span>Command Library</span>
+            <span className="font-mono text-[10px] text-muted-foreground">⌘K</span>
+          </button>
           <button
             onClick={() => openPanel({ kind: "manual" })}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left"
@@ -291,6 +323,12 @@ export function Terminal() {
             {activePanel?.kind === "audit" && <AuditPanel />}
             {activePanel?.kind === "leads" && <LeadsPanel />}
             {activePanel?.kind === "manual" && <ManualPanel />}
+            {activePanel?.kind === "library" && (
+              <LibraryPanel
+                onRun={(t) => exec(t)}
+                onPrefill={(t) => { setInput(t); inputRef.current?.focus(); }}
+              />
+            )}
           </div>
 
           {/* Scrollback */}
@@ -307,6 +345,16 @@ export function Terminal() {
             {busy && <div className="text-amber">…working</div>}
           </div>
 
+          {/* Inline suggestions */}
+          {input.trim() && (input.startsWith(":") || input.startsWith("/")) && (
+            <div className="px-5">
+              <InlineSuggestions
+                input={input}
+                onPick={(c) => { setInput(c.template); inputRef.current?.focus(); }}
+              />
+            </div>
+          )}
+
           {/* Command line */}
           <div className="border-t border-primary/40 bg-background px-5 py-3 flex items-center gap-3">
             <span className="font-mono text-primary">:</span>
@@ -318,13 +366,27 @@ export function Terminal() {
               disabled={busy}
               spellCheck={false}
               autoComplete="off"
-              placeholder=":cfo brief FY26 burn scenarios base/best/worst"
+              placeholder=":cfo brief FY26 burn scenarios   ·   ⌘K for palette   ·   /library"
               className="flex-1 bg-transparent outline-none font-mono text-[13px] text-foreground placeholder:text-muted-foreground/60"
             />
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
+              title="Open command palette"
+            >⌘K</button>
             <span className="font-mono text-primary caret">▍</span>
           </div>
         </main>
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onPick={(entry, mode) => {
+          if (mode === "run") exec(entry.template);
+          else { setInput(entry.template); setTimeout(() => inputRef.current?.focus(), 0); }
+        }}
+      />
 
       {/* Audit ticker */}
       <div className="border-t border-rule bg-panel/80 overflow-hidden ticker-mask">
@@ -354,9 +416,21 @@ function panelLabel(p: Panel, agents: Agent[]): string {
   if (p.kind === "audit") return "AUDIT";
   if (p.kind === "leads") return "LEADS";
   if (p.kind === "manual") return "MANUAL";
+  if (p.kind === "library") return "LIBRARY";
   const a = agents.find(x => x.slug === p.agentSlug);
   const tag = p.kind === "boardroom" ? "BOARD" : a?.slug.toUpperCase();
   return `${tag} · ${p.title}`;
+}
+
+function Clock() {
+  const [now, setNow] = useState<string>("");
+  useEffect(() => {
+    const tick = () => setNow(new Date().toLocaleString("en-GB", { hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span suppressHydrationWarning>{now || "—"}</span>;
 }
 
 /* ───────── Panels ───────── */

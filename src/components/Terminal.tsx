@@ -316,6 +316,12 @@ export function Terminal() {
             {activePanel?.kind === "audit" && <AuditPanel />}
             {activePanel?.kind === "leads" && <LeadsPanel />}
             {activePanel?.kind === "manual" && <ManualPanel />}
+            {activePanel?.kind === "library" && (
+              <LibraryPanel
+                onRun={(t) => exec(t)}
+                onPrefill={(t) => { setInput(t); inputRef.current?.focus(); }}
+              />
+            )}
           </div>
 
           {/* Scrollback */}
@@ -332,6 +338,16 @@ export function Terminal() {
             {busy && <div className="text-amber">…working</div>}
           </div>
 
+          {/* Inline suggestions */}
+          {input.trim() && (input.startsWith(":") || input.startsWith("/")) && (
+            <div className="px-5">
+              <InlineSuggestions
+                input={input}
+                onPick={(c) => { setInput(c.template); inputRef.current?.focus(); }}
+              />
+            </div>
+          )}
+
           {/* Command line */}
           <div className="border-t border-primary/40 bg-background px-5 py-3 flex items-center gap-3">
             <span className="font-mono text-primary">:</span>
@@ -343,13 +359,27 @@ export function Terminal() {
               disabled={busy}
               spellCheck={false}
               autoComplete="off"
-              placeholder=":cfo brief FY26 burn scenarios base/best/worst"
+              placeholder=":cfo brief FY26 burn scenarios   ·   ⌘K for palette   ·   /library"
               className="flex-1 bg-transparent outline-none font-mono text-[13px] text-foreground placeholder:text-muted-foreground/60"
             />
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
+              title="Open command palette"
+            >⌘K</button>
             <span className="font-mono text-primary caret">▍</span>
           </div>
         </main>
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onPick={(entry, mode) => {
+          if (mode === "run") exec(entry.template);
+          else { setInput(entry.template); setTimeout(() => inputRef.current?.focus(), 0); }
+        }}
+      />
 
       {/* Audit ticker */}
       <div className="border-t border-rule bg-panel/80 overflow-hidden ticker-mask">

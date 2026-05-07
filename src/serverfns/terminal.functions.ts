@@ -448,6 +448,10 @@ export const dispatch = createServerFn({ method: "POST" })
       rationale: `${data.verb} ${data.args}`.slice(0, 500),
       amendments: consults.flatMap(c => c.consult.amendments ?? []),
     });
+
+    return {
+      thread_id: threadId,
+      artifact,
       consults,
       requires_approval: requiresApproval,
       audit_hash: audit.hash_self,

@@ -308,10 +308,10 @@ export function Terminal() {
           <div className="flex-1 overflow-auto">
             {activePanel?.kind === "agents" && <AgentsPanel agents={agents} onOpen={openPanel} />}
             {activePanel?.kind === "thread" && (
-              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} />
+              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} onRunCommand={exec} />
             )}
             {activePanel?.kind === "boardroom" && (
-              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} boardroom />
+              <ThreadPanel agentSlug={activePanel.agentSlug} threadId={activePanel.threadId} agents={agents} boardroom onRunCommand={exec} />
             )}
             {activePanel?.kind === "tasks" && <TasksPanel />}
             {activePanel?.kind === "approvals" && <ApprovalsPanel onDecide={async (id, decision) => {

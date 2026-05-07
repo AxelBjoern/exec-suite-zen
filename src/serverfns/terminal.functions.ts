@@ -436,9 +436,18 @@ export const dispatch = createServerFn({ method: "POST" })
       },
     });
 
-    return {
+    // Phase 2: log decision for cross-thread recall
+    const finalSection = artifact.sections.find(s =>
+      /final decision|recommendation|summary/i.test(s.heading)
+    ) ?? artifact.sections[0];
+    await supabaseAdmin.from("decision_log").insert({
       thread_id: threadId,
-      artifact,
+      agent_slug: primary.slug,
+      title: artifact.title.slice(0, 200),
+      decision: (finalSection?.body_md ?? "").slice(0, 1000),
+      rationale: `${data.verb} ${data.args}`.slice(0, 500),
+      amendments: consults.flatMap(c => c.consult.amendments ?? []),
+    });
       consults,
       requires_approval: requiresApproval,
       audit_hash: audit.hash_self,

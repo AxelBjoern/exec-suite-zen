@@ -109,6 +109,20 @@ export const CONSULT_TOOL = {
   },
 };
 
+export type Artifact = {
+  title: string;
+  sections: { heading: string; body_md: string }[];
+  action_items: {
+    task: string;
+    owner_agent: string;
+    deliverable: string;
+    due: string;
+    auto_dispatch: boolean;
+  }[];
+  requires_external_approval: boolean;
+  suggested_next_commands: string[];
+};
+
 export const CHAT_TOOL = {
   type: "function" as const,
   function: {

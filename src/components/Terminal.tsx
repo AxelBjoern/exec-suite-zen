@@ -264,6 +264,13 @@ export function Terminal() {
             ))}
           </div>
           <button
+            onClick={() => openPanel({ kind: "library" })}
+            className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left flex items-center justify-between"
+          >
+            <span>Command Library</span>
+            <span className="font-mono text-[10px] text-muted-foreground">⌘K</span>
+          </button>
+          <button
             onClick={() => openPanel({ kind: "manual" })}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left"
           >

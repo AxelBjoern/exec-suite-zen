@@ -62,6 +62,8 @@ export function Terminal() {
   const decideFn = useServerFn(decideApproval);
   const pinFn = useServerFn(pinDirective);
   const verifyFn = useServerFn(verifyChain);
+  const researchFn = useServerFn(fetchUrlSnapshot);
+  const queueEmailFn = useServerFn(queueEmail);
 
   const agentsQ = useQuery({ queryKey: ["agents"], queryFn: () => listAgents() });
   const auditQ = useQuery({

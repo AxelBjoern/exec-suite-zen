@@ -140,3 +140,34 @@ export function ConsultCard({
     </article>
   );
 }
+
+export function ChatReplyCard({
+  markdown,
+  suggestedNext,
+  onRunCommand,
+}: {
+  markdown: string;
+  suggestedNext: string[];
+  onRunCommand?: (cmd: string) => void;
+}) {
+  return (
+    <article className="border border-rule bg-panel/30 p-4 my-2">
+      <div className="prose prose-sm prose-invert max-w-none font-serif text-[14px] leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+      </div>
+      {suggestedNext.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {suggestedNext.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => onRunCommand?.(c)}
+              className="font-mono text-[11px] border border-rule px-2 py-1 hover:border-primary hover:text-primary transition-colors"
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}

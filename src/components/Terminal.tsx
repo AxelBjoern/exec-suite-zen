@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   dispatch,
+  routePrompt,
   listAgents,
   listAudit,
   listTasks,
@@ -19,7 +20,7 @@ import { queueEmail } from "@/serverfns/integrations/email.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
 import { ContextPanel } from "@/components/ContextPanel";
-import { ArtifactCard, ConsultCard } from "@/components/ArtifactCard";
+import { ArtifactCard, ConsultCard, ChatReplyCard } from "@/components/ArtifactCard";
 import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];
@@ -37,7 +38,10 @@ type Panel =
   | { kind: "agents" };
 
 const HELP = `Available commands:
-  :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
+  <free-form prompt>          auto-route — router picks the right agent or boardroom
+  @<agent> <prompt>           ask one agent in plain language (e.g. @cfo runway if we hire 5 engineers?)
+  @board <prompt>             force a boardroom debate (router picks the lead)
+  :<agent> <verb> [args]      structured verb dispatch (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
   :seo audit <url>            fetch+analyze a URL (read-only)
   :sales research <url>       prospect/company discovery (read-only)
@@ -55,6 +59,7 @@ Agents: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo`;
 export function Terminal() {
   const qc = useQueryClient();
   const dispatchFn = useServerFn(dispatch);
+  const routeFn = useServerFn(routePrompt);
   const decideFn = useServerFn(decideApproval);
   const pinFn = useServerFn(pinDirective);
   const verifyFn = useServerFn(verifyChain);
@@ -221,6 +226,28 @@ export function Terminal() {
       return runDispatch(slug, verb, args.join(" "), false);
     }
 
+    // free-form: "@board <prompt>" — forced boardroom, router picks lead
+    if (/^@board\s+/i.test(cmd)) {
+      const prompt = cmd.replace(/^@board\s+/i, "").trim();
+      if (!prompt) return pushOut("usage: @board <prompt>", "err");
+      return runPrompt(prompt, { forceBoardroom: true });
+    }
+
+    // free-form: "@<agent> <prompt>"
+    if (cmd.startsWith("@")) {
+      const rest = cmd.slice(1);
+      const [slug, ...rest2] = rest.split(/\s+/);
+      const prompt = rest2.join(" ").trim();
+      if (!validSlugs.has(slug)) return pushOut(`unknown agent: ${slug} (try @board or @<slug>)`, "err");
+      if (!prompt) return pushOut(`usage: @${slug} <prompt>`, "err");
+      return runPromptForAgent(slug, prompt, false);
+    }
+
+    // bare prompt — auto-route
+    if (!cmd.startsWith("/") && !cmd.startsWith(":")) {
+      return runPrompt(cmd, { forceBoardroom: false });
+    }
+
     pushOut(`unknown command: ${cmd}  (try /help)`, "err");
   }
 
@@ -239,6 +266,68 @@ export function Terminal() {
         title: `${agent?.role ?? slug} · ${verb}`,
       });
       if (r.requires_approval) {
+        toast.warning("Output requires human approval", { description: "Open /approvals to sign off." });
+        pushOut(`[REQUIRES APPROVAL] hash ${r.audit_hash.slice(0, 12)}…`, "err");
+      } else {
+        pushOut(`commit ok · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+      }
+      qc.invalidateQueries({ queryKey: ["audit"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["approvals"] });
+    } catch (e: any) {
+      pushOut(e.message ?? "dispatch failed", "err");
+      toast.error(e.message ?? "dispatch failed");
+    } finally { setBusy(false); }
+  }
+
+  async function runPrompt(prompt: string, opts: { forceBoardroom: boolean }) {
+    setBusy(true);
+    pushOut(`ROUTING → ${opts.forceBoardroom ? "boardroom (forced)" : "auto"} …`, "sys");
+    try {
+      const decision = await routeFn({ data: { prompt, force_boardroom: opts.forceBoardroom } });
+      const trace = decision.mode === "boardroom"
+        ? `ROUTED → BOARDROOM lead=${decision.primary_agent.toUpperCase()} consults=${decision.consult_agents.map(s => s.toUpperCase()).join(",") || "—"}`
+        : `ROUTED → ${decision.primary_agent.toUpperCase()} (solo) verb=${decision.inferred_verb}`;
+      pushOut(trace, "sys");
+      await runPromptForAgent(
+        decision.primary_agent,
+        prompt,
+        decision.mode === "boardroom",
+        decision.inferred_verb,
+      );
+    } catch (e: any) {
+      pushOut(e.message ?? "routing failed", "err");
+      toast.error(e.message ?? "routing failed");
+      setBusy(false);
+    }
+  }
+
+  async function runPromptForAgent(slug: string, prompt: string, boardroom: boolean, verb = "respond") {
+    setBusy(true);
+    pushOut(`${boardroom ? "BOARDROOM" : "DISPATCH"} → ${slug.toUpperCase()} · ${verb}`, "sys");
+    try {
+      const r = await dispatchFn({
+        data: {
+          raw: "",
+          agent_slug: slug,
+          verb,
+          args: prompt,
+          prompt,
+          freeform: true,
+          thread_id: null,
+          boardroom,
+        },
+      });
+      const agent = agents.find(a => a.slug === slug);
+      openPanel({
+        kind: boardroom ? "boardroom" : "thread",
+        agentSlug: slug,
+        threadId: r.thread_id!,
+        title: `${agent?.role ?? slug} · ${verb}`,
+      });
+      if ((r as any).chat) {
+        pushOut(`reply · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+      } else if (r.requires_approval) {
         toast.warning("Output requires human approval", { description: "Open /approvals to sign off." });
         pushOut(`[REQUIRES APPROVAL] hash ${r.audit_hash.slice(0, 12)}…`, "err");
       } else {
@@ -554,8 +643,9 @@ function ThreadPanel({
 
         {!threadId && (
           <div className="font-mono text-sm text-muted-foreground border border-dashed border-rule p-6">
-            No thread yet. From the command line below, dispatch:
-            <div className="text-primary mt-2">:{agentSlug} brief &lt;your topic&gt;</div>
+            No thread yet. From the command line below, try:
+            <div className="text-primary mt-2">@{agentSlug} &lt;ask anything in plain language&gt;</div>
+            <div className="text-primary">:{agentSlug} brief &lt;your topic&gt;</div>
             {boardroom && <div className="text-primary">:board {agentSlug} &lt;verb&gt; ...</div>}
           </div>
         )}
@@ -566,7 +656,8 @@ function ThreadPanel({
             const sender = m.role === "user" ? "Operator" : senderAgent?.role ?? "Agent";
             const aj = m.artifact_json as any;
             const isConsult = aj && aj.kind === "consult";
-            const isArtifact = aj && !isConsult && Array.isArray(aj.sections);
+            const isChat = aj && aj.kind === "chat";
+            const isArtifact = aj && !isConsult && !isChat && Array.isArray(aj.sections);
             return (
               <div key={m.id} className="border-l-2 border-primary/60 pl-4">
                 <div className="flex items-baseline justify-between">
@@ -579,6 +670,12 @@ function ThreadPanel({
                   <ArtifactCard artifact={aj} onRunCommand={onRunCommand} />
                 ) : isConsult ? (
                   <ConsultCard agentRole={sender} consult={aj} />
+                ) : isChat ? (
+                  <ChatReplyCard
+                    markdown={aj.reply_markdown ?? m.content}
+                    suggestedNext={aj.suggested_next_commands ?? []}
+                    onRunCommand={onRunCommand}
+                  />
                 ) : (
                   <div className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed font-serif">
                     {m.content}

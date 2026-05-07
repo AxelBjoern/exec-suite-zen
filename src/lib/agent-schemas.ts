@@ -109,18 +109,69 @@ export const CONSULT_TOOL = {
   },
 };
 
-export type Artifact = {
-  title: string;
-  sections: { heading: string; body_md: string }[];
-  action_items: {
-    task: string;
-    owner_agent: string;
-    deliverable: string;
-    due: string;
-    auto_dispatch: boolean;
-  }[];
-  requires_external_approval: boolean;
+export const CHAT_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "chat_reply",
+    description: "Answer a quick question conversationally. Use this when the operator's prompt does not warrant a full structured deliverable (no plan, model, memo, or RFC needed).",
+    parameters: {
+      type: "object",
+      properties: {
+        reply_markdown: {
+          type: "string",
+          description: "Your answer in markdown. Concise, decision-grade, no filler. May include bullets, short tables, code.",
+        },
+        suggested_next_commands: {
+          type: "array",
+          maxItems: 4,
+          items: { type: "string" },
+          description: "Optional follow-up commands the operator might run.",
+        },
+      },
+      required: ["reply_markdown", "suggested_next_commands"],
+      additionalProperties: false,
+    },
+  },
+};
+
+export const ROUTE_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "route_prompt",
+    description: "Pick the right VDNX agent(s) to answer a free-form prompt.",
+    parameters: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["solo", "boardroom"] },
+        primary_agent: { type: "string", enum: VALID_OWNERS },
+        consult_agents: {
+          type: "array",
+          items: { type: "string", enum: VALID_OWNERS },
+          description: "Empty for solo. 1–3 peers for boardroom.",
+        },
+        inferred_verb: {
+          type: "string",
+          description: "Best-fit verb from the agent's verb list, or 'respond' if none fits.",
+        },
+        reasoning: { type: "string", description: "One sentence why." },
+      },
+      required: ["mode", "primary_agent", "consult_agents", "inferred_verb", "reasoning"],
+      additionalProperties: false,
+    },
+  },
+};
+
+export type ChatReply = {
+  reply_markdown: string;
   suggested_next_commands: string[];
+};
+
+export type RouteDecision = {
+  mode: "solo" | "boardroom";
+  primary_agent: string;
+  consult_agents: string[];
+  inferred_verb: string;
+  reasoning: string;
 };
 
 export type Consult = {
@@ -143,6 +194,7 @@ export const INTERNAL_VERBS = new Set([
   "research", "summarize", "score", "map", "plan", "propose", "rfc",
   "architect", "forecast", "variance", "kyc-review", "risk-memo",
   "keyword-map", "profile-audit", "discovery", "trend-brief",
+  "respond", "chat", "answer",
 ]);
 
 export function shouldGate(verb: string, args: string): boolean {

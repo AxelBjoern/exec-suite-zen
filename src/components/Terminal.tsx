@@ -39,18 +39,14 @@ type Panel =
 const HELP = `Available commands:
   :<agent> <verb> [args]      dispatch to one agent (e.g. :cfo brief FY26 burn)
   :board <agent> <verb> ...   boardroom — primary agent + auto consults
+  :seo audit <url>            fetch+analyze a URL (read-only)
+  :sales research <url>       prospect/company discovery (read-only)
+  :sales email <to> <subj>    queue an email (gated in /approvals)
+  :cmo announce <to> <subj>   queue a campaign email (gated in /approvals)
   /library                    browse the full command library
-  /agents                     show roster
-  /tasks                      open task inbox
-  /approvals                  open approval queue
-  /audit                      open hash-chained audit log
-  /manual                     open instruction manual
-  /leads                      open lead-gen pipeline
-  /context                    edit company context (memory)
+  /agents · /tasks · /approvals · /audit · /leads · /context · /manual
   /directive <agent> <text>   pin a standing directive
-  /clear                      clear scrollback
-  /verify                     verify the audit chain
-  /help                       this list
+  /clear · /verify · /help
 
 Shortcuts: ⌘K palette · ↑/↓ history · Tab autocomplete
 

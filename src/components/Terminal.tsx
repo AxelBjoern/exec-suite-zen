@@ -16,6 +16,7 @@ import {
 } from "@/serverfns/terminal.functions";
 import { CommandPalette, InlineSuggestions } from "@/components/CommandPalette";
 import { LibraryPanel } from "@/components/LibraryPanel";
+import { ArtifactCard, ConsultCard } from "@/components/ArtifactCard";
 import { suggestForInput } from "@/lib/command-library";
 
 type Agent = Awaited<ReturnType<typeof listAgents>>[number];

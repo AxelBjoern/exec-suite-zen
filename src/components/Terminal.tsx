@@ -226,6 +226,28 @@ export function Terminal() {
       return runDispatch(slug, verb, args.join(" "), false);
     }
 
+    // free-form: "@board <prompt>" — forced boardroom, router picks lead
+    if (/^@board\s+/i.test(cmd)) {
+      const prompt = cmd.replace(/^@board\s+/i, "").trim();
+      if (!prompt) return pushOut("usage: @board <prompt>", "err");
+      return runPrompt(prompt, { forceBoardroom: true });
+    }
+
+    // free-form: "@<agent> <prompt>"
+    if (cmd.startsWith("@")) {
+      const rest = cmd.slice(1);
+      const [slug, ...rest2] = rest.split(/\s+/);
+      const prompt = rest2.join(" ").trim();
+      if (!validSlugs.has(slug)) return pushOut(`unknown agent: ${slug} (try @board or @<slug>)`, "err");
+      if (!prompt) return pushOut(`usage: @${slug} <prompt>`, "err");
+      return runPromptForAgent(slug, prompt, false);
+    }
+
+    // bare prompt — auto-route
+    if (!cmd.startsWith("/") && !cmd.startsWith(":")) {
+      return runPrompt(cmd, { forceBoardroom: false });
+    }
+
     pushOut(`unknown command: ${cmd}  (try /help)`, "err");
   }
 
@@ -244,6 +266,68 @@ export function Terminal() {
         title: `${agent?.role ?? slug} · ${verb}`,
       });
       if (r.requires_approval) {
+        toast.warning("Output requires human approval", { description: "Open /approvals to sign off." });
+        pushOut(`[REQUIRES APPROVAL] hash ${r.audit_hash.slice(0, 12)}…`, "err");
+      } else {
+        pushOut(`commit ok · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+      }
+      qc.invalidateQueries({ queryKey: ["audit"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["approvals"] });
+    } catch (e: any) {
+      pushOut(e.message ?? "dispatch failed", "err");
+      toast.error(e.message ?? "dispatch failed");
+    } finally { setBusy(false); }
+  }
+
+  async function runPrompt(prompt: string, opts: { forceBoardroom: boolean }) {
+    setBusy(true);
+    pushOut(`ROUTING → ${opts.forceBoardroom ? "boardroom (forced)" : "auto"} …`, "sys");
+    try {
+      const decision = await routeFn({ data: { prompt, force_boardroom: opts.forceBoardroom } });
+      const trace = decision.mode === "boardroom"
+        ? `ROUTED → BOARDROOM lead=${decision.primary_agent.toUpperCase()} consults=${decision.consult_agents.map(s => s.toUpperCase()).join(",") || "—"}`
+        : `ROUTED → ${decision.primary_agent.toUpperCase()} (solo) verb=${decision.inferred_verb}`;
+      pushOut(trace, "sys");
+      await runPromptForAgent(
+        decision.primary_agent,
+        prompt,
+        decision.mode === "boardroom",
+        decision.inferred_verb,
+      );
+    } catch (e: any) {
+      pushOut(e.message ?? "routing failed", "err");
+      toast.error(e.message ?? "routing failed");
+      setBusy(false);
+    }
+  }
+
+  async function runPromptForAgent(slug: string, prompt: string, boardroom: boolean, verb = "respond") {
+    setBusy(true);
+    pushOut(`${boardroom ? "BOARDROOM" : "DISPATCH"} → ${slug.toUpperCase()} · ${verb}`, "sys");
+    try {
+      const r = await dispatchFn({
+        data: {
+          raw: "",
+          agent_slug: slug,
+          verb,
+          args: prompt,
+          prompt,
+          freeform: true,
+          thread_id: null,
+          boardroom,
+        },
+      });
+      const agent = agents.find(a => a.slug === slug);
+      openPanel({
+        kind: boardroom ? "boardroom" : "thread",
+        agentSlug: slug,
+        threadId: r.thread_id!,
+        title: `${agent?.role ?? slug} · ${verb}`,
+      });
+      if ((r as any).chat) {
+        pushOut(`reply · hash ${r.audit_hash.slice(0, 12)}…`, "sys");
+      } else if (r.requires_approval) {
         toast.warning("Output requires human approval", { description: "Open /approvals to sign off." });
         pushOut(`[REQUIRES APPROVAL] hash ${r.audit_hash.slice(0, 12)}…`, "err");
       } else {

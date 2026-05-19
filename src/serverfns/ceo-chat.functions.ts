@@ -211,6 +211,89 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       .limit(80);
     if (histErr) throw histErr;
 
+    // ── @mention dispatch shortcut ────────────────────────────────────────
+    // Recognize:  "@board <prompt>"  or  "@<slug> <prompt>" at the start.
+    const mention = data.content.match(/^@(board|[a-z]+)\s+([\s\S]+)$/i);
+    if (mention) {
+      const target = mention[1].toLowerCase();
+      const prompt = mention[2].trim() + attachmentBlock;
+
+      try {
+        let assistantMd = "";
+        if (target === "board") {
+          // Route to best primary, then dispatch as boardroom
+          const decision = await routePrompt({
+            data: { prompt, force_boardroom: true },
+          });
+          const result = await dispatch({
+            data: {
+              raw: data.content,
+              agent_slug: decision.primary_agent,
+              verb: decision.inferred_verb || "respond",
+              args: prompt,
+              boardroom: true,
+              freeform: true,
+              prompt,
+            },
+          });
+          const consultLines = (result as any).consults?.length
+            ? (result as any).consults
+                .map(
+                  (c: any) =>
+                    `- **${c.role}** — ${c.consult.position.toUpperCase()}${c.consult.blocking ? " · BLOCKING" : ""}`,
+                )
+                .join("\n")
+            : "_(no consults)_";
+          assistantMd =
+            `**Boardroom dispatched** — lead: \`${decision.primary_agent.toUpperCase()}\`` +
+            `\n\n${artifactToMd((result as any).artifact)}` +
+            `\n\n---\n**Consults:**\n${consultLines}` +
+            ((result as any).requires_approval
+              ? `\n\n⚠️ External approval gate triggered.`
+              : "");
+        } else if ((VALID_DISPATCH_SLUGS as readonly string[]).includes(target)) {
+          const result = await dispatch({
+            data: {
+              raw: data.content,
+              agent_slug: target,
+              verb: "respond",
+              args: prompt,
+              freeform: true,
+              prompt,
+            },
+          });
+          if ((result as any).chat) {
+            assistantMd = `**@${target.toUpperCase()} replied:**\n\n${(result as any).chat.reply_markdown}`;
+          } else {
+            assistantMd =
+              `**@${target.toUpperCase()} dispatched:**\n\n${artifactToMd((result as any).artifact)}` +
+              ((result as any).requires_approval
+                ? `\n\n⚠️ External approval gate triggered.`
+                : "");
+          }
+        }
+
+        if (assistantMd) {
+          const { data: saved, error: saveErr } = await supabaseAdmin
+            .from("ceo_chat_messages")
+            .insert({ role: "assistant", content: assistantMd })
+            .select("id, role, content, created_at")
+            .single();
+          if (saveErr) throw saveErr;
+          return saved;
+        }
+      } catch (e: any) {
+        const errMd = `**Dispatch failed for @${target}:** ${e?.message ?? "unknown error"}`;
+        const { data: saved } = await supabaseAdmin
+          .from("ceo_chat_messages")
+          .insert({ role: "assistant", content: errMd })
+          .select("id, role, content, created_at")
+          .single();
+        return saved;
+      }
+    }
+
+    // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [
       { role: "system", content: CEO_SYSTEM },
       ...(history ?? []).map((m) => ({
@@ -238,6 +321,23 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
     return saved;
   });
+
+// Compact markdown renderer for an Artifact (mirrors terminal artifactToMarkdown)
+function artifactToMd(a: any): string {
+  if (!a) return "_(no artifact)_";
+  const sections = (a.sections ?? [])
+    .map((s: any) => `### ${s.heading}\n\n${s.body_md}`)
+    .join("\n\n");
+  const items = (a.action_items ?? []).length
+    ? `\n\n### Action Items\n\n| # | Task | Owner | Due | Auto |\n|---|------|-------|-----|------|\n${a.action_items
+        .map(
+          (it: any, i: number) =>
+            `| ${i + 1} | ${it.task} | ${String(it.owner_agent).toUpperCase()} | ${it.due} | ${it.auto_dispatch ? "✓" : "gate"} |`,
+        )
+        .join("\n")}`
+    : "";
+  return `# ${a.title}\n\n${sections}${items}`;
+}
 
 export const clearCeoChat = createServerFn({ method: "POST" }).handler(async () => {
   const { error } = await supabaseAdmin

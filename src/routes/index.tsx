@@ -18,6 +18,7 @@ import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Select,
   SelectContent,
@@ -383,6 +384,7 @@ function ChatPage() {
             </div>
             <div className="text-sm font-semibold tracking-tight">History</div>
           </div>
+          <ThemeToggle />
           <Button
             size="icon"
             variant="ghost"
@@ -707,7 +709,7 @@ function MessageRow({
       <div className="h-7 w-7 shrink-0 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center text-[10px] font-bold text-primary tracking-wider">
         CEO
       </div>
-      <div className="flex-1 min-w-0 prose prose-sm prose-invert max-w-none prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-code:text-primary prose-strong:text-foreground">
+      <div className="flex-1 min-w-0 prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:break-words prose-strong:text-foreground">
         <ReactMarkdown>{content}</ReactMarkdown>
       </div>
     </div>

@@ -1,95 +1,92 @@
+
 # Phase 4 (revised): Monday Board → Weekly Plan → Daily Reports
 
-The autonomous loop is reframed around your actual operating cadence: one Monday boardroom sets the week, you approve it, agents execute it Tue–Fri, and each agent reports to you every morning.
+Same operating cadence as before. Two infrastructure swaps:
 
-## The weekly loop
+- **LLM**: All agent calls go to **Nous Research Hermes** via **OpenRouter** (instead of Lovable AI Gateway / Gemini / GPT).
+- **Scheduler**: **Postgres `pg_cron` + `pg_net`** hitting `/api/public/*` server routes (instead of Inngest). No external durable runtime.
 
 ```text
 MON 08:00  Board meeting → weekly plan draft  →  awaits your approval
-           │
-           ▼ (you approve in Terminal)
-MON–FRI    Agents auto-execute approved action items
-           │
-           ▼
+MON–FRI    Approved action items auto-execute (pg_cron tick every minute drains a job queue)
 TUE–FRI    Daily standup report per agent at 08:00
-           │
-           ▼
 FRI 17:00  End-of-week recap → seeds next Monday's board
 ```
 
-Three moving parts: **Monday board**, **weekly plan + approval**, **daily reports**. Everything else (watchers, ad-hoc dispatch, auto-route) stays as already built.
+## 1. LLM swap → Hermes via OpenRouter
 
-## 1. Monday board meeting (cron: 0 8 * * 1)
+- New helper `src/server/llm.server.ts` exposing `chatCompletion({ messages, tools, tool_choice, temperature })` that POSTs to `https://openrouter.ai/api/v1/chat/completions`.
+- Default model: `nousresearch/hermes-4-405b` (configurable via `HERMES_MODEL` env, fallback `nousresearch/hermes-3-llama-3.1-405b`).
+- Reads `OPENROUTER_API_KEY` from `process.env`. Sets `HTTP-Referer` + `X-Title` headers per OpenRouter convention.
+- Existing tool-calling shapes in `src/lib/agent-schemas.ts` (`ARTIFACT_TOOL`, `CONSULT_TOOL`, `CHAT_TOOL`, `ROUTE_TOOL`) are already OpenAI-compatible — Hermes models support OpenAI tool-calling, so no schema changes.
+- Replace every `fetch("https://ai.gateway.lovable.dev/...")` call in `terminal.functions.ts` (and any agent helper) with `chatCompletion(...)`. Surface 429 / 402 / non-200 errors back to the client as before.
+- New secret to request: **`OPENROUTER_API_KEY`** (via `add_secret`). `LOVABLE_API_KEY` is no longer needed by agents (kept only if other code uses it).
 
-Inngest function `monday-board` runs a real boardroom dispatch:
-- CEO is primary, consults CFO + COO + CMO (whichever exist).
-- Prompt is generated from: company_context, last week's `decision_log`, open `tasks`, blocked `approvals`, and the previous Friday recap.
-- Output is a single artifact titled "Week of {date} — Plan" with `action_items[]` covering the week (owner_agent, task, deliverable, due, auto_dispatch).
-- The whole artifact is wrapped in **one parent approval** (`kind: "weekly_plan"`) — not one approval per item. You approve the week as a block.
-- Posted to a dedicated thread `kind=board` so it's easy to find.
+## 2. Scheduler swap → pg_cron + pg_net
 
-## 2. Weekly plan approval
+No Inngest, no connector. Three public route endpoints, each protected by the Supabase anon key in an `apikey` header:
 
-New UI: **"This week" panel** at top of Terminal on Mondays.
-- Shows the plan artifact + every proposed action item with owner.
-- Buttons: **Approve week**, **Reject**, **Edit** (strike items before approving).
-- On approve: all child tasks flip from `blocked` → `todo` and emit `agent/task.ready` events. Inngest `task-runner` then calls `runTask()` per child with retries + depth guard (max 3).
-- External actions (email, etc.) still hit their own per-task approval gate when their time comes — weekly approval ≠ blanket approval to send things on your behalf.
+- `POST /api/public/cron/monday-board` — runs the boardroom dispatch and writes the weekly plan + parent approval (`kind:'weekly_plan'`).
+- `POST /api/public/cron/daily-reports` — fans out a freeform "report progress" prompt to each active agent, posts to a `kind=standup` thread, creates `suggestions` rows.
+- `POST /api/public/cron/weekly-recap` — CEO solo, writes `kind=recap` artifact.
+- `POST /api/public/cron/job-tick` — runs every minute. Drains a small `job_queue` table (max N per tick): `runTask(task_id)` for queued task runs, plus operator-defined schedules whose `next_run_at <= now()`. Includes the **depth guard** (max 3) so chains can't loop.
+- `POST /api/public/cron/approval-overdue` — every 15 min, finds approvals pending >24h and pings CEO.
 
-## 3. Daily reports (cron: 0 8 * * 2-5)
+`supabase/insert` (not migration) registers the cron schedules with `cron.schedule(...)` calling these URLs via `net.http_post` with `apikey` header.
 
-Inngest function `daily-agent-reports` fans out to every active agent:
-- Each agent runs a freeform dispatch: *"Report progress on your open tasks. List what's done, what's blocked, what you propose next. Flag anything needing operator decision."*
-- Output goes to a `kind=standup` thread, one message per agent, grouped under a single date header.
-- Any "needs operator decision" item creates a lightweight `suggestion` row (new table) shown in a **Today's suggestions** strip in the Terminal — one-tap approve/dismiss.
-- No daily report on Mondays (board covers it) or weekends.
+### Why a job_queue + tick instead of direct cron-per-task
 
-## 4. Friday recap (cron: 0 17 * * 5)
+`pg_cron` resolution is 1 minute and global. We can't schedule one cron per task or per operator schedule. Instead, **anything that needs to "run later"** — approved plan items, retries, operator schedules — inserts a row into `job_queue (id, kind, payload, run_at, attempts, status)`. The single `job-tick` route claims due rows in a transaction (`SELECT ... FOR UPDATE SKIP LOCKED`) and executes them. This gives us durability + retries without an external system.
 
-`weekly-recap` runs CEO solo with the week's `decision_log` + completed/blocked tasks. Stores artifact in a `kind=recap` thread. The next Monday board reads it.
+## 3. Weekly plan approval (unchanged from prior plan)
 
-## 5. Watchers (kept from prior plan)
+- `WeeklyPlanPanel` shows the latest `kind=weekly_plan` artifact + every proposed action item.
+- **Approve week** flips child tasks `blocked → todo` and inserts one `job_queue` row per `auto_dispatch:true` item.
+- External actions (post / send / publish / email) still hit their per-task approval gate when their job runs.
 
-- `approval-overdue-watcher` (*/15 * * * *): if any approval has been pending >24h, ping CEO with a freeform prompt summarizing it.
-- `tool-call-failed` (event): on Resend / external failure, route to owner agent for diagnosis + proposal.
+## 4. Daily suggestions (unchanged)
 
-## 6. Operator-defined schedules
+- Agents flag "needs operator decision" → `suggestions` row → strip in Terminal with one-tap approve/dismiss.
 
-Same `schedules` table + `SchedulesPanel` as before, for any custom recurring prompt you want outside the weekly rhythm. `operator-schedule-tick` runs every minute, dispatches due rows.
+## Schema additions (single migration)
 
-## Schema additions
-
-- `tasks.depth int default 0` — chain depth guard.
-- `tasks.kind text` — `'plan_item' | 'standup' | 'ad_hoc'` (for filtering).
-- `threads.kind text default 'solo'` — `'board' | 'standup' | 'recap' | 'solo'`.
-- `approvals.kind text default 'task'` — `'weekly_plan' | 'task'`.
-- `suggestions` table: id, agent_slug, thread_id, title, body, status (`open|approved|dismissed`), created_at.
-- `schedules` table (as before).
+- `tasks.depth int default 0`
+- `tasks.kind text` — `'plan_item' | 'standup' | 'ad_hoc'`
+- `threads.kind text default 'solo'` — `'board' | 'standup' | 'recap' | 'solo'`
+- `approvals.kind text default 'task'` — `'weekly_plan' | 'task'`
+- `suggestions` table (id, agent_slug, thread_id, title, body, status, created_at)
+- `schedules` table (id, name, cron, agent_slug, mode, verb, args, prompt, active, last_run_at, next_run_at)
+- `job_queue` table (id, kind, payload jsonb, run_at, attempts int default 0, status `pending|running|done|failed`, last_error text, created_at)
+- Indexes on `job_queue (status, run_at)` and `schedules (active, next_run_at)`.
 
 ## Files
 
 **Add**
-- `src/routes/api/public/inngest.ts` — Inngest serve endpoint.
-- `src/server/inngest.server.ts` — client + functions (`monday-board`, `daily-agent-reports`, `weekly-recap`, `task-runner`, `approval-overdue-watcher`, `tool-call-failed`, `operator-schedule-tick`).
-- `src/server/inngest-events.server.ts` — gateway POST helper.
-- `src/serverfns/tasks.functions.ts` — `runTask`, `approveWeeklyPlan`.
-- `src/serverfns/suggestions.functions.ts` — list / decide.
-- `src/serverfns/schedules.functions.ts` — CRUD.
-- `src/components/WeeklyPlanPanel.tsx` — Monday review/approve UI.
-- `src/components/DailySuggestions.tsx` — today's items strip.
-- `src/components/SchedulesPanel.tsx` — operator schedules.
+- `src/server/llm.server.ts` — Hermes/OpenRouter client.
+- `src/routes/api/public/cron/monday-board.ts`
+- `src/routes/api/public/cron/daily-reports.ts`
+- `src/routes/api/public/cron/weekly-recap.ts`
+- `src/routes/api/public/cron/job-tick.ts`
+- `src/routes/api/public/cron/approval-overdue.ts`
+- `src/serverfns/tasks.functions.ts` — `runTask`, `approveWeeklyPlan`, `enqueueJob`.
+- `src/serverfns/suggestions.functions.ts`
+- `src/serverfns/schedules.functions.ts`
+- `src/components/WeeklyPlanPanel.tsx`
+- `src/components/DailySuggestions.tsx`
+- `src/components/SchedulesPanel.tsx`
 
 **Edit**
-- `src/serverfns/terminal.functions.ts` — `dispatch()` writes parent approval as `kind:'weekly_plan'` for board mode; on weekly approval, fan-out emits `agent/task.ready`.
-- `src/components/Terminal.tsx` — mount `WeeklyPlanPanel` + `DailySuggestions` above command bar; show router trace + auto-route toggle.
-- `src/lib/agent-schemas.ts` — add `weekly_plan` artifact hint.
+- `src/serverfns/terminal.functions.ts` — route LLM calls through `llm.server.ts`; on board mode write parent approval as `kind:'weekly_plan'`.
+- `src/components/Terminal.tsx` — mount `WeeklyPlanPanel` + `DailySuggestions` + auto-route toggle + router trace.
 
-## Out of scope
-
-- Auto-approving external actions (email/etc still gated).
-- Streaming agent responses.
-- Multi-tenant scheduling.
+**No edits to** `agent-schemas.ts` (OpenAI-compatible already).
 
 ## Setup before code
 
-Connect the **Inngest connector** (provides `LOVABLE_API_KEY`, `INNGEST_API_KEY`, `INNGEST_SIGNING_KEY` automatically). Nothing else to add.
+Just one secret: **`OPENROUTER_API_KEY`** (https://openrouter.ai/keys). Cron URLs use the existing Supabase publishable key for the `apikey` header — no extra secret.
+
+## Out of scope
+
+- Auto-approving external actions.
+- Streaming agent responses.
+- Multi-tenant scheduling.

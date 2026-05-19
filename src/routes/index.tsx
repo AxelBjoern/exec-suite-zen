@@ -12,6 +12,7 @@ import {
   createCeoConversation,
   renameCeoConversation,
   deleteCeoConversation,
+  generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";

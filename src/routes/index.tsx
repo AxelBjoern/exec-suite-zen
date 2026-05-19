@@ -12,6 +12,7 @@ import {
   createCeoConversation,
   renameCeoConversation,
   deleteCeoConversation,
+  generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";
@@ -35,6 +36,8 @@ import {
   Plus,
   MessageSquare,
   Pencil,
+  FileDown,
+  FileType,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -117,6 +120,7 @@ function ChatPage() {
   const createConvo = useServerFn(createCeoConversation);
   const renameConvo = useServerFn(renameCeoConversation);
   const deleteConvo = useServerFn(deleteCeoConversation);
+  const genDoc = useServerFn(generateCeoDocument);
   const qc = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(() => {
@@ -231,12 +235,39 @@ function ChatPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ceo-conversations"] }),
   });
 
+  const docMutation = useMutation({
+    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) =>
+      genDoc({
+        data: {
+          kind: vars.kind,
+          topic: vars.topic,
+          conversationId: activeId,
+          model,
+        },
+      }),
+    onMutate: (vars) => {
+      setPendingUser({
+        content: `/${vars.kind} ${vars.topic}`,
+        attachments: [],
+      });
+    },
+    onSettled: async (saved: any) => {
+      setPendingUser(null);
+      const newId = saved?.conversation_id ?? activeId;
+      if (newId && newId !== activeId) setActiveId(newId);
+      await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
+      await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),
+  });
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, pendingUser, mutation.isPending]);
+  }, [messages, pendingUser, mutation.isPending, docMutation.isPending]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -272,14 +303,39 @@ function ChatPage() {
   function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
     const text = input.trim();
-    if (mutation.isPending || uploading) return;
+    if (mutation.isPending || docMutation.isPending || uploading) return;
     if (!text && attachments.length === 0) return;
+
+    // Slash commands: /pdf <topic>  or  /docx <topic>
+    const slash = text.match(/^\/(pdf|docx)\s+([\s\S]+)$/i);
+    if (slash && attachments.length === 0) {
+      const kind = slash[1].toLowerCase() as "pdf" | "docx";
+      const topic = slash[2].trim();
+      setInput("");
+      docMutation.mutate({ kind, topic });
+      return;
+    }
+
     setInput("");
     mutation.mutate({
       content: text,
       attachmentIds: attachments.map((a) => a.id),
     });
   }
+
+  function handleGenerateDoc(kind: "pdf" | "docx") {
+    const seed = input.trim();
+    const topic =
+      seed ||
+      window.prompt(
+        `What should the ${kind.toUpperCase()} cover? (e.g. "Q1 board update on growth and burn")`,
+      ) ||
+      "";
+    if (!topic.trim()) return;
+    setInput("");
+    docMutation.mutate({ kind, topic: topic.trim() });
+  }
+
 
   function handleRename(c: Conversation) {
     const next = window.prompt("Rename conversation", c.title);
@@ -302,9 +358,11 @@ function ChatPage() {
   );
 
   const showThinking = mutation.isPending;
+  const showGenerating = docMutation.isPending;
   const canSend =
     (input.trim().length > 0 || attachments.length > 0) &&
     !mutation.isPending &&
+    !docMutation.isPending &&
     !uploading;
 
   return (
@@ -445,7 +503,11 @@ function ChatPage() {
                 </div>
                 <p className="text-base">
                   Ask the CEO agent anything — strategy, decisions, delegation,
-                  opinions. Attach docs with the paperclip below.
+                  opinions. Attach docs with the paperclip, or generate a{" "}
+                  <span className="text-foreground font-medium">PDF</span> /{" "}
+                  <span className="text-foreground font-medium">DOCX</span>{" "}
+                  using <code className="text-xs">/pdf</code> or{" "}
+                  <code className="text-xs">/docx</code>.
                 </p>
               </div>
             )}
@@ -471,6 +533,13 @@ function ChatPage() {
               <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 CEO is thinking…
+              </div>
+            )}
+
+            {showGenerating && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Generating document…
               </div>
             )}
           </div>
@@ -523,10 +592,10 @@ function ChatPage() {
                     handleSubmit();
                   }
                 }}
-                placeholder="Message the CEO…  Try @cfo, @cmo, @cto, @sales, @board…  (Enter to send, Shift+Enter for newline)"
+                placeholder="Message the CEO…  Try @cfo, @board, /pdf <topic>, /docx <topic>…  (Enter to send, Shift+Enter for newline)"
                 rows={2}
-                disabled={mutation.isPending}
-                className="w-full resize-none bg-transparent pl-12 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+                disabled={mutation.isPending || docMutation.isPending}
+                className="w-full resize-none bg-transparent pl-32 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
               />
               <input
                 ref={fileInputRef}
@@ -536,25 +605,51 @@ function ChatPage() {
                 hidden
                 onChange={(e) => handleFiles(e.target.files)}
               />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || mutation.isPending}
-                className="absolute left-2 bottom-2 h-9 w-9 text-muted-foreground hover:text-foreground"
-                aria-label="Attach document"
-                title="Attach .pdf, .docx, .txt, .md"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+              <div className="absolute left-1.5 bottom-1.5 flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || mutation.isPending || docMutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Attach document"
+                  title="Attach .pdf, .docx, .txt, .md"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleGenerateDoc("pdf")}
+                  disabled={docMutation.isPending || mutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Generate PDF"
+                  title="Generate PDF (or type /pdf <topic>)"
+                >
+                  <FileDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleGenerateDoc("docx")}
+                  disabled={docMutation.isPending || mutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Generate Word document"
+                  title="Generate DOCX (or type /docx <topic>)"
+                >
+                  <FileType className="h-4 w-4" />
+                </Button>
+              </div>
               <Button
                 type="submit"
                 size="icon"
                 disabled={!canSend}
                 className="absolute right-2 bottom-2 h-9 w-9"
               >
-                {mutation.isPending ? (
+                {mutation.isPending || docMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />

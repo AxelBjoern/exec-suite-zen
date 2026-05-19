@@ -7,6 +7,11 @@ import {
 } from "@/server/llm.server";
 import { DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
 import { dispatch, routePrompt } from "@/serverfns/terminal.functions";
+import {
+  renderDocx,
+  renderPdf,
+  type DocOutline,
+} from "@/server/doc-generator.server";
 
 const VALID_DISPATCH_SLUGS = [
   "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
@@ -22,7 +27,221 @@ Rules:
 - Never invent metrics or commitments. If you don't know, say so and propose how to find out.
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
 - You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
+- The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. Mention this when relevant (e.g., "want this as a PDF? Type \`/pdf <topic>\`").
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
+
+// ── Document generation (PDF / DOCX) ────────────────────────────────────────
+
+const DOC_AUTHOR = "VDNX CEO Agent";
+
+async function buildDocOutline(opts: {
+  topic: string;
+  kind: "pdf" | "docx";
+  model?: string;
+  history: ChatMessage[];
+}): Promise<DocOutline> {
+  const system = `${DEFAULT_COMPANY_CONTEXT}
+
+You are the VDNX CEO Agent producing a publish-ready executive document.
+
+Write the document the operator asked for. Be specific, decisive, founder-grade — no filler, no hedging. Use numbers and concrete recommendations. Never invent metrics; if a number is unknown, state the assumption.
+
+Respond with ONLY a single valid JSON object — no prose, no markdown fences. Schema:
+
+{
+  "title": "string (≤90 chars)",
+  "subtitle": "string (optional, ≤140 chars)",
+  "sections": [
+    { "heading": "string", "paragraphs": ["string", "string", ...] }
+  ]
+}
+
+Rules:
+- 4–8 sections, each with 2–6 substantial paragraphs.
+- Plain text in paragraphs (no markdown, no bullet characters). Use complete sentences.
+- First section is typically "Executive Summary".
+- Last section is typically "Recommended Next Steps" or "Decision Required".`;
+
+  const json = await chatCompletion({
+    model: resolveChatModel(opts.model),
+    temperature: 0.5,
+    messages: [
+      { role: "system", content: system },
+      ...opts.history.slice(-12),
+      {
+        role: "user",
+        content: `Produce a ${opts.kind === "pdf" ? "PDF" : "Word"} document on:\n\n${opts.topic}\n\nReturn JSON only.`,
+      },
+    ],
+  });
+
+  const raw: string = json?.choices?.[0]?.message?.content?.trim() ?? "";
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // Try to salvage by extracting the first {...} block
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Model did not return valid JSON for the document.");
+    parsed = JSON.parse(match[0]);
+  }
+
+  if (!parsed?.title || !Array.isArray(parsed?.sections) || parsed.sections.length === 0) {
+    throw new Error("Document outline missing title or sections.");
+  }
+
+  return {
+    title: String(parsed.title).slice(0, 200),
+    subtitle: parsed.subtitle ? String(parsed.subtitle).slice(0, 240) : undefined,
+    author: DOC_AUTHOR,
+    sections: parsed.sections
+      .filter((s: any) => s && s.heading && Array.isArray(s.paragraphs))
+      .map((s: any) => ({
+        heading: String(s.heading),
+        paragraphs: s.paragraphs.map((p: any) => String(p)).filter(Boolean),
+      })),
+  };
+}
+
+function safeFilename(title: string, ext: string) {
+  const base = title
+    .replace(/[^a-zA-Z0-9\s_-]/g, "")
+    .replace(/\s+/g, "-")
+    .slice(0, 60) || "document";
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return `${base}-${ts}.${ext}`;
+}
+
+export const generateCeoDocument = createServerFn({ method: "POST" })
+  .inputValidator(
+    (d: {
+      kind: "pdf" | "docx";
+      topic: string;
+      conversationId?: string | null;
+      model?: string;
+    }) => {
+      const kind = d?.kind === "docx" ? "docx" : "pdf";
+      const topic = (d?.topic ?? "").trim();
+      if (!topic) throw new Error("Topic is required");
+      if (topic.length > 4000) throw new Error("Topic too long");
+      return {
+        kind: kind as "pdf" | "docx",
+        topic,
+        conversationId: d?.conversationId ?? null,
+        model: d?.model,
+      };
+    },
+  )
+  .handler(async ({ data }) => {
+    // 1. Ensure a conversation
+    let conversationId = data.conversationId;
+    if (!conversationId) {
+      const title = `${data.kind.toUpperCase()}: ${data.topic.slice(0, 60)}`;
+      const { data: convo, error } = await supabaseAdmin
+        .from("ceo_conversations")
+        .insert({ title })
+        .select("id")
+        .single();
+      if (error) throw error;
+      conversationId = convo.id;
+    }
+
+    // 2. Save the operator's "user" message describing the request
+    const userMd = `/${data.kind} ${data.topic}`;
+    await supabaseAdmin
+      .from("ceo_chat_messages")
+      .insert({ role: "user", content: userMd, conversation_id: conversationId });
+
+    // 3. Load short history for context
+    const { data: history } = await supabaseAdmin
+      .from("ceo_chat_messages")
+      .select("role, content")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(40);
+
+    try {
+      // 4. Generate outline + render file
+      const outline = await buildDocOutline({
+        topic: data.topic,
+        kind: data.kind,
+        model: data.model,
+        history: (history ?? []).map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      });
+
+      const bytes =
+        data.kind === "pdf" ? await renderPdf(outline) : await renderDocx(outline);
+
+      const filename = safeFilename(outline.title, data.kind);
+      const storagePath = `${conversationId}/${crypto.randomUUID()}-${filename}`;
+      const contentType =
+        data.kind === "pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+      const { error: upErr } = await supabaseAdmin.storage
+        .from("chat-documents")
+        .upload(storagePath, bytes, { contentType, upsert: false });
+      if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+
+      const {
+        data: { publicUrl },
+      } = supabaseAdmin.storage.from("chat-documents").getPublicUrl(storagePath);
+
+      const sizeKB = Math.max(1, Math.round(bytes.length / 1024));
+      const replyMd = [
+        `📄 **${outline.title}** generated.`,
+        outline.subtitle ? `_${outline.subtitle}_` : "",
+        "",
+        `[Download ${data.kind.toUpperCase()} — ${filename} (${sizeKB} KB)](${publicUrl})`,
+        "",
+        "**Outline**",
+        ...outline.sections.map((s, i) => `${i + 1}. ${s.heading}`),
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const { data: saved, error: saveErr } = await supabaseAdmin
+        .from("ceo_chat_messages")
+        .insert({
+          role: "assistant",
+          content: replyMd,
+          conversation_id: conversationId,
+        })
+        .select("id, role, content, created_at")
+        .single();
+      if (saveErr) throw saveErr;
+
+      await supabaseAdmin
+        .from("ceo_conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      return { ...saved, conversation_id: conversationId, downloadUrl: publicUrl };
+    } catch (e: any) {
+      const errMd = `**Failed to generate ${data.kind.toUpperCase()}:** ${e?.message ?? "unknown error"}`;
+      const { data: saved } = await supabaseAdmin
+        .from("ceo_chat_messages")
+        .insert({
+          role: "assistant",
+          content: errMd,
+          conversation_id: conversationId,
+        })
+        .select("id, role, content, created_at")
+        .single();
+      return { ...(saved ?? {}), conversation_id: conversationId };
+    }
+  });
+
 
 const MAX_EXTRACTED_CHARS = 30_000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;

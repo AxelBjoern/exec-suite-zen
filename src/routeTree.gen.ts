@@ -10,33 +10,78 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
+import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
+import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronMondayBoardRoute =
+  ApiPublicCronMondayBoardRouteImport.update({
+    id: '/api/public/cron/monday-board',
+    path: '/api/public/cron/monday-board',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronJobTickRoute = ApiPublicCronJobTickRouteImport.update({
+  id: '/api/public/cron/job-tick',
+  path: '/api/public/cron/job-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCronDailyReportsRoute =
+  ApiPublicCronDailyReportsRouteImport.update({
+    id: '/api/public/cron/daily-reports',
+    path: '/api/public/cron/daily-reports',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
+  '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
+  '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
+  '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/api/public/cron/daily-reports'
+    | '/api/public/cron/job-tick'
+    | '/api/public/cron/monday-board'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/api/public/cron/daily-reports'
+    | '/api/public/cron/job-tick'
+    | '/api/public/cron/monday-board'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/cron/daily-reports'
+    | '/api/public/cron/job-tick'
+    | '/api/public/cron/monday-board'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
+  ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
+  ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +93,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/monday-board': {
+      id: '/api/public/cron/monday-board'
+      path: '/api/public/cron/monday-board'
+      fullPath: '/api/public/cron/monday-board'
+      preLoaderRoute: typeof ApiPublicCronMondayBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/job-tick': {
+      id: '/api/public/cron/job-tick'
+      path: '/api/public/cron/job-tick'
+      fullPath: '/api/public/cron/job-tick'
+      preLoaderRoute: typeof ApiPublicCronJobTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/daily-reports': {
+      id: '/api/public/cron/daily-reports'
+      path: '/api/public/cron/daily-reports'
+      fullPath: '/api/public/cron/daily-reports'
+      preLoaderRoute: typeof ApiPublicCronDailyReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
+  ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
+  ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

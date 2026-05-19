@@ -14,9 +14,7 @@ import {
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
-
-const LOVABLE_AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-2.5-flash";
+import { callTool } from "@/server/llm.server";
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");
@@ -209,61 +207,9 @@ export const listDirectives = createServerFn({ method: "GET" })
   });
 
 // ─────────────────────────────────────────────────────────────────────────
-// AI Gateway calls — structured tool-calling
+// LLM tool-calling delegated to Hermes via OpenRouter (see src/server/llm.server.ts)
 // ─────────────────────────────────────────────────────────────────────────
 
-async function callTool<T>(opts: {
-  system: string;
-  user: string;
-  tool?: any;
-  tools?: any[];
-  toolChoice?: "auto" | { name: string };
-  model?: string;
-}): Promise<{ name: string; result: T }> {
-  const apiKey = process.env.LOVABLE_API_KEY;
-  if (!apiKey) throw new Error("LOVABLE_API_KEY missing");
-  const tools = opts.tools ?? (opts.tool ? [opts.tool] : []);
-  const tool_choice =
-    opts.toolChoice === "auto"
-      ? "auto"
-      : opts.toolChoice
-        ? { type: "function", function: { name: opts.toolChoice.name } }
-        : tools.length === 1
-          ? { type: "function", function: { name: tools[0].function.name } }
-          : "auto";
-  const res = await fetch(LOVABLE_AI, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: opts.model ?? DEFAULT_MODEL,
-      messages: [
-        { role: "system", content: opts.system },
-        { role: "user", content: opts.user },
-      ],
-      tools,
-      tool_choice,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    if (res.status === 429) throw new Error("Rate limit reached. Wait a moment and retry.");
-    if (res.status === 402) throw new Error("AI credits exhausted. Add credits in Lovable Cloud → AI.");
-    throw new Error(`AI Gateway ${res.status}: ${body.slice(0, 500)}`);
-  }
-  const json = await res.json();
-  const call = json.choices?.[0]?.message?.tool_calls?.[0];
-  if (!call?.function?.arguments) {
-    throw new Error("AI did not return a structured tool call");
-  }
-  try {
-    return { name: call.function.name, result: JSON.parse(call.function.arguments) as T };
-  } catch (e: any) {
-    throw new Error(`Failed to parse tool args: ${e.message}`);
-  }
-}
 
 function artifactToMarkdown(a: Artifact): string {
   const sections = a.sections

@@ -133,6 +133,47 @@ export type Database = {
         }
         Relationships: []
       }
+      ceo_chat_attachments: {
+        Row: {
+          created_at: string
+          extracted_text: string | null
+          filename: string
+          id: string
+          message_id: string | null
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_text?: string | null
+          filename: string
+          id?: string
+          message_id?: string | null
+          mime_type: string
+          size_bytes: number
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          extracted_text?: string | null
+          filename?: string
+          id?: string
+          message_id?: string | null
+          mime_type?: string
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ceo_chat_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ceo_chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ceo_chat_messages: {
         Row: {
           content: string

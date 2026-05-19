@@ -4,6 +4,22 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = process.env.HERMES_MODEL ?? "nousresearch/hermes-4-405b";
 
+// User-facing model picker → OpenRouter slug.
+// Labels mirror what the operator asked for; slugs are the closest currently-
+// published OpenRouter models. Update slugs when newer versions ship.
+const MODEL_SLUGS: Record<string, string> = {
+  hermes: "nousresearch/hermes-4-405b",
+  grok: "x-ai/grok-4",
+  gpt: "openai/gpt-5",
+  claude: "anthropic/claude-opus-4.1",
+  deepseek: "deepseek/deepseek-chat",
+};
+
+export function resolveChatModel(id?: string | null): string {
+  if (!id) return DEFAULT_MODEL;
+  return MODEL_SLUGS[id] ?? DEFAULT_MODEL;
+}
+
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export async function chatCompletion(opts: {

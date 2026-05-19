@@ -211,7 +211,7 @@ function ChatPage() {
       <header className="border-b border-border/40 px-6 py-4 flex items-center justify-between bg-card/40 backdrop-blur">
         <div className="flex items-center gap-3">
           <Link
-            to="/"
+            to="/terminal"
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

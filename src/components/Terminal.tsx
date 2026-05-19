@@ -380,8 +380,16 @@ export function Terminal() {
             Authority · Auditability · Atomicity
           </div>
         </div>
-        <div className="font-mono text-[11px] text-muted-foreground">
-          <Clock />
+        <div className="flex items-center gap-4">
+          <a
+            href="/chat"
+            className="smallcaps text-[10px] text-muted-foreground hover:text-primary border border-rule px-2.5 py-1 rounded-sm transition-colors"
+          >
+            Chat with CEO →
+          </a>
+          <div className="font-mono text-[11px] text-muted-foreground">
+            <Clock />
+          </div>
         </div>
       </header>
 

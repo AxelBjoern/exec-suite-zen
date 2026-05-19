@@ -133,6 +133,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ceo_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
       company_context: {
         Row: {
           current_priorities: string

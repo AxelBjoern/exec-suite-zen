@@ -592,10 +592,10 @@ function ChatPage() {
                     handleSubmit();
                   }
                 }}
-                placeholder="Message the CEO…  Try @cfo, @cmo, @cto, @sales, @board…  (Enter to send, Shift+Enter for newline)"
+                placeholder="Message the CEO…  Try @cfo, @board, /pdf <topic>, /docx <topic>…  (Enter to send, Shift+Enter for newline)"
                 rows={2}
-                disabled={mutation.isPending}
-                className="w-full resize-none bg-transparent pl-12 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+                disabled={mutation.isPending || docMutation.isPending}
+                className="w-full resize-none bg-transparent pl-32 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
               />
               <input
                 ref={fileInputRef}
@@ -605,25 +605,51 @@ function ChatPage() {
                 hidden
                 onChange={(e) => handleFiles(e.target.files)}
               />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || mutation.isPending}
-                className="absolute left-2 bottom-2 h-9 w-9 text-muted-foreground hover:text-foreground"
-                aria-label="Attach document"
-                title="Attach .pdf, .docx, .txt, .md"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+              <div className="absolute left-1.5 bottom-1.5 flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || mutation.isPending || docMutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Attach document"
+                  title="Attach .pdf, .docx, .txt, .md"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleGenerateDoc("pdf")}
+                  disabled={docMutation.isPending || mutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Generate PDF"
+                  title="Generate PDF (or type /pdf <topic>)"
+                >
+                  <FileDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleGenerateDoc("docx")}
+                  disabled={docMutation.isPending || mutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Generate Word document"
+                  title="Generate DOCX (or type /docx <topic>)"
+                >
+                  <FileType className="h-4 w-4" />
+                </Button>
+              </div>
               <Button
                 type="submit"
                 size="icon"
                 disabled={!canSend}
                 className="absolute right-2 bottom-2 h-9 w-9"
               >
-                {mutation.isPending ? (
+                {mutation.isPending || docMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4" />

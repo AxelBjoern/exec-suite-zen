@@ -43,7 +43,15 @@ export async function chatCompletion(opts: {
     body: JSON.stringify({
       model: opts.model ?? DEFAULT_MODEL,
       messages: opts.messages,
-      ...(opts.tools?.length ? { tools: opts.tools, tool_choice: opts.tool_choice ?? "auto" } : {}),
+      ...(opts.tools?.length
+        ? {
+            tools: opts.tools,
+            tool_choice: opts.tool_choice ?? "auto",
+            // Only route to providers that actually support tool use, so we
+            // don't get OpenRouter 404 "No endpoints found that support tool use".
+            provider: { require_parameters: true },
+          }
+        : {}),
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     }),
   });
@@ -53,6 +61,33 @@ export async function chatCompletion(opts: {
     if (res.status === 429) throw new Error("Hermes rate limit reached. Wait a moment and retry.");
     if (res.status === 402) throw new Error("OpenRouter credits exhausted. Top up at openrouter.ai.");
     if (res.status === 401) throw new Error("OPENROUTER_API_KEY invalid or revoked.");
+    // Fallback: model has no tool-capable provider. Retry once with a known
+    // tool-capable model so agent dispatches keep working.
+    const noToolEndpoint =
+      res.status === 404 && opts.tools?.length && /tool use|require_parameters/i.test(body);
+    if (noToolEndpoint) {
+      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-4o-mini";
+      const retry = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://lovable.app",
+          "X-Title": "VDNX Agents",
+        },
+        body: JSON.stringify({
+          model: fallback,
+          messages: opts.messages,
+          tools: opts.tools,
+          tool_choice: opts.tool_choice ?? "auto",
+          provider: { require_parameters: true },
+          ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+        }),
+      });
+      if (retry.ok) return retry.json();
+      const rbody = await retry.text();
+      throw new Error(`OpenRouter ${retry.status} (fallback ${fallback}): ${rbody.slice(0, 500)}`);
+    }
     throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 500)}`);
   }
   return res.json();

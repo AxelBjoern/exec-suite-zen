@@ -227,10 +227,12 @@ export async function runTask(task_id: string) {
       ? (r.result as ChatReply).reply_markdown
       : artifactToMarkdown(r.result as Artifact);
 
-    await supabaseAdmin.from("messages").insert({
-      thread_id: t.thread_id, agent_id: agent.id, role: "agent",
-      content: md, artifact_json: r.result as any,
-    });
+    if (t.thread_id) {
+      await supabaseAdmin.from("messages").insert({
+        thread_id: t.thread_id, agent_id: agent.id, role: "agent",
+        content: md, artifact_json: r.result as any,
+      });
+    }
 
     await supabaseAdmin.from("tasks").update({
       status: "done", completed_at: new Date().toISOString(),

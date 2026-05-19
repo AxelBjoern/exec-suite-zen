@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
+import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,30 +24,47 @@ const ApiPublicCronMondayBoardRoute =
     path: '/api/public/cron/monday-board',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronDailyReportsRoute =
+  ApiPublicCronDailyReportsRouteImport.update({
+    id: '/api/public/cron/daily-reports',
+    path: '/api/public/cron/daily-reports',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/cron/monday-board'
+  fullPaths:
+    | '/'
+    | '/api/public/cron/daily-reports'
+    | '/api/public/cron/monday-board'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/cron/monday-board'
-  id: '__root__' | '/' | '/api/public/cron/monday-board'
+  to: '/' | '/api/public/cron/daily-reports' | '/api/public/cron/monday-board'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/cron/daily-reports'
+    | '/api/public/cron/monday-board'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
 }
 
@@ -66,11 +84,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronMondayBoardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/daily-reports': {
+      id: '/api/public/cron/daily-reports'
+      path: '/api/public/cron/daily-reports'
+      fullPath: '/api/public/cron/daily-reports'
+      preLoaderRoute: typeof ApiPublicCronDailyReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
 }
 export const routeTree = rootRouteImport

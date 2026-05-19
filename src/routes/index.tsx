@@ -8,6 +8,10 @@ import {
   sendCeoMessage,
   clearCeoChat,
   uploadCeoAttachment,
+  listCeoConversations,
+  createCeoConversation,
+  renameCeoConversation,
+  deleteCeoConversation,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";
@@ -28,6 +32,9 @@ import {
   Paperclip,
   X,
   FileText,
+  Plus,
+  MessageSquare,
+  Pencil,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -58,7 +65,15 @@ type Msg = {
   attachments?: Attachment[];
 };
 
+type Conversation = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
 const MODEL_STORAGE_KEY = "ceo-chat-model";
+const ACTIVE_CONVO_KEY = "ceo-chat-active";
 const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md";
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -80,16 +95,60 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatRelative(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d`;
+  return d.toLocaleDateString();
+}
+
 function ChatPage() {
   const load = useServerFn(getCeoChat);
   const send = useServerFn(sendCeoMessage);
   const clear = useServerFn(clearCeoChat);
   const upload = useServerFn(uploadCeoAttachment);
+  const listConvos = useServerFn(listCeoConversations);
+  const createConvo = useServerFn(createCeoConversation);
+  const renameConvo = useServerFn(renameCeoConversation);
+  const deleteConvo = useServerFn(deleteCeoConversation);
   const qc = useQueryClient();
 
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(ACTIVE_CONVO_KEY);
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeId) localStorage.setItem(ACTIVE_CONVO_KEY, activeId);
+    else localStorage.removeItem(ACTIVE_CONVO_KEY);
+  }, [activeId]);
+
+  const { data: conversations = [] } = useQuery<Conversation[]>({
+    queryKey: ["ceo-conversations"],
+    queryFn: () => listConvos() as Promise<Conversation[]>,
+  });
+
+  // If no active id, default to the most recent conversation
+  useEffect(() => {
+    if (!activeId && conversations.length > 0) {
+      setActiveId(conversations[0].id);
+    }
+    // If active id is stale (deleted), reset
+    if (activeId && conversations.length > 0 && !conversations.find((c) => c.id === activeId)) {
+      setActiveId(conversations[0].id);
+    }
+  }, [conversations, activeId]);
+
   const { data: messages = [] } = useQuery<Msg[]>({
-    queryKey: ["ceo-chat"],
-    queryFn: () => load() as Promise<Msg[]>,
+    queryKey: ["ceo-chat", activeId],
+    queryFn: () => load({ data: { conversationId: activeId } }) as Promise<Msg[]>,
   });
 
   const [input, setInput] = useState("");
@@ -121,26 +180,55 @@ function ChatPage() {
           content: vars.content,
           model,
           attachmentIds: vars.attachmentIds,
+          conversationId: activeId,
         },
       }),
     onMutate: (vars) => {
       setPendingUser({ content: vars.content, attachments: [...attachments] });
       setAttachments([]);
     },
-    onSettled: async () => {
+    onSettled: async (saved: any) => {
       setPendingUser(null);
+      // Server may have auto-created a conversation; adopt it
+      const newId = saved?.conversation_id ?? activeId;
+      if (newId && newId !== activeId) setActiveId(newId);
       await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
+      await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     onError: (e: any) => toast.error(e?.message ?? "Send failed"),
   });
 
   const clearMutation = useMutation({
-    mutationFn: async () => clear(),
+    mutationFn: async () => clear({ data: { conversationId: activeId } }),
     onSuccess: () => {
-      qc.setQueryData(["ceo-chat"], []);
+      qc.setQueryData(["ceo-chat", activeId], []);
       toast.success("Conversation cleared");
     },
+  });
+
+  const newConvoMutation = useMutation({
+    mutationFn: async () => createConvo({ data: { title: "New conversation" } }),
+    onSuccess: (convo: any) => {
+      setActiveId(convo.id);
+      qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+  });
+
+  const deleteConvoMutation = useMutation({
+    mutationFn: async (id: string) => deleteConvo({ data: { id } }),
+    onSuccess: (_d, id) => {
+      if (activeId === id) setActiveId(null);
+      qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      toast.success("Conversation deleted");
+    },
+  });
+
+  const renameConvoMutation = useMutation({
+    mutationFn: async (v: { id: string; title: string }) =>
+      renameConvo({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ceo-conversations"] }),
   });
 
   useEffect(() => {
@@ -152,7 +240,7 @@ function ChatPage() {
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+  }, [activeId]);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -193,6 +281,19 @@ function ChatPage() {
     });
   }
 
+  function handleRename(c: Conversation) {
+    const next = window.prompt("Rename conversation", c.title);
+    if (next == null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === c.title) return;
+    renameConvoMutation.mutate({ id: c.id, title: trimmed });
+  }
+
+  function handleDelete(c: Conversation) {
+    if (!window.confirm(`Delete "${c.title}"? This cannot be undone.`)) return;
+    deleteConvoMutation.mutate(c.id);
+  }
+
   const activeModelLabel = useMemo(
     () =>
       CHAT_MODEL_OPTIONS.find((m) => m.id === model)?.label ??
@@ -207,15 +308,98 @@ function ChatPage() {
     !uploading;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="border-b border-border/40 px-6 py-4 flex items-center justify-between bg-card/40 backdrop-blur">
-        <div className="flex items-center gap-3">
+    <div className="h-screen bg-background text-foreground flex">
+      {/* ── Sidebar: conversation history ──────────────────────────────── */}
+      <aside className="w-72 shrink-0 border-r border-border/40 bg-card/30 backdrop-blur flex flex-col">
+        <div className="px-4 py-4 border-b border-border/40 flex items-center gap-2">
           <Link
             to="/terminal"
             className="text-muted-foreground hover:text-foreground transition-colors"
+            title="Back to terminal"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
+          <div className="flex-1">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              VDNX
+            </div>
+            <div className="text-sm font-semibold tracking-tight">History</div>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            onClick={() => newConvoMutation.mutate()}
+            disabled={newConvoMutation.isPending}
+            title="New conversation"
+            aria-label="New conversation"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-2">
+          {conversations.length === 0 && (
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              No conversations yet. Start chatting or click <Plus className="inline h-3 w-3" /> to create one.
+            </div>
+          )}
+          {conversations.map((c) => {
+            const active = c.id === activeId;
+            return (
+              <div
+                key={c.id}
+                className={`group relative mx-2 mb-1 rounded-md transition-colors ${
+                  active
+                    ? "bg-primary/10 border border-primary/30"
+                    : "hover:bg-muted/50 border border-transparent"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setActiveId(c.id)}
+                  className="w-full text-left px-3 py-2 pr-14"
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <div className="text-sm font-medium truncate">{c.title}</div>
+                  </div>
+                  <div className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
+                    {formatRelative(c.updated_at)}
+                  </div>
+                </button>
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRename(c);
+                    }}
+                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
+                    aria-label="Rename"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(c);
+                    }}
+                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-background/80"
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* ── Main: chat panel ───────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="border-b border-border/40 px-6 py-4 flex items-center justify-between bg-card/40 backdrop-blur">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               VDNX
@@ -224,159 +408,161 @@ function ChatPage() {
               CEO Agent — Direct Chat
             </h1>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Select value={model} onValueChange={setModel}>
-            <SelectTrigger className="h-8 w-[180px] text-xs">
-              <SelectValue>{activeModelLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {CHAT_MODEL_OPTIONS.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="text-xs">
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => clearMutation.mutate()}
-            disabled={clearMutation.isPending || messages.length === 0}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            Clear
-          </Button>
-        </div>
-      </header>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
-        <div className="max-w-3xl mx-auto py-8 space-y-8">
-          {messages.length === 0 && !pendingUser && (
-            <div className="text-center py-20 text-muted-foreground">
-              <div className="text-sm uppercase tracking-[0.2em] mb-3">
-                Start the conversation
-              </div>
-              <p className="text-base">
-                Ask the CEO agent anything — strategy, decisions, delegation,
-                opinions. Attach docs with the paperclip below.
-              </p>
-            </div>
-          )}
-
-          {messages.map((m) => (
-            <MessageRow
-              key={m.id}
-              role={m.role}
-              content={m.content}
-              attachments={m.attachments ?? []}
-            />
-          ))}
-
-          {pendingUser && (
-            <MessageRow
-              role="user"
-              content={pendingUser.content}
-              attachments={pendingUser.attachments}
-            />
-          )}
-
-          {showThinking && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              CEO is thinking…
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-border/40 bg-card/40 backdrop-blur">
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4">
-          {(attachments.length > 0 || uploading) && (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {attachments.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs"
-                >
-                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium">{a.filename}</span>
-                  <span className="text-muted-foreground">
-                    {formatBytes(a.sizeBytes)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttachments((prev) =>
-                        prev.filter((x) => x.id !== a.id),
-                      )
-                    }
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Remove ${a.filename}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-              {uploading && (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Extracting…
-                </div>
-              )}
-            </div>
-          )}
-          <div className="relative rounded-xl border border-border bg-background focus-within:border-primary/60 transition-colors">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Message the CEO…  Try @cfo, @cmo, @cto, @sales, @board…  (Enter to send, Shift+Enter for newline)"
-              rows={2}
-              disabled={mutation.isPending}
-              className="w-full resize-none bg-transparent pl-12 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_TYPES}
-              multiple
-              hidden
-              onChange={(e) => handleFiles(e.target.files)}
-            />
+          <div className="flex items-center gap-2">
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger className="h-8 w-[180px] text-xs">
+                <SelectValue>{activeModelLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {CHAT_MODEL_OPTIONS.map((m) => (
+                  <SelectItem key={m.id} value={m.id} className="text-xs">
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
-              type="button"
-              size="icon"
               variant="ghost"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || mutation.isPending}
-              className="absolute left-2 bottom-2 h-9 w-9 text-muted-foreground hover:text-foreground"
-              aria-label="Attach document"
-              title="Attach .pdf, .docx, .txt, .md"
+              size="sm"
+              onClick={() => clearMutation.mutate()}
+              disabled={
+                clearMutation.isPending || messages.length === 0 || !activeId
+              }
+              className="text-muted-foreground hover:text-destructive"
             >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!canSend}
-              className="absolute right-2 bottom-2 h-9 w-9"
-            >
-              {mutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Clear
             </Button>
           </div>
-        </form>
+        </header>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
+          <div className="max-w-3xl mx-auto py-8 space-y-8">
+            {messages.length === 0 && !pendingUser && (
+              <div className="text-center py-20 text-muted-foreground">
+                <div className="text-sm uppercase tracking-[0.2em] mb-3">
+                  Start the conversation
+                </div>
+                <p className="text-base">
+                  Ask the CEO agent anything — strategy, decisions, delegation,
+                  opinions. Attach docs with the paperclip below.
+                </p>
+              </div>
+            )}
+
+            {messages.map((m) => (
+              <MessageRow
+                key={m.id}
+                role={m.role}
+                content={m.content}
+                attachments={m.attachments ?? []}
+              />
+            ))}
+
+            {pendingUser && (
+              <MessageRow
+                role="user"
+                content={pendingUser.content}
+                attachments={pendingUser.attachments}
+              />
+            )}
+
+            {showThinking && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                CEO is thinking…
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border/40 bg-card/40 backdrop-blur">
+          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4">
+            {(attachments.length > 0 || uploading) && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {attachments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-medium">{a.filename}</span>
+                    <span className="text-muted-foreground">
+                      {formatBytes(a.sizeBytes)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachments((prev) =>
+                          prev.filter((x) => x.id !== a.id),
+                        )
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Remove ${a.filename}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {uploading && (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Extracting…
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="relative rounded-xl border border-border bg-background focus-within:border-primary/60 transition-colors">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                placeholder="Message the CEO…  Try @cfo, @cmo, @cto, @sales, @board…  (Enter to send, Shift+Enter for newline)"
+                rows={2}
+                disabled={mutation.isPending}
+                className="w-full resize-none bg-transparent pl-12 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                hidden
+                onChange={(e) => handleFiles(e.target.files)}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || mutation.isPending}
+                className="absolute left-2 bottom-2 h-9 w-9 text-muted-foreground hover:text-foreground"
+                aria-label="Attach document"
+                title="Attach .pdf, .docx, .txt, .md"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!canSend}
+                className="absolute right-2 bottom-2 h-9 w-9"
+              >
+                {mutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
       <Toaster theme="dark" position="top-right" />
     </div>

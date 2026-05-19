@@ -9,15 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ChatRouteImport } from './routes/chat'
+import { Route as TerminalRouteImport } from './routes/terminal'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
 
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
+const TerminalRoute = TerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -45,14 +45,14 @@ const ApiPublicCronDailyReportsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/chat': typeof ChatRoute
+  '/terminal': typeof TerminalRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/chat': typeof ChatRoute
+  '/terminal': typeof TerminalRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
@@ -60,7 +60,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/chat': typeof ChatRoute
+  '/terminal': typeof TerminalRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
@@ -69,21 +69,21 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/chat'
+    | '/terminal'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/chat'
+    | '/terminal'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
   id:
     | '__root__'
     | '/'
-    | '/chat'
+    | '/terminal'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
@@ -91,7 +91,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ChatRoute: typeof ChatRoute
+  TerminalRoute: typeof TerminalRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
@@ -99,11 +99,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
+    '/terminal': {
+      id: '/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -139,7 +139,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ChatRoute: ChatRoute,
+  TerminalRoute: TerminalRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,

@@ -43,7 +43,15 @@ export async function chatCompletion(opts: {
     body: JSON.stringify({
       model: opts.model ?? DEFAULT_MODEL,
       messages: opts.messages,
-      ...(opts.tools?.length ? { tools: opts.tools, tool_choice: opts.tool_choice ?? "auto" } : {}),
+      ...(opts.tools?.length
+        ? {
+            tools: opts.tools,
+            tool_choice: opts.tool_choice ?? "auto",
+            // Only route to providers that actually support tool use, so we
+            // don't get OpenRouter 404 "No endpoints found that support tool use".
+            provider: { require_parameters: true },
+          }
+        : {}),
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     }),
   });

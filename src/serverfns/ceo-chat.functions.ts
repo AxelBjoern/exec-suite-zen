@@ -27,42 +27,108 @@ Rules:
 const MAX_EXTRACTED_CHARS = 30_000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-export const getCeoChat = createServerFn({ method: "GET" }).handler(async () => {
-  const { data: messages, error } = await supabaseAdmin
-    .from("ceo_chat_messages")
-    .select("id, role, content, created_at")
-    .order("created_at", { ascending: true })
-    .limit(500);
-  if (error) throw error;
+// ── Conversations ───────────────────────────────────────────────────────────
 
-  const ids = (messages ?? []).map((m) => m.id);
-  let attachments: Array<{
-    id: string;
-    message_id: string | null;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-  }> = [];
-  if (ids.length) {
-    const { data: atts } = await supabaseAdmin
-      .from("ceo_chat_attachments")
-      .select("id, message_id, filename, mime_type, size_bytes")
-      .in("message_id", ids);
-    attachments = atts ?? [];
-  }
+export const listCeoConversations = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const { data, error } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("id, title, created_at, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return data ?? [];
+  },
+);
 
-  return (messages ?? []).map((m) => ({
-    ...m,
-    attachments: attachments
-      .filter((a) => a.message_id === m.id)
-      .map((a) => ({
-        id: a.id,
-        filename: a.filename,
-        mimeType: a.mime_type,
-        sizeBytes: a.size_bytes,
-      })),
-  }));
-});
+export const createCeoConversation = createServerFn({ method: "POST" })
+  .inputValidator((d: { title?: string }) => ({
+    title: (d?.title ?? "New conversation").trim().slice(0, 120) || "New conversation",
+  }))
+  .handler(async ({ data }) => {
+    const { data: row, error } = await supabaseAdmin
+      .from("ceo_conversations")
+      .insert({ title: data.title })
+      .select("id, title, created_at, updated_at")
+      .single();
+    if (error) throw error;
+    return row;
+  });
+
+export const renameCeoConversation = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; title: string }) => {
+    if (!d?.id) throw new Error("Missing conversation id");
+    const title = (d?.title ?? "").trim().slice(0, 120);
+    if (!title) throw new Error("Title is required");
+    return { id: d.id, title };
+  })
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("ceo_conversations")
+      .update({ title: data.title, updated_at: new Date().toISOString() })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const deleteCeoConversation = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string }) => {
+    if (!d?.id) throw new Error("Missing conversation id");
+    return { id: d.id };
+  })
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("ceo_conversations")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// ── Messages ────────────────────────────────────────────────────────────────
+
+export const getCeoChat = createServerFn({ method: "GET" })
+  .inputValidator((d?: { conversationId?: string | null }) => ({
+    conversationId: d?.conversationId ?? null,
+  }))
+  .handler(async ({ data }) => {
+    if (!data.conversationId) return [];
+    const { data: messages, error } = await supabaseAdmin
+      .from("ceo_chat_messages")
+      .select("id, role, content, created_at")
+      .eq("conversation_id", data.conversationId)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (error) throw error;
+
+    const ids = (messages ?? []).map((m) => m.id);
+    let attachments: Array<{
+      id: string;
+      message_id: string | null;
+      filename: string;
+      mime_type: string;
+      size_bytes: number;
+    }> = [];
+    if (ids.length) {
+      const { data: atts } = await supabaseAdmin
+        .from("ceo_chat_attachments")
+        .select("id, message_id, filename, mime_type, size_bytes")
+        .in("message_id", ids);
+      attachments = atts ?? [];
+    }
+
+    return (messages ?? []).map((m) => ({
+      ...m,
+      attachments: attachments
+        .filter((a) => a.message_id === m.id)
+        .map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          mimeType: a.mime_type,
+          sizeBytes: a.size_bytes,
+        })),
+    }));
+  });
 
 export const uploadCeoAttachment = createServerFn({ method: "POST" })
   .inputValidator(
@@ -144,7 +210,12 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
 
 export const sendCeoMessage = createServerFn({ method: "POST" })
   .inputValidator(
-    (d: { content: string; model?: string; attachmentIds?: string[] }) => {
+    (d: {
+      content: string;
+      model?: string;
+      attachmentIds?: string[];
+      conversationId?: string | null;
+    }) => {
       const c = (d?.content ?? "").trim();
       const attachmentIds = Array.isArray(d?.attachmentIds) ? d.attachmentIds : [];
       if (!c && attachmentIds.length === 0)
@@ -154,10 +225,26 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         content: c,
         model: d?.model ?? undefined,
         attachmentIds,
+        conversationId: d?.conversationId ?? null,
       };
     },
   )
   .handler(async ({ data }) => {
+    // Ensure a conversation exists; create one if needed (auto-title from first message)
+    let conversationId = data.conversationId;
+    if (!conversationId) {
+      const autoTitle =
+        (data.content || "New conversation").replace(/\s+/g, " ").trim().slice(0, 80) ||
+        "New conversation";
+      const { data: convo, error: convoErr } = await supabaseAdmin
+        .from("ceo_conversations")
+        .insert({ title: autoTitle })
+        .select("id")
+        .single();
+      if (convoErr) throw convoErr;
+      conversationId = convo.id;
+    }
+
     // Load attachments (if any) for prompt augmentation
     let attachmentBlock = "";
     let attachmentRows: Array<{ id: string; filename: string }> = [];
@@ -187,7 +274,11 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // Save user message
     const { data: userRow, error: userErr } = await supabaseAdmin
       .from("ceo_chat_messages")
-      .insert({ role: "user", content: userContentSaved })
+      .insert({
+        role: "user",
+        content: userContentSaved,
+        conversation_id: conversationId,
+      })
       .select("id")
       .single();
     if (userErr) throw userErr;
@@ -203,16 +294,38 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         );
     }
 
-    // Build conversation history (saved, sans attachment text)
+    // Build conversation history (scoped to this conversation, sans attachment text)
     const { data: history, error: histErr } = await supabaseAdmin
       .from("ceo_chat_messages")
       .select("id, role, content")
+      .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(80);
     if (histErr) throw histErr;
 
+    // bump conversation updated_at so it sorts to the top
+    const bump = async () =>
+      supabaseAdmin
+        .from("ceo_conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", conversationId!);
+
+    const saveAssistant = async (markdown: string) => {
+      const { data: saved, error: saveErr } = await supabaseAdmin
+        .from("ceo_chat_messages")
+        .insert({
+          role: "assistant",
+          content: markdown,
+          conversation_id: conversationId,
+        })
+        .select("id, role, content, created_at")
+        .single();
+      if (saveErr) throw saveErr;
+      await bump();
+      return { ...saved, conversation_id: conversationId };
+    };
+
     // ── @mention dispatch shortcut ────────────────────────────────────────
-    // Recognize:  "@board <prompt>"  or  "@<slug> <prompt>" at the start.
     const mention = data.content.match(/^@(board|[a-z]+)\s+([\s\S]+)$/i);
     if (mention) {
       const target = mention[1].toLowerCase();
@@ -221,7 +334,6 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       try {
         let assistantMd = "";
         if (target === "board") {
-          // Route to best primary, then dispatch as boardroom
           const decision = await routePrompt({
             data: { prompt, force_boardroom: true },
           });
@@ -274,22 +386,11 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         }
 
         if (assistantMd) {
-          const { data: saved, error: saveErr } = await supabaseAdmin
-            .from("ceo_chat_messages")
-            .insert({ role: "assistant", content: assistantMd })
-            .select("id, role, content, created_at")
-            .single();
-          if (saveErr) throw saveErr;
-          return saved;
+          return await saveAssistant(assistantMd);
         }
       } catch (e: any) {
         const errMd = `**Dispatch failed for @${target}:** ${e?.message ?? "unknown error"}`;
-        const { data: saved } = await supabaseAdmin
-          .from("ceo_chat_messages")
-          .insert({ role: "assistant", content: errMd })
-          .select("id, role, content, created_at")
-          .single();
-        return saved;
+        return await saveAssistant(errMd);
       }
     }
 
@@ -298,7 +399,6 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       { role: "system", content: CEO_SYSTEM },
       ...(history ?? []).map((m) => ({
         role: m.role as "user" | "assistant",
-        // Inject attachment block into the just-saved user message only
         content:
           m.id === userRow.id ? userContentForModel : m.content,
       })),
@@ -312,14 +412,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const reply: string =
       json?.choices?.[0]?.message?.content?.trim() || "(no reply)";
 
-    const { data: saved, error: saveErr } = await supabaseAdmin
-      .from("ceo_chat_messages")
-      .insert({ role: "assistant", content: reply })
-      .select("id, role, content, created_at")
-      .single();
-    if (saveErr) throw saveErr;
-
-    return saved;
+    return await saveAssistant(reply);
   });
 
 // Compact markdown renderer for an Artifact (mirrors terminal artifactToMarkdown)
@@ -339,11 +432,16 @@ function artifactToMd(a: any): string {
   return `# ${a.title}\n\n${sections}${items}`;
 }
 
-export const clearCeoChat = createServerFn({ method: "POST" }).handler(async () => {
-  const { error } = await supabaseAdmin
-    .from("ceo_chat_messages")
-    .delete()
-    .gte("created_at", "1970-01-01");
-  if (error) throw error;
-  return { ok: true };
-});
+export const clearCeoChat = createServerFn({ method: "POST" })
+  .inputValidator((d?: { conversationId?: string | null }) => ({
+    conversationId: d?.conversationId ?? null,
+  }))
+  .handler(async ({ data }) => {
+    if (!data.conversationId) return { ok: true };
+    const { error } = await supabaseAdmin
+      .from("ceo_chat_messages")
+      .delete()
+      .eq("conversation_id", data.conversationId);
+    if (error) throw error;
+    return { ok: true };
+  });

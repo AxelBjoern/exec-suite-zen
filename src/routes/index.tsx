@@ -120,6 +120,7 @@ function ChatPage() {
   const createConvo = useServerFn(createCeoConversation);
   const renameConvo = useServerFn(renameCeoConversation);
   const deleteConvo = useServerFn(deleteCeoConversation);
+  const genDoc = useServerFn(generateCeoDocument);
   const qc = useQueryClient();
 
   const [activeId, setActiveId] = useState<string | null>(() => {

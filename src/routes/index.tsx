@@ -18,6 +18,7 @@ import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Select,
   SelectContent,

@@ -6,6 +6,11 @@ import {
   type ChatMessage,
 } from "@/server/llm.server";
 import { DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
+import { dispatch, routePrompt } from "@/serverfns/terminal.functions";
+
+const VALID_DISPATCH_SLUGS = [
+  "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
+] as const;
 
 const CEO_SYSTEM = `${DEFAULT_COMPANY_CONTEXT}
 
@@ -16,7 +21,7 @@ Rules:
 - Markdown is welcome (headings, bullets, tables) but keep replies tight unless asked for depth.
 - Never invent metrics or commitments. If you don't know, say so and propose how to find out.
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
-- You can reference VDNX's specialist agents (CFO, COO, CTO, CMO, CCO, sales, linkedin, social, seo) and suggest delegating, but you cannot dispatch them from this chat.
+- You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 const MAX_EXTRACTED_CHARS = 30_000;
@@ -206,6 +211,89 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       .limit(80);
     if (histErr) throw histErr;
 
+    // ── @mention dispatch shortcut ────────────────────────────────────────
+    // Recognize:  "@board <prompt>"  or  "@<slug> <prompt>" at the start.
+    const mention = data.content.match(/^@(board|[a-z]+)\s+([\s\S]+)$/i);
+    if (mention) {
+      const target = mention[1].toLowerCase();
+      const prompt = mention[2].trim() + attachmentBlock;
+
+      try {
+        let assistantMd = "";
+        if (target === "board") {
+          // Route to best primary, then dispatch as boardroom
+          const decision = await routePrompt({
+            data: { prompt, force_boardroom: true },
+          });
+          const result = await dispatch({
+            data: {
+              raw: data.content,
+              agent_slug: decision.primary_agent,
+              verb: decision.inferred_verb || "respond",
+              args: prompt,
+              boardroom: true,
+              freeform: true,
+              prompt,
+            },
+          });
+          const consultLines = (result as any).consults?.length
+            ? (result as any).consults
+                .map(
+                  (c: any) =>
+                    `- **${c.role}** — ${c.consult.position.toUpperCase()}${c.consult.blocking ? " · BLOCKING" : ""}`,
+                )
+                .join("\n")
+            : "_(no consults)_";
+          assistantMd =
+            `**Boardroom dispatched** — lead: \`${decision.primary_agent.toUpperCase()}\`` +
+            `\n\n${artifactToMd((result as any).artifact)}` +
+            `\n\n---\n**Consults:**\n${consultLines}` +
+            ((result as any).requires_approval
+              ? `\n\n⚠️ External approval gate triggered.`
+              : "");
+        } else if ((VALID_DISPATCH_SLUGS as readonly string[]).includes(target)) {
+          const result = await dispatch({
+            data: {
+              raw: data.content,
+              agent_slug: target,
+              verb: "respond",
+              args: prompt,
+              freeform: true,
+              prompt,
+            },
+          });
+          if ((result as any).chat) {
+            assistantMd = `**@${target.toUpperCase()} replied:**\n\n${(result as any).chat.reply_markdown}`;
+          } else {
+            assistantMd =
+              `**@${target.toUpperCase()} dispatched:**\n\n${artifactToMd((result as any).artifact)}` +
+              ((result as any).requires_approval
+                ? `\n\n⚠️ External approval gate triggered.`
+                : "");
+          }
+        }
+
+        if (assistantMd) {
+          const { data: saved, error: saveErr } = await supabaseAdmin
+            .from("ceo_chat_messages")
+            .insert({ role: "assistant", content: assistantMd })
+            .select("id, role, content, created_at")
+            .single();
+          if (saveErr) throw saveErr;
+          return saved;
+        }
+      } catch (e: any) {
+        const errMd = `**Dispatch failed for @${target}:** ${e?.message ?? "unknown error"}`;
+        const { data: saved } = await supabaseAdmin
+          .from("ceo_chat_messages")
+          .insert({ role: "assistant", content: errMd })
+          .select("id, role, content, created_at")
+          .single();
+        return saved;
+      }
+    }
+
+    // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [
       { role: "system", content: CEO_SYSTEM },
       ...(history ?? []).map((m) => ({
@@ -233,6 +321,23 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
     return saved;
   });
+
+// Compact markdown renderer for an Artifact (mirrors terminal artifactToMarkdown)
+function artifactToMd(a: any): string {
+  if (!a) return "_(no artifact)_";
+  const sections = (a.sections ?? [])
+    .map((s: any) => `### ${s.heading}\n\n${s.body_md}`)
+    .join("\n\n");
+  const items = (a.action_items ?? []).length
+    ? `\n\n### Action Items\n\n| # | Task | Owner | Due | Auto |\n|---|------|-------|-----|------|\n${a.action_items
+        .map(
+          (it: any, i: number) =>
+            `| ${i + 1} | ${it.task} | ${String(it.owner_agent).toUpperCase()} | ${it.due} | ${it.auto_dispatch ? "✓" : "gate"} |`,
+        )
+        .join("\n")}`
+    : "";
+  return `# ${a.title}\n\n${sections}${items}`;
+}
 
 export const clearCeoChat = createServerFn({ method: "POST" }).handler(async () => {
   const { error } = await supabaseAdmin

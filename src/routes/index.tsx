@@ -338,7 +338,7 @@ function ChatPage() {
                   handleSubmit();
                 }
               }}
-              placeholder="Message the CEO…  (Enter to send, Shift+Enter for newline)"
+              placeholder="Message the CEO…  Try @cfo, @cmo, @cto, @sales, @board…  (Enter to send, Shift+Enter for newline)"
               rows={2}
               disabled={mutation.isPending}
               className="w-full resize-none bg-transparent pl-12 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"

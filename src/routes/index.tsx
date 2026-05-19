@@ -30,7 +30,7 @@ import {
   FileText,
 } from "lucide-react";
 
-export const Route = createFileRoute("/chat")({
+export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Chat — VDNX CEO Agent" },

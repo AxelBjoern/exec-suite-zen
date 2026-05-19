@@ -36,6 +36,8 @@ import {
   Plus,
   MessageSquare,
   Pencil,
+  FileDown,
+  FileType,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({

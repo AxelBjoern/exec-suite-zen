@@ -9,7 +9,7 @@ import {
   clearCeoChat,
   uploadCeoAttachment,
 } from "@/serverfns/ceo-chat.functions";
-import { CHAT_MODEL_OPTIONS } from "@/server/llm.server";
+import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

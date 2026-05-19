@@ -383,6 +383,7 @@ function ChatPage() {
             </div>
             <div className="text-sm font-semibold tracking-tight">History</div>
           </div>
+          <ThemeToggle />
           <Button
             size="icon"
             variant="ghost"

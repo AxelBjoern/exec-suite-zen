@@ -503,7 +503,11 @@ function ChatPage() {
                 </div>
                 <p className="text-base">
                   Ask the CEO agent anything — strategy, decisions, delegation,
-                  opinions. Attach docs with the paperclip below.
+                  opinions. Attach docs with the paperclip, or generate a{" "}
+                  <span className="text-foreground font-medium">PDF</span> /{" "}
+                  <span className="text-foreground font-medium">DOCX</span>{" "}
+                  using <code className="text-xs">/pdf</code> or{" "}
+                  <code className="text-xs">/docx</code>.
                 </p>
               </div>
             )}
@@ -529,6 +533,13 @@ function ChatPage() {
               <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 CEO is thinking…
+              </div>
+            )}
+
+            {showGenerating && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Generating document…
               </div>
             )}
           </div>

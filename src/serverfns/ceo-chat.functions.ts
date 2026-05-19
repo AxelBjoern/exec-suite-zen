@@ -6,6 +6,11 @@ import {
   type ChatMessage,
 } from "@/server/llm.server";
 import { DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
+import { dispatch, routePrompt } from "@/serverfns/terminal.functions";
+
+const VALID_DISPATCH_SLUGS = [
+  "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
+] as const;
 
 const CEO_SYSTEM = `${DEFAULT_COMPANY_CONTEXT}
 
@@ -16,7 +21,7 @@ Rules:
 - Markdown is welcome (headings, bullets, tables) but keep replies tight unless asked for depth.
 - Never invent metrics or commitments. If you don't know, say so and propose how to find out.
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
-- You can reference VDNX's specialist agents (CFO, COO, CTO, CMO, CCO, sales, linkedin, social, seo) and suggest delegating, but you cannot dispatch them from this chat.
+- You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 const MAX_EXTRACTED_CHARS = 30_000;

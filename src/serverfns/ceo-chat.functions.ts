@@ -33,7 +33,7 @@ export const getCeoChat = createServerFn({ method: "GET" }).handler(async () => 
   const ids = (messages ?? []).map((m) => m.id);
   let attachments: Array<{
     id: string;
-    message_id: string;
+    message_id: string | null;
     filename: string;
     mime_type: string;
     size_bytes: number;

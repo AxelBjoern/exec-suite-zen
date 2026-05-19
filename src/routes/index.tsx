@@ -235,12 +235,39 @@ function ChatPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ceo-conversations"] }),
   });
 
+  const docMutation = useMutation({
+    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) =>
+      genDoc({
+        data: {
+          kind: vars.kind,
+          topic: vars.topic,
+          conversationId: activeId,
+          model,
+        },
+      }),
+    onMutate: (vars) => {
+      setPendingUser({
+        content: `/${vars.kind} ${vars.topic}`,
+        attachments: [],
+      });
+    },
+    onSettled: async (saved: any) => {
+      setPendingUser(null);
+      const newId = saved?.conversation_id ?? activeId;
+      if (newId && newId !== activeId) setActiveId(newId);
+      await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
+      await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      requestAnimationFrame(() => inputRef.current?.focus());
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),
+  });
+
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, pendingUser, mutation.isPending]);
+  }, [messages, pendingUser, mutation.isPending, docMutation.isPending]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -276,14 +303,39 @@ function ChatPage() {
   function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
     const text = input.trim();
-    if (mutation.isPending || uploading) return;
+    if (mutation.isPending || docMutation.isPending || uploading) return;
     if (!text && attachments.length === 0) return;
+
+    // Slash commands: /pdf <topic>  or  /docx <topic>
+    const slash = text.match(/^\/(pdf|docx)\s+([\s\S]+)$/i);
+    if (slash && attachments.length === 0) {
+      const kind = slash[1].toLowerCase() as "pdf" | "docx";
+      const topic = slash[2].trim();
+      setInput("");
+      docMutation.mutate({ kind, topic });
+      return;
+    }
+
     setInput("");
     mutation.mutate({
       content: text,
       attachmentIds: attachments.map((a) => a.id),
     });
   }
+
+  function handleGenerateDoc(kind: "pdf" | "docx") {
+    const seed = input.trim();
+    const topic =
+      seed ||
+      window.prompt(
+        `What should the ${kind.toUpperCase()} cover? (e.g. "Q1 board update on growth and burn")`,
+      ) ||
+      "";
+    if (!topic.trim()) return;
+    setInput("");
+    docMutation.mutate({ kind, topic: topic.trim() });
+  }
+
 
   function handleRename(c: Conversation) {
     const next = window.prompt("Rename conversation", c.title);

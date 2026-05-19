@@ -58,7 +58,9 @@ export type Database = {
           created_at: string
           decided_at: string | null
           id: string
+          kind: string
           notes: string | null
+          payload: Json | null
           reviewer: string | null
           status: string
           task_id: string | null
@@ -67,7 +69,9 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           id?: string
+          kind?: string
           notes?: string | null
+          payload?: Json | null
           reviewer?: string | null
           status?: string
           task_id?: string | null
@@ -76,7 +80,9 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           id?: string
+          kind?: string
           notes?: string | null
+          payload?: Json | null
           reviewer?: string | null
           status?: string
           task_id?: string | null
@@ -249,6 +255,42 @@ export type Database = {
         }
         Relationships: []
       }
+      job_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          kind: string
+          last_error: string | null
+          payload: Json
+          run_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          payload?: Json
+          run_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          payload?: Json
+          run_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lead_replies: {
         Row: {
           body: string
@@ -379,6 +421,51 @@ export type Database = {
           },
         ]
       }
+      schedules: {
+        Row: {
+          active: boolean
+          agent_slug: string
+          args: string | null
+          created_at: string
+          cron: string
+          id: string
+          last_run_at: string | null
+          mode: string
+          name: string
+          next_run_at: string
+          prompt: string | null
+          verb: string | null
+        }
+        Insert: {
+          active?: boolean
+          agent_slug: string
+          args?: string | null
+          created_at?: string
+          cron: string
+          id?: string
+          last_run_at?: string | null
+          mode?: string
+          name: string
+          next_run_at?: string
+          prompt?: string | null
+          verb?: string | null
+        }
+        Update: {
+          active?: boolean
+          agent_slug?: string
+          args?: string | null
+          created_at?: string
+          cron?: string
+          id?: string
+          last_run_at?: string | null
+          mode?: string
+          name?: string
+          next_run_at?: string
+          prompt?: string | null
+          verb?: string | null
+        }
+        Relationships: []
+      }
       sequences: {
         Row: {
           created_at: string
@@ -411,6 +498,42 @@ export type Database = {
           },
         ]
       }
+      suggestions: {
+        Row: {
+          agent_slug: string
+          body: string
+          created_at: string
+          decided_at: string | null
+          id: string
+          status: string
+          task_id: string | null
+          thread_id: string | null
+          title: string
+        }
+        Insert: {
+          agent_slug: string
+          body: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          status?: string
+          task_id?: string | null
+          thread_id?: string | null
+          title: string
+        }
+        Update: {
+          agent_slug?: string
+          body?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          status?: string
+          task_id?: string | null
+          thread_id?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           agent_id: string | null
@@ -420,7 +543,9 @@ export type Database = {
           body: string | null
           completed_at: string | null
           created_at: string
+          depth: number
           id: string
+          kind: string | null
           owner_agent: string | null
           parent_task_id: string | null
           payload: Json | null
@@ -437,7 +562,9 @@ export type Database = {
           body?: string | null
           completed_at?: string | null
           created_at?: string
+          depth?: number
           id?: string
+          kind?: string | null
           owner_agent?: string | null
           parent_task_id?: string | null
           payload?: Json | null
@@ -454,7 +581,9 @@ export type Database = {
           body?: string | null
           completed_at?: string | null
           created_at?: string
+          depth?: number
           id?: string
+          kind?: string | null
           owner_agent?: string | null
           parent_task_id?: string | null
           payload?: Json | null
@@ -517,6 +646,7 @@ export type Database = {
           agent_id: string | null
           created_at: string
           id: string
+          kind: string
           mode: string
           title: string | null
         }
@@ -524,6 +654,7 @@ export type Database = {
           agent_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           mode?: string
           title?: string | null
         }
@@ -531,6 +662,7 @@ export type Database = {
           agent_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           mode?: string
           title?: string | null
         }

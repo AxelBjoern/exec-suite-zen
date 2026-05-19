@@ -358,9 +358,11 @@ function ChatPage() {
   );
 
   const showThinking = mutation.isPending;
+  const showGenerating = docMutation.isPending;
   const canSend =
     (input.trim().length > 0 || attachments.length > 0) &&
     !mutation.isPending &&
+    !docMutation.isPending &&
     !uploading;
 
   return (

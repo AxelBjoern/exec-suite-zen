@@ -778,17 +778,18 @@ function ChatPage() {
                 </Button>
               </div>
               {mutation.isPending || docMutation.isPending ? (
-                <Button
+                <button
                   type="button"
-                  size="icon"
-                  variant="destructive"
                   onClick={handleStop}
-                  className="absolute right-2 bottom-2 h-9 w-9"
                   aria-label="Stop generation"
-                  title="Stop"
+                  title="Stop generating"
+                  className="absolute right-2 bottom-2 h-9 w-9 rounded-full flex items-center justify-center bg-foreground text-background shadow-sm transition-all hover:scale-105 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <Square className="h-3.5 w-3.5 fill-current" />
-                </Button>
+                  <span className="relative flex h-3.5 w-3.5 items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-sm bg-background/40" />
+                    <span className="relative h-2.5 w-2.5 rounded-[2px] bg-background" />
+                  </span>
+                </button>
               ) : (
                 <Button
                   type="submit"

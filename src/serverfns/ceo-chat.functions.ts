@@ -119,6 +119,46 @@ function safeFilename(title: string, ext: string) {
   return `${base}-${ts}.${ext}`;
 }
 
+function normalizeDocTopic(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/^\/(pdf|docx)\b[\s:@-]*/i, "")
+    .replace(/\[Download[^\]]+\]\([^)]*\)/gi, " ")
+    .replace(/[*_`#>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+async function resolveDocumentTopic(opts: {
+  kind: "pdf" | "docx";
+  explicitTopic?: string | null;
+  conversationId?: string | null;
+}) {
+  const explicit = normalizeDocTopic(opts.explicitTopic);
+  if (explicit) return explicit;
+
+  if (opts.conversationId) {
+    const { data: recent } = await supabaseAdmin
+      .from("ceo_chat_messages")
+      .select("content, artifact_json")
+      .eq("conversation_id", opts.conversationId)
+      .order("created_at", { ascending: false })
+      .limit(12);
+
+    for (const row of recent ?? []) {
+      const artifactTitle = normalizeDocTopic((row.artifact_json as any)?.title);
+      if (artifactTitle) return artifactTitle;
+
+      const contentTopic = normalizeDocTopic(row.content);
+      if (contentTopic) return contentTopic;
+    }
+  }
+
+  return opts.kind === "pdf"
+    ? "Executive summary from current conversation"
+    : "Executive brief from current conversation";
+}
+
 export const generateCeoDocument = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
@@ -129,7 +169,6 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     }) => {
       const kind = d?.kind === "docx" ? "docx" : "pdf";
       const topic = (d?.topic ?? "").trim();
-      if (!topic) throw new Error("Topic is required");
       if (topic.length > 4000) throw new Error("Topic too long");
       return {
         kind: kind as "pdf" | "docx",
@@ -140,10 +179,16 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }) => {
+    const topic = await resolveDocumentTopic({
+      kind: data.kind,
+      explicitTopic: data.topic,
+      conversationId: data.conversationId,
+    });
+
     // 1. Ensure a conversation
     let conversationId = data.conversationId;
     if (!conversationId) {
-      const title = `${data.kind.toUpperCase()}: ${data.topic.slice(0, 60)}`;
+      const title = `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`;
       const { data: convo, error } = await supabaseAdmin
         .from("ceo_conversations")
         .insert({ title })
@@ -154,7 +199,7 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     }
 
     // 2. Save the operator's "user" message describing the request
-    const userMd = `/${data.kind} ${data.topic}`;
+    const userMd = `/${data.kind} ${topic}`;
     await supabaseAdmin
       .from("ceo_chat_messages")
       .insert({ role: "user", content: userMd, conversation_id: conversationId });
@@ -170,7 +215,7 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     try {
       // 4. Generate outline + render file
       const outline = await buildDocOutline({
-        topic: data.topic,
+        topic,
         kind: data.kind,
         model: data.model,
         history: (history ?? []).map((m) => ({
@@ -488,17 +533,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // Reroute stray slash-commands (e.g. "/pdf@topic", "/docx topic") that bypassed the client parser.
     const slash = data.content.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
     if (slash && data.attachmentIds.length === 0) {
-      const topic = slash[2].trim();
-      if (topic) {
-        return (await generateCeoDocument({
-          data: {
-            kind: slash[1].toLowerCase() as "pdf" | "docx",
-            topic,
-            conversationId: data.conversationId ?? null,
-            model: data.model,
-          },
-        })) as any;
-      }
+      return (await generateCeoDocument({
+        data: {
+          kind: slash[1].toLowerCase() as "pdf" | "docx",
+          topic: slash[2].trim(),
+          conversationId: data.conversationId ?? null,
+          model: data.model,
+        },
+      })) as any;
     }
 
     // Ensure a conversation exists; create one if needed (auto-title from first message)

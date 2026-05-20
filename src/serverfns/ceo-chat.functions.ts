@@ -485,6 +485,22 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }) => {
+    // Reroute stray slash-commands (e.g. "/pdf@topic", "/docx topic") that bypassed the client parser.
+    const slash = data.content.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
+    if (slash && data.attachmentIds.length === 0) {
+      const topic = slash[2].trim();
+      if (topic) {
+        return (await generateCeoDocument({
+          data: {
+            kind: slash[1].toLowerCase() as "pdf" | "docx",
+            topic,
+            conversationId: data.conversationId ?? null,
+            model: data.model,
+          },
+        })) as any;
+      }
+    }
+
     // Ensure a conversation exists; create one if needed (auto-title from first message)
     let conversationId = data.conversationId;
     if (!conversationId) {

@@ -1,0 +1,1 @@
+UPDATE agents SET role = REGEXP_REPLACE(role, '^Elite NYC\s*', '') WHERE role LIKE 'Elite NYC%';

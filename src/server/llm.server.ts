@@ -1,23 +1,36 @@
-// Hermes via OpenRouter — replaces the Lovable AI Gateway for all agent calls.
-// Server-only. Reads OPENROUTER_API_KEY from process.env.
+// All LLM calls go through OpenRouter. Server-only.
+// Reads OPENROUTER_API_KEY from process.env. No fallback models — if a
+// selected model fails, the error surfaces with that model's name.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = process.env.HERMES_MODEL ?? "nousresearch/hermes-4-405b";
+const DEFAULT_MODEL = "nousresearch/hermes-4-405b";
 
-// User-facing model picker → OpenRouter slug.
-// Labels mirror what the operator asked for; slugs are the closest currently-
-// published OpenRouter models. Update slugs when newer versions ship.
-const MODEL_SLUGS: Record<string, string> = {
+// The ONLY allowed models. No other versions, no fallbacks.
+const MODEL_SLUGS = {
   hermes: "nousresearch/hermes-4-405b",
   grok: "x-ai/grok-4.3",
-  gpt: "openai/gpt-5",
+  gpt: "openai/gpt-5.3-chat",
   claude: "anthropic/claude-opus-4.7",
   deepseek: "deepseek/deepseek-v4-pro",
+} as const;
+
+const MODEL_LABELS: Record<string, string> = {
+  "nousresearch/hermes-4-405b": "Hermes 4 405B",
+  "x-ai/grok-4.3": "Grok 4.3",
+  "openai/gpt-5.3-chat": "ChatGPT 5.3",
+  "anthropic/claude-opus-4.7": "Claude Opus 4.7",
+  "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
 };
 
 export function resolveChatModel(id?: string | null): string {
   if (!id) return DEFAULT_MODEL;
-  return MODEL_SLUGS[id] ?? DEFAULT_MODEL;
+  const slug = MODEL_SLUGS[id as keyof typeof MODEL_SLUGS];
+  if (!slug) throw new Error(`Unknown model "${id}". Allowed: Hermes 4 405B, Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro.`);
+  return slug;
+}
+
+function labelFor(slug: string): string {
+  return MODEL_LABELS[slug] ?? "the selected model";
 }
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -32,6 +45,9 @@ export async function chatCompletion(opts: {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY missing");
 
+  const model = opts.model ?? DEFAULT_MODEL;
+  const label = labelFor(model);
+
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -41,14 +57,12 @@ export async function chatCompletion(opts: {
       "X-Title": "VDNX Agents",
     },
     body: JSON.stringify({
-      model: opts.model ?? DEFAULT_MODEL,
+      model,
       messages: opts.messages,
       ...(opts.tools?.length
         ? {
             tools: opts.tools,
             tool_choice: opts.tool_choice ?? "auto",
-            // Only route to providers that actually support tool use, so we
-            // don't get OpenRouter 404 "No endpoints found that support tool use".
             provider: { require_parameters: true },
           }
         : {}),
@@ -58,37 +72,15 @@ export async function chatCompletion(opts: {
 
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 429) throw new Error("Hermes rate limit reached. Wait a moment and retry.");
-    if (res.status === 402) throw new Error("OpenRouter credits exhausted. Top up at openrouter.ai.");
+    if (res.status === 429) throw new Error(`${label} is rate-limited. Wait a moment and retry.`);
+    if (res.status === 402) throw new Error(`Credits exhausted while calling ${label}.`);
     if (res.status === 401) throw new Error("OPENROUTER_API_KEY invalid or revoked.");
-    // Fallback: model has no tool-capable provider. Retry once with a known
-    // tool-capable model so agent dispatches keep working.
     const noToolEndpoint =
       res.status === 404 && opts.tools?.length && /tool use|require_parameters/i.test(body);
     if (noToolEndpoint) {
-      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-5";
-      const retry = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://lovable.app",
-          "X-Title": "VDNX Agents",
-        },
-        body: JSON.stringify({
-          model: fallback,
-          messages: opts.messages,
-          tools: opts.tools,
-          tool_choice: opts.tool_choice ?? "auto",
-          provider: { require_parameters: true },
-          ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-        }),
-      });
-      if (retry.ok) return retry.json();
-      const rbody = await retry.text();
-      throw new Error(`OpenRouter ${retry.status} (fallback ${fallback}): ${rbody.slice(0, 500)}`);
+      throw new Error(`${label} has no tool-capable endpoint right now. Pick another model.`);
     }
-    throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 500)}`);
+    throw new Error(`${label} request failed (${res.status}): ${body.slice(0, 300)}`);
   }
   return res.json();
 }
@@ -124,7 +116,8 @@ export async function callTool<T>(opts: {
 
   const call = json.choices?.[0]?.message?.tool_calls?.[0];
   if (!call?.function?.arguments) {
-    throw new Error("Hermes did not return a structured tool call");
+    const label = labelFor(opts.model ?? DEFAULT_MODEL);
+    throw new Error(`${label} did not return a structured tool call.`);
   }
   try {
     return { name: call.function.name, result: JSON.parse(call.function.arguments) as T };

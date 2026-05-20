@@ -325,7 +325,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
     if (!data.conversationId) return [];
     const { data: messages, error } = await supabaseAdmin
       .from("ceo_chat_messages")
-      .select("id, role, content, created_at")
+      .select("id, role, content, created_at, artifact_json")
       .eq("conversation_id", data.conversationId)
       .order("created_at", { ascending: true })
       .limit(500);

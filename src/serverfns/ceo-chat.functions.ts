@@ -592,6 +592,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               args: prompt,
               freeform: true,
               prompt,
+              model: data.model,
             },
           });
           if ((result as any).chat) {

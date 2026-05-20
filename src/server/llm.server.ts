@@ -9,10 +9,10 @@ const DEFAULT_MODEL = process.env.HERMES_MODEL ?? "nousresearch/hermes-4-405b";
 // published OpenRouter models. Update slugs when newer versions ship.
 const MODEL_SLUGS: Record<string, string> = {
   hermes: "nousresearch/hermes-4-405b",
-  grok: "x-ai/grok-4",
+  grok: "x-ai/grok-4.3",
   gpt: "openai/gpt-5",
   claude: "anthropic/claude-opus-4.7",
-  deepseek: "deepseek/deepseek-chat",
+  deepseek: "deepseek/deepseek-v4-pro",
 };
 
 export function resolveChatModel(id?: string | null): string {
@@ -66,7 +66,7 @@ export async function chatCompletion(opts: {
     const noToolEndpoint =
       res.status === 404 && opts.tools?.length && /tool use|require_parameters/i.test(body);
     if (noToolEndpoint) {
-      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-4o-mini";
+      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-5";
       const retry = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {

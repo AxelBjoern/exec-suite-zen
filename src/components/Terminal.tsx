@@ -593,7 +593,15 @@ function Clock() {
 function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) => void }) {
   return (
     <div className="p-8 max-w-6xl">
-      <h1 className="font-serif text-3xl mb-1">The Executive Team</h1>
+      <div className="flex items-center justify-between gap-4 mb-1">
+        <h1 className="font-serif text-3xl">The Executive Team</h1>
+        <Link
+          to="/"
+          className="smallcaps text-[20px] text-muted-foreground hover:text-primary border border-rule px-5 py-2 rounded-sm transition-colors"
+        >
+          Chat with CEO →
+        </Link>
+      </div>
       <p className="text-muted-foreground text-sm mb-6">
         Ten operators. Every output AI-drafted, human-approved, hash-chained.
       </p>

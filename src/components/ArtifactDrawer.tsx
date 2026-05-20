@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Download, Link2, Check, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -42,24 +42,32 @@ export function ArtifactDrawer({
     }
   }
 
-  const previewUrl = artifact?.kind === "pdf" ? artifact.url : artifact?.previewUrl;
-  const canPreviewInline = Boolean(previewUrl);
+  const officePreviewUrl =
+    artifact?.kind === "docx" && artifact.url
+      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.url)}`
+      : null;
+  const previewUrl =
+    artifact?.kind === "pdf"
+      ? artifact.url
+      : artifact?.previewUrl || officePreviewUrl;
+  const previewType = artifact?.kind === "docx" && !artifact?.previewUrl ? "office" : "pdf";
+  const canPreviewInline = Boolean(artifact && previewUrl);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-[680px] p-0 flex flex-col gap-0 bg-card"
-        aria-describedby={descriptionId}
-      >
-        {artifact && (
+      {artifact ? (
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-[680px] p-0 flex flex-col gap-0 bg-card"
+          aria-describedby={descriptionId}
+        >
           <>
-            <SheetTitle id={titleId} className="sr-only">
-              {artifact.title}
-            </SheetTitle>
-            <SheetDescription id={descriptionId} className="sr-only">
-              Preview and download panel for the generated {artifact.kind.toUpperCase()} document.
-            </SheetDescription>
+            <SheetHeader className="sr-only">
+              <SheetTitle id={titleId}>{artifact.title}</SheetTitle>
+              <SheetDescription id={descriptionId}>
+                Preview and download panel for the generated {artifact.kind.toUpperCase()} document.
+              </SheetDescription>
+            </SheetHeader>
             <header className="border-b border-border px-5 py-4 flex items-start gap-3">
               <div className="h-9 w-9 shrink-0 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
                 <FileText className="h-4 w-4" />
@@ -113,12 +121,28 @@ export function ArtifactDrawer({
 
             <div className="flex-1 min-h-0 bg-muted/30">
               {canPreviewInline ? (
-                <iframe
-                  key={previewUrl}
-                  src={previewUrl ?? undefined}
-                  title={artifact.title}
-                  className="w-full h-full border-0"
-                />
+                previewType === "pdf" ? (
+                  <object
+                    key={previewUrl}
+                    data={previewUrl ?? undefined}
+                    type="application/pdf"
+                    aria-label={artifact.title}
+                    className="h-full w-full"
+                  >
+                    <iframe
+                      src={previewUrl ?? undefined}
+                      title={artifact.title}
+                      className="h-full w-full border-0"
+                    />
+                  </object>
+                ) : (
+                  <iframe
+                    key={previewUrl}
+                    src={previewUrl ?? undefined}
+                    title={artifact.title}
+                    className="h-full w-full border-0"
+                  />
+                )
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-8">
                   <div className="max-w-sm w-full text-center space-y-4 rounded-xl border border-border bg-background p-8">
@@ -146,8 +170,8 @@ export function ArtifactDrawer({
               )}
             </div>
           </>
-        )}
-      </SheetContent>
+        </SheetContent>
+      ) : null}
     </Sheet>
   );
 }

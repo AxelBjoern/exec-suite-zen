@@ -72,6 +72,7 @@ type Msg = {
   content: string;
   created_at: string;
   attachments?: Attachment[];
+  artifact_json?: DocArtifact | null;
 };
 
 type Conversation = {

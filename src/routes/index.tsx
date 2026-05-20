@@ -39,7 +39,10 @@ import {
   Pencil,
   FileDown,
   FileType,
+  Copy,
+  Check,
 } from "lucide-react";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({

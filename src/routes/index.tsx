@@ -276,6 +276,9 @@ function ChatPage() {
       if (newId && newId !== activeId) setActiveId(newId);
       await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      const artifact = (saved?.artifact_json as DocArtifact | undefined) ??
+        (saved?.content ? parseArtifactFromMarkdown(saved.content) : null);
+      if (artifact) setOpenArtifact(artifact);
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),

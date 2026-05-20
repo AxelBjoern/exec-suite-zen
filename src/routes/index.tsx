@@ -15,6 +15,12 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import {
+  ArtifactDrawer,
+  ArtifactPill,
+  parseArtifactFromMarkdown,
+  type DocArtifact,
+} from "@/components/ArtifactDrawer";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -72,6 +78,7 @@ type Msg = {
   content: string;
   created_at: string;
   attachments?: Attachment[];
+  artifact_json?: DocArtifact | null;
 };
 
 type Conversation = {
@@ -171,6 +178,7 @@ function ChatPage() {
   const [model, setModel] = useState<string>(CHAT_MODEL_OPTIONS[0].id);
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openArtifact, setOpenArtifact] = useState<DocArtifact | null>(null);
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -268,6 +276,9 @@ function ChatPage() {
       if (newId && newId !== activeId) setActiveId(newId);
       await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+      const artifact = (saved?.artifact_json as DocArtifact | undefined) ??
+        (saved?.content ? parseArtifactFromMarkdown(saved.content) : null);
+      if (artifact) setOpenArtifact(artifact);
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),
@@ -567,6 +578,8 @@ function ChatPage() {
                 role={m.role}
                 content={m.content}
                 attachments={m.attachments ?? []}
+                artifact={m.artifact_json ?? parseArtifactFromMarkdown(m.content)}
+                onOpenArtifact={setOpenArtifact}
               />
             ))}
 
@@ -710,6 +723,11 @@ function ChatPage() {
         </div>
       </div>
       <Toaster theme="dark" position="top-right" />
+      <ArtifactDrawer
+        artifact={openArtifact}
+        open={!!openArtifact}
+        onOpenChange={(o) => !o && setOpenArtifact(null)}
+      />
     </div>
   );
 }
@@ -718,10 +736,14 @@ function MessageRow({
   role,
   content,
   attachments,
+  artifact,
+  onOpenArtifact,
 }: {
   role: "user" | "assistant";
   content: string;
   attachments: Attachment[];
+  artifact?: DocArtifact | null;
+  onOpenArtifact?: (a: DocArtifact) => void;
 }) {
   if (role === "user") {
     return (
@@ -785,6 +807,9 @@ function MessageRow({
         <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:break-words prose-strong:text-foreground">
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
+        {artifact && onOpenArtifact && (
+          <ArtifactPill artifact={artifact} onOpen={() => onOpenArtifact(artifact)} />
+        )}
         <div className="mt-2 flex items-center gap-1">
           <button
             type="button"

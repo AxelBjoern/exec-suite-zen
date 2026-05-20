@@ -210,14 +210,25 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
         .filter(Boolean)
         .join("\n");
 
+      const artifactJson = {
+        kind: data.kind,
+        title: outline.title,
+        subtitle: outline.subtitle ?? null,
+        filename,
+        url: publicUrl,
+        sizeKB,
+        createdAt: new Date().toISOString(),
+      };
+
       const { data: saved, error: saveErr } = await supabaseAdmin
         .from("ceo_chat_messages")
         .insert({
           role: "assistant",
           content: replyMd,
           conversation_id: conversationId,
+          artifact_json: artifactJson,
         })
-        .select("id, role, content, created_at")
+        .select("id, role, content, created_at, artifact_json")
         .single();
       if (saveErr) throw saveErr;
 
@@ -314,7 +325,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
     if (!data.conversationId) return [];
     const { data: messages, error } = await supabaseAdmin
       .from("ceo_chat_messages")
-      .select("id, role, content, created_at")
+      .select("id, role, content, created_at, artifact_json")
       .eq("conversation_id", data.conversationId)
       .order("created_at", { ascending: true })
       .limit(500);

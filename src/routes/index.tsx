@@ -378,8 +378,20 @@ function ChatPage() {
 
   return (
     <div className="h-screen bg-background text-foreground flex">
+      {/* ── Mobile backdrop ─────────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar: conversation history ──────────────────────────────── */}
-      <aside className="w-72 shrink-0 border-r border-border/40 bg-card/30 backdrop-blur flex flex-col">
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-40 w-72 max-w-[85vw] shrink-0 border-r border-border/40 bg-card md:bg-card/30 backdrop-blur flex flex-col transition-transform duration-200 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
         <div className="px-4 py-4 border-b border-border/40 flex items-center gap-2">
           <Link
             to="/terminal"
@@ -406,6 +418,15 @@ function ChatPage() {
           >
             <Plus className="h-4 w-4" />
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           {conversations.length === 0 && (
@@ -426,7 +447,10 @@ function ChatPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => {
+                    setActiveId(c.id);
+                    setSidebarOpen(false);
+                  }}
                   className="w-full text-left px-3 py-2 pr-14"
                 >
                   <div className="flex items-center gap-2">
@@ -437,7 +461,7 @@ function ChatPage() {
                     {formatRelative(c.updated_at)}
                   </div>
                 </button>
-                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -469,19 +493,30 @@ function ChatPage() {
 
       {/* ── Main: chat panel ───────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-border/40 px-6 py-4 flex items-center justify-between bg-card/40 backdrop-blur">
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              VDNX
+        <header className="border-b border-border/40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2 bg-card/40 backdrop-blur">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 md:hidden shrink-0"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <div className="hidden md:block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                VDNX
+              </div>
+              <h1 className="text-sm md:text-lg font-semibold tracking-tight truncate">
+                CEO Agent
+              </h1>
             </div>
-            <h1 className="text-lg font-semibold tracking-tight">
-              CEO Agent — Direct Chat
-            </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue>{activeModelLabel}</SelectValue>
+              <SelectTrigger className="h-8 w-[120px] md:w-[180px] text-xs">
+                <SelectValue>{hydrated ? activeModelLabel : CHAT_MODEL_OPTIONS[0].label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {CHAT_MODEL_OPTIONS.map((m) => (
@@ -498,13 +533,15 @@ function ChatPage() {
               disabled={
                 clearMutation.isPending || messages.length === 0 || !activeId
               }
-              className="text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive px-2"
+              aria-label="Clear conversation"
             >
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              Clear
+              <Trash2 className="h-4 w-4 md:mr-1.5" />
+              <span className="hidden md:inline">Clear</span>
             </Button>
           </div>
         </header>
+
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
           <div className="max-w-3xl mx-auto py-8 space-y-8">

@@ -184,6 +184,7 @@ function ChatPage() {
   const [isDragging, setIsDragging] = useState(false);
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const lastAutoOpenedArtifactRef = useRef<string | null>(null);
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -322,6 +323,23 @@ function ChatPage() {
       behavior: "smooth",
     });
   }, [messages, pendingUser, mutation.isPending, docMutation.isPending]);
+
+  useEffect(() => {
+    const latestArtifactMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant" && (message.artifact_json ?? parseArtifactFromMarkdown(message.content)));
+
+    if (!latestArtifactMessage) return;
+
+    const artifact = latestArtifactMessage.artifact_json ?? parseArtifactFromMarkdown(latestArtifactMessage.content);
+    if (!artifact) return;
+
+    const artifactKey = `${latestArtifactMessage.id}:${artifact.url}:${artifact.previewUrl ?? ""}`;
+    if (lastAutoOpenedArtifactRef.current === artifactKey) return;
+
+    lastAutoOpenedArtifactRef.current = artifactKey;
+    setOpenArtifact(artifact);
+  }, [messages]);
 
   useEffect(() => {
     inputRef.current?.focus();

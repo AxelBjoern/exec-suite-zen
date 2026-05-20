@@ -777,18 +777,28 @@ function ChatPage() {
                   <FileType className="h-4 w-4" />
                 </Button>
               </div>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!canSend}
-                className="absolute right-2 bottom-2 h-9 w-9"
-              >
-                {mutation.isPending || docMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              {mutation.isPending || docMutation.isPending ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  onClick={handleStop}
+                  className="absolute right-2 bottom-2 h-9 w-9"
+                  aria-label="Stop generation"
+                  title="Stop"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!canSend}
+                  className="absolute right-2 bottom-2 h-9 w-9"
+                >
                   <Send className="h-4 w-4" />
-                )}
-              </Button>
+                </Button>
+              )}
             </div>
           </form>
         </div>

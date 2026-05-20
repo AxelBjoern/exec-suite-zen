@@ -14,7 +14,7 @@ import {
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
-import { callTool } from "@/server/llm.server";
+import { callTool, resolveChatModel } from "@/server/llm.server";
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");
@@ -249,8 +249,10 @@ export const dispatch = createServerFn({ method: "POST" })
     parent_task_id?: string | null;
     prompt?: string | null;
     freeform?: boolean;
+    model?: string;
   }) => d)
   .handler(async ({ data }) => {
+    const chosenModel = resolveChatModel(data.model);
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);
     if (!primary) throw new Error(`Unknown agent: ${data.agent_slug}`);
@@ -323,6 +325,7 @@ export const dispatch = createServerFn({ method: "POST" })
         user: userPrompt,
         tools: [CHAT_TOOL, ARTIFACT_TOOL],
         toolChoice: "auto",
+        model: chosenModel,
       });
       if (r.name === "chat_reply") {
         const chat = r.result as ChatReply;
@@ -355,6 +358,7 @@ export const dispatch = createServerFn({ method: "POST" })
         system: primarySystem,
         user: userPrompt,
         tool: ARTIFACT_TOOL,
+        model: chosenModel,
       });
       var artifact = r.result;
     }
@@ -390,6 +394,7 @@ export const dispatch = createServerFn({ method: "POST" })
             system: consultSystem,
             user: userPrompt,
             tool: CONSULT_TOOL,
+            model: chosenModel,
           });
           const c = cr.result;
           await supabaseAdmin.from("messages").insert({
@@ -506,8 +511,9 @@ export const dispatch = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────
 
 export const routePrompt = createServerFn({ method: "POST" })
-  .inputValidator((d: { prompt: string; force_boardroom?: boolean }) => d)
+  .inputValidator((d: { prompt: string; force_boardroom?: boolean; model?: string }) => d)
   .handler(async ({ data }) => {
+    const chosenModel = resolveChatModel(data.model);
     const { data: agents } = await supabaseAdmin
       .from("agents").select("slug,role,mandate").order("sort_order");
     const { data: ctxRow } = await supabaseAdmin
@@ -523,6 +529,7 @@ export const routePrompt = createServerFn({ method: "POST" })
       system,
       user: `Operator prompt:\n${data.prompt}\n\nReturn the routing decision now.`,
       tool: ROUTE_TOOL,
+      model: chosenModel,
     });
     const decision = r.result;
     if (data.force_boardroom) decision.mode = "boardroom";

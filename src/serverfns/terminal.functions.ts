@@ -394,6 +394,7 @@ export const dispatch = createServerFn({ method: "POST" })
             system: consultSystem,
             user: userPrompt,
             tool: CONSULT_TOOL,
+            model: chosenModel,
           });
           const c = cr.result;
           await supabaseAdmin.from("messages").insert({

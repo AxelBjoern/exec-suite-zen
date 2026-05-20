@@ -511,8 +511,9 @@ export const dispatch = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────
 
 export const routePrompt = createServerFn({ method: "POST" })
-  .inputValidator((d: { prompt: string; force_boardroom?: boolean }) => d)
+  .inputValidator((d: { prompt: string; force_boardroom?: boolean; model?: string }) => d)
   .handler(async ({ data }) => {
+    const chosenModel = resolveChatModel(data.model);
     const { data: agents } = await supabaseAdmin
       .from("agents").select("slug,role,mandate").order("sort_order");
     const { data: ctxRow } = await supabaseAdmin
@@ -528,6 +529,7 @@ export const routePrompt = createServerFn({ method: "POST" })
       system,
       user: `Operator prompt:\n${data.prompt}\n\nReturn the routing decision now.`,
       tool: ROUTE_TOOL,
+      model: chosenModel,
     });
     const decision = r.result;
     if (data.force_boardroom) decision.mode = "boardroom";

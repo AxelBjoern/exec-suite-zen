@@ -38,11 +38,6 @@ export function ArtifactDrawer({
   }
 
   const isPdf = artifact?.kind === "pdf";
-  const officeEmbed = artifact
-    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-        artifact.url,
-      )}`
-    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

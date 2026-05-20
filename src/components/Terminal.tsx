@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   dispatch,
@@ -381,12 +382,6 @@ export function Terminal() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <a
-            href="/chat"
-            className="smallcaps text-[10px] text-muted-foreground hover:text-primary border border-rule px-2.5 py-1 rounded-sm transition-colors"
-          >
-            Chat with CEO →
-          </a>
           <div className="font-mono text-[11px] text-muted-foreground">
             <Clock />
           </div>
@@ -598,7 +593,15 @@ function Clock() {
 function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) => void }) {
   return (
     <div className="p-8 max-w-6xl">
-      <h1 className="font-serif text-3xl mb-1">The Executive Team</h1>
+      <div className="flex items-center justify-between gap-4 mb-1">
+        <h1 className="font-serif text-3xl">The Executive Team</h1>
+        <Link
+          to="/"
+          className="smallcaps text-[20px] text-muted-foreground hover:text-primary border border-rule px-5 py-2 rounded-sm transition-colors"
+        >
+          Chat with CEO →
+        </Link>
+      </div>
       <p className="text-muted-foreground text-sm mb-6">
         Ten operators. Every output AI-drafted, human-approved, hash-chained.
       </p>

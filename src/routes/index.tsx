@@ -535,7 +535,46 @@ function ChatPage() {
       </aside>
 
       {/* ── Main: chat panel ───────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className="flex-1 flex flex-col min-w-0 relative"
+        onDragEnter={(e) => {
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current += 1;
+          setIsDragging(true);
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types?.includes("Files")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer?.files?.length) return;
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setIsDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+      >
+        {isDragging && (
+          <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg">
+            <div className="flex flex-col items-center gap-3 text-primary">
+              <Upload className="h-10 w-10" />
+              <div className="text-sm font-medium uppercase tracking-[0.2em]">
+                Drop files to attach
+              </div>
+              <div className="text-xs text-muted-foreground">
+                .pdf, .docx, .txt, .md · up to 10MB each
+              </div>
+            </div>
+          </div>
+        )}
         <header className="border-b border-border/40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2 bg-card/40 backdrop-blur">
           <div className="flex items-center gap-2 min-w-0">
             <Button

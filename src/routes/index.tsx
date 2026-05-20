@@ -202,20 +202,25 @@ function ChatPage() {
 
 
   const mutation = useMutation({
-    mutationFn: async (vars: { content: string; attachmentIds: string[] }) =>
-      send({
+    mutationFn: async (vars: { content: string; attachmentIds: string[] }) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return send({
         data: {
           content: vars.content,
           model,
           attachmentIds: vars.attachmentIds,
           conversationId: activeId,
         },
-      }),
+        signal: controller.signal,
+      });
+    },
     onMutate: (vars) => {
       setPendingUser({ content: vars.content, attachments: [...attachments] });
       setAttachments([]);
     },
     onSettled: async (saved: any) => {
+      abortRef.current = null;
       setPendingUser(null);
       // Server may have auto-created a conversation; adopt it
       const newId = saved?.conversation_id ?? activeId;
@@ -224,7 +229,13 @@ function ChatPage() {
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       requestAnimationFrame(() => inputRef.current?.focus());
     },
-    onError: (e: any) => toast.error(e?.message ?? "Send failed"),
+    onError: (e: any) => {
+      if (e?.name === "AbortError" || /abort/i.test(e?.message ?? "")) {
+        toast.info("Message stopped");
+        return;
+      }
+      toast.error(e?.message ?? "Send failed");
+    },
   });
 
   const clearMutation = useMutation({

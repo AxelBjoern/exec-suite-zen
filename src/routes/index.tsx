@@ -178,6 +178,7 @@ function ChatPage() {
   const [model, setModel] = useState<string>(CHAT_MODEL_OPTIONS[0].id);
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openArtifact, setOpenArtifact] = useState<DocArtifact | null>(null);
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {

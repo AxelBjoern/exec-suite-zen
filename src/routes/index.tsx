@@ -731,10 +731,14 @@ function MessageRow({
   role,
   content,
   attachments,
+  artifact,
+  onOpenArtifact,
 }: {
   role: "user" | "assistant";
   content: string;
   attachments: Attachment[];
+  artifact?: DocArtifact | null;
+  onOpenArtifact?: (a: DocArtifact) => void;
 }) {
   if (role === "user") {
     return (

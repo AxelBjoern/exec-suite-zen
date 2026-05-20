@@ -14,7 +14,7 @@ import {
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
-import { callTool } from "@/server/llm.server";
+import { callTool, resolveChatModel } from "@/server/llm.server";
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");

@@ -1,33 +1,51 @@
-## Why the 404 happens
+## Goal
 
-The "Chat with CEO →" link in `src/components/Terminal.tsx` (line 385) points to `href="/chat"`, but no `/chat` route exists. The CEO chat lives at `/` (`src/routes/index.tsx`). Clicking the link navigates to `/chat`, which has no matching route file, so the router renders the 404 boundary.
+Only these 5 models may ever appear in code, logs, errors, or UI:
+- Hermes 4 405B
+- Grok 4.3
+- ChatGPT 5.3
+- Claude Opus 4.7
+- DeepSeek V4 Pro
 
-## Fix
+No fallback model. No "gpt-4o-mini", no "gpt-5", no "deepseek-chat", no Opus 4.1/4.5/etc.
 
-In `src/components/Terminal.tsx`:
+## Changes
 
-1. **Remove** the "Chat with CEO →" anchor from the top header (lines 384–389). Leave the clock in the header on the right.
+### `src/server/llm.server.ts`
 
-2. **Move it next to the "Executive Team" header** inside `AgentsPanel` (around line 601). Wrap the existing `<h1>` and the new link in a flex row so they sit side-by-side, vertically centered:
+1. **Update `gpt` slug**: `openai/gpt-5` → `openai/gpt-5.3` (ChatGPT 5.3 is what the picker advertises; current code lies and routes to GPT-5).
 
-   ```tsx
-   <div className="flex items-center justify-between gap-4 mb-1">
-     <h1 className="font-serif text-3xl">The Executive Team</h1>
-     <Link
-       to="/"
-       className="smallcaps text-[20px] text-muted-foreground hover:text-primary border border-rule px-5 py-2 rounded-sm transition-colors"
-     >
-       Chat with CEO →
-     </Link>
-   </div>
+2. **Remove the tool fallback block entirely.** Currently if a selected model has no tool-capable endpoint, the code silently retries against `HERMES_TOOL_FALLBACK_MODEL` (defaulting to `openai/gpt-5`). This violates "no fallback models". Replace with a hard error that names only the selected model:
+   ```
+   throw new Error(`${selectedLabel} has no tool-capable endpoint right now. Pick another model.`)
    ```
 
-3. **Size increase ~100%**: original was `text-[10px]` with `px-2.5 py-1`. Doubled to `text-[20px]` with `px-5 py-2`.
+3. **Remove `DEFAULT_MODEL` env override.** `HERMES_MODEL` could silently point anywhere. Hard-code default to `nousresearch/hermes-4-405b`.
 
-4. **Fix the destination**: use TanStack Router's `<Link to="/">` (already imported in the file via `@tanstack/react-router`) instead of a raw `<a href="/chat">`, so it navigates to the actual CEO chat route at `/` and benefits from client-side routing.
+4. **`resolveChatModel` unknown id**: instead of falling back to Hermes silently, throw — so unknown selector values surface as a real error rather than being masked as Hermes usage.
+
+### `src/lib/chat-models.ts`
+
+Rename `gpt` label `"ChatGPT 5.3"` stays as-is (already correct). Verify all 5 labels match the allowed list exactly.
+
+### Error messages
+
+Audit all `throw new Error(...)` strings in `src/server/llm.server.ts`, `src/serverfns/terminal.functions.ts`, `src/serverfns/ceo-chat.functions.ts` to ensure no disallowed model name leaks into user-facing copy.
+
+### OpenRouter slug verification
+
+Confirmed against OpenRouter catalog:
+- `nousresearch/hermes-4-405b` ✓
+- `x-ai/grok-4.3` ✓
+- `anthropic/claude-opus-4.7` ✓
+- `deepseek/deepseek-v4-pro` ✓
+- `openai/gpt-5.3` — needs verification at implementation time; if not published, ask user which OpenRouter slug to map "ChatGPT 5.3" to (do not silently substitute).
 
 ## Out of scope
 
-- No changes to the chat route itself.
-- No changes to other header items (logo, tagline, clock).
-- No changes to AgentsPanel cards below the header.
+- UI selector layout, model picker styling.
+- Any change to ceo-chat / terminal dispatch flow (model is already threaded correctly).
+
+## Result
+
+If the user selects DeepSeek V4 Pro and it can't handle the tool call, they see "DeepSeek V4 Pro has no tool-capable endpoint right now. Pick another model." — never a silent swap to another model.

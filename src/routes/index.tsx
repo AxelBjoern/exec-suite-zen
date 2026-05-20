@@ -48,6 +48,8 @@ import {
   Copy,
   Check,
   Menu,
+  Square,
+  Upload,
 } from "lucide-react";
 
 
@@ -179,6 +181,9 @@ function ChatPage() {
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openArtifact, setOpenArtifact] = useState<DocArtifact | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -197,20 +202,25 @@ function ChatPage() {
 
 
   const mutation = useMutation({
-    mutationFn: async (vars: { content: string; attachmentIds: string[] }) =>
-      send({
+    mutationFn: async (vars: { content: string; attachmentIds: string[] }) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return send({
         data: {
           content: vars.content,
           model,
           attachmentIds: vars.attachmentIds,
           conversationId: activeId,
         },
-      }),
+        signal: controller.signal,
+      });
+    },
     onMutate: (vars) => {
       setPendingUser({ content: vars.content, attachments: [...attachments] });
       setAttachments([]);
     },
     onSettled: async (saved: any) => {
+      abortRef.current = null;
       setPendingUser(null);
       // Server may have auto-created a conversation; adopt it
       const newId = saved?.conversation_id ?? activeId;
@@ -219,7 +229,13 @@ function ChatPage() {
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       requestAnimationFrame(() => inputRef.current?.focus());
     },
-    onError: (e: any) => toast.error(e?.message ?? "Send failed"),
+    onError: (e: any) => {
+      if (e?.name === "AbortError" || /abort/i.test(e?.message ?? "")) {
+        toast.info("Message stopped");
+        return;
+      }
+      toast.error(e?.message ?? "Send failed");
+    },
   });
 
   const clearMutation = useMutation({
@@ -255,15 +271,19 @@ function ChatPage() {
   });
 
   const docMutation = useMutation({
-    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) =>
-      genDoc({
+    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return genDoc({
         data: {
           kind: vars.kind,
           topic: vars.topic,
           conversationId: activeId,
           model,
         },
-      }),
+        signal: controller.signal,
+      });
+    },
     onMutate: (vars) => {
       setPendingUser({
         content: `/${vars.kind} ${vars.topic}`,
@@ -271,6 +291,7 @@ function ChatPage() {
       });
     },
     onSettled: async (saved: any) => {
+      abortRef.current = null;
       setPendingUser(null);
       const newId = saved?.conversation_id ?? activeId;
       if (newId && newId !== activeId) setActiveId(newId);
@@ -281,8 +302,19 @@ function ChatPage() {
       if (artifact) setOpenArtifact(artifact);
       requestAnimationFrame(() => inputRef.current?.focus());
     },
-    onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),
+    onError: (e: any) => {
+      if (e?.name === "AbortError" || /abort/i.test(e?.message ?? "")) {
+        toast.info("Generation stopped");
+        return;
+      }
+      toast.error(e?.message ?? "Document generation failed");
+    },
   });
+
+  function handleStop() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -503,7 +535,46 @@ function ChatPage() {
       </aside>
 
       {/* ── Main: chat panel ───────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className="flex-1 flex flex-col min-w-0 relative"
+        onDragEnter={(e) => {
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current += 1;
+          setIsDragging(true);
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer?.types?.includes("Files")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer?.files?.length) return;
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setIsDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+      >
+        {isDragging && (
+          <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg">
+            <div className="flex flex-col items-center gap-3 text-primary">
+              <Upload className="h-10 w-10" />
+              <div className="text-sm font-medium uppercase tracking-[0.2em]">
+                Drop files to attach
+              </div>
+              <div className="text-xs text-muted-foreground">
+                .pdf, .docx, .txt, .md · up to 10MB each
+              </div>
+            </div>
+          </div>
+        )}
         <header className="border-b border-border/40 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2 bg-card/40 backdrop-blur">
           <div className="flex items-center gap-2 min-w-0">
             <Button
@@ -706,18 +777,28 @@ function ChatPage() {
                   <FileType className="h-4 w-4" />
                 </Button>
               </div>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!canSend}
-                className="absolute right-2 bottom-2 h-9 w-9"
-              >
-                {mutation.isPending || docMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              {mutation.isPending || docMutation.isPending ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  onClick={handleStop}
+                  className="absolute right-2 bottom-2 h-9 w-9"
+                  aria-label="Stop generation"
+                  title="Stop"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!canSend}
+                  className="absolute right-2 bottom-2 h-9 w-9"
+                >
                   <Send className="h-4 w-4" />
-                )}
-              </Button>
+                </Button>
+              )}
             </div>
           </form>
         </div>

@@ -249,8 +249,10 @@ export const dispatch = createServerFn({ method: "POST" })
     parent_task_id?: string | null;
     prompt?: string | null;
     freeform?: boolean;
+    model?: string;
   }) => d)
   .handler(async ({ data }) => {
+    const chosenModel = resolveChatModel(data.model);
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);
     if (!primary) throw new Error(`Unknown agent: ${data.agent_slug}`);

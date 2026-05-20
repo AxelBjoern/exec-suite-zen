@@ -271,15 +271,19 @@ function ChatPage() {
   });
 
   const docMutation = useMutation({
-    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) =>
-      genDoc({
+    mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return genDoc({
         data: {
           kind: vars.kind,
           topic: vars.topic,
           conversationId: activeId,
           model,
         },
-      }),
+        signal: controller.signal,
+      });
+    },
     onMutate: (vars) => {
       setPendingUser({
         content: `/${vars.kind} ${vars.topic}`,
@@ -287,6 +291,7 @@ function ChatPage() {
       });
     },
     onSettled: async (saved: any) => {
+      abortRef.current = null;
       setPendingUser(null);
       const newId = saved?.conversation_id ?? activeId;
       if (newId && newId !== activeId) setActiveId(newId);
@@ -297,8 +302,19 @@ function ChatPage() {
       if (artifact) setOpenArtifact(artifact);
       requestAnimationFrame(() => inputRef.current?.focus());
     },
-    onError: (e: any) => toast.error(e?.message ?? "Document generation failed"),
+    onError: (e: any) => {
+      if (e?.name === "AbortError" || /abort/i.test(e?.message ?? "")) {
+        toast.info("Generation stopped");
+        return;
+      }
+      toast.error(e?.message ?? "Document generation failed");
+    },
   });
+
+  function handleStop() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({

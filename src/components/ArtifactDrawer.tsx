@@ -107,12 +107,29 @@ export function ArtifactDrawer({
                   className="w-full h-full border-0"
                 />
               ) : (
-                <iframe
-                  key={artifact.url}
-                  src={officeEmbed!}
-                  title={artifact.title}
-                  className="w-full h-full border-0"
-                />
+                <div className="w-full h-full flex items-center justify-center p-8">
+                  <div className="max-w-sm w-full text-center space-y-4 rounded-xl border border-border bg-background p-8">
+                    <div className="mx-auto h-14 w-14 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                      <FileText className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm">{artifact.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-1 font-mono break-all">
+                        {artifact.filename}
+                        {artifact.sizeKB ? ` · ${artifact.sizeKB} KB` : ""}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Word documents can't be previewed inline. Download to open in your editor of choice.
+                    </p>
+                    <Button asChild size="sm" className="gap-1.5">
+                      <a href={artifact.url} download={artifact.filename}>
+                        <Download className="h-3.5 w-3.5" />
+                        Download {artifact.kind.toUpperCase()}
+                      </a>
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </>

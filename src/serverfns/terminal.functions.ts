@@ -325,6 +325,7 @@ export const dispatch = createServerFn({ method: "POST" })
         user: userPrompt,
         tools: [CHAT_TOOL, ARTIFACT_TOOL],
         toolChoice: "auto",
+        model: chosenModel,
       });
       if (r.name === "chat_reply") {
         const chat = r.result as ChatReply;

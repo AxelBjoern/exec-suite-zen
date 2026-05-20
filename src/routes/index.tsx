@@ -166,20 +166,25 @@ function ChatPage() {
   } | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [model, setModel] = useState<string>(() => {
-    if (typeof window === "undefined") return CHAT_MODEL_OPTIONS[0].id;
-    return localStorage.getItem(MODEL_STORAGE_KEY) ?? CHAT_MODEL_OPTIONS[0].id;
-  });
+  const [model, setModel] = useState<string>(CHAT_MODEL_OPTIONS[0].id);
+  const [hydrated, setHydrated] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
+  useEffect(() => {
+    const stored = localStorage.getItem(MODEL_STORAGE_KEY);
+    if (stored) setModel(stored);
+    setHydrated(true);
+  }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(MODEL_STORAGE_KEY, model);
-    }
-  }, [model]);
+    if (hydrated) localStorage.setItem(MODEL_STORAGE_KEY, model);
+  }, [model, hydrated]);
+
 
   const mutation = useMutation({
     mutationFn: async (vars: { content: string; attachmentIds: string[] }) =>

@@ -15,6 +15,12 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import {
+  ArtifactDrawer,
+  ArtifactPill,
+  parseArtifactFromMarkdown,
+  type DocArtifact,
+} from "@/components/ArtifactDrawer";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

@@ -723,6 +723,11 @@ function ChatPage() {
         </div>
       </div>
       <Toaster theme="dark" position="top-right" />
+      <ArtifactDrawer
+        artifact={openArtifact}
+        open={!!openArtifact}
+        onOpenChange={(o) => !o && setOpenArtifact(null)}
+      />
     </div>
   );
 }

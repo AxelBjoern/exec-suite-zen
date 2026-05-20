@@ -9,10 +9,10 @@ const DEFAULT_MODEL = process.env.HERMES_MODEL ?? "nousresearch/hermes-4-405b";
 // published OpenRouter models. Update slugs when newer versions ship.
 const MODEL_SLUGS: Record<string, string> = {
   hermes: "nousresearch/hermes-4-405b",
-  grok: "x-ai/grok-4",
+  grok: "x-ai/grok-4.3",
   gpt: "openai/gpt-5",
   claude: "anthropic/claude-opus-4.7",
-  deepseek: "deepseek/deepseek-chat",
+  deepseek: "deepseek/deepseek-v4-pro",
 };
 
 export function resolveChatModel(id?: string | null): string {

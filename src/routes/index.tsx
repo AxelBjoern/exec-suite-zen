@@ -181,6 +181,9 @@ function ChatPage() {
   const [hydrated, setHydrated] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openArtifact, setOpenArtifact] = useState<DocArtifact | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {

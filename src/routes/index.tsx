@@ -382,16 +382,8 @@ function ChatPage() {
     const slash = text.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
     if (slash && attachments.length === 0) {
       const kind = slash[1].toLowerCase() as "pdf" | "docx";
-      let topic = slash[2].trim();
-      if (!topic) {
-        topic =
-          window.prompt(
-            `What should the ${kind.toUpperCase()} cover? (e.g. "Q1 board update on growth and burn")`,
-          )?.trim() ?? "";
-      }
-      if (!topic) return;
       setInput("");
-      docMutation.mutate({ kind, topic });
+      docMutation.mutate({ kind, topic: slash[2].trim() });
       return;
     }
 
@@ -403,16 +395,9 @@ function ChatPage() {
   }
 
   function handleGenerateDoc(kind: "pdf" | "docx") {
-    const seed = input.trim();
-    const topic =
-      seed ||
-      window.prompt(
-        `What should the ${kind.toUpperCase()} cover? (e.g. "Q1 board update on growth and burn")`,
-      ) ||
-      "";
-    if (!topic.trim()) return;
+    const topic = input.trim();
     setInput("");
-    docMutation.mutate({ kind, topic: topic.trim() });
+    docMutation.mutate({ kind, topic });
   }
 
 

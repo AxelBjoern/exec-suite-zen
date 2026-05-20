@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Download, Link2, Check, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -54,12 +54,12 @@ export function ArtifactDrawer({
       >
         {artifact && (
           <>
-            <SheetTitle id={titleId} className="sr-only">
-              {artifact.title}
-            </SheetTitle>
-            <SheetDescription id={descriptionId} className="sr-only">
-              Preview and download panel for the generated {artifact.kind.toUpperCase()} document.
-            </SheetDescription>
+            <SheetHeader className="sr-only">
+              <SheetTitle id={titleId}>{artifact.title}</SheetTitle>
+              <SheetDescription id={descriptionId}>
+                Preview and download panel for the generated {artifact.kind.toUpperCase()} document.
+              </SheetDescription>
+            </SheetHeader>
             <header className="border-b border-border px-5 py-4 flex items-start gap-3">
               <div className="h-9 w-9 shrink-0 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
                 <FileText className="h-4 w-4" />
@@ -113,12 +113,19 @@ export function ArtifactDrawer({
 
             <div className="flex-1 min-h-0 bg-muted/30">
               {canPreviewInline ? (
-                <iframe
+                <object
                   key={previewUrl}
-                  src={previewUrl ?? undefined}
-                  title={artifact.title}
-                  className="w-full h-full border-0"
-                />
+                  data={previewUrl ?? undefined}
+                  type="application/pdf"
+                  aria-label={artifact.title}
+                  className="h-full w-full"
+                >
+                  <iframe
+                    src={previewUrl ?? undefined}
+                    title={artifact.title}
+                    className="h-full w-full border-0"
+                  />
+                </object>
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-8">
                   <div className="max-w-sm w-full text-center space-y-4 rounded-xl border border-border bg-background p-8">

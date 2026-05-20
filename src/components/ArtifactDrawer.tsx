@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Download, Link2, Check, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
 export type DocArtifact = {
   kind: "pdf" | "docx";
@@ -10,6 +11,8 @@ export type DocArtifact = {
   subtitle?: string | null;
   filename: string;
   url: string;
+  previewUrl?: string | null;
+  previewKind?: "pdf" | null;
   sizeKB?: number;
   createdAt?: string;
 };
@@ -24,6 +27,8 @@ export function ArtifactDrawer({
   onOpenChange: (open: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const titleId = useId();
+  const descriptionId = useId();
 
   async function copyLink() {
     if (!artifact) return;
@@ -37,16 +42,24 @@ export function ArtifactDrawer({
     }
   }
 
-  const isPdf = artifact?.kind === "pdf";
+  const previewUrl = artifact?.kind === "pdf" ? artifact.url : artifact?.previewUrl;
+  const canPreviewInline = Boolean(previewUrl);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-[680px] p-0 flex flex-col gap-0 bg-card"
+        aria-describedby={descriptionId}
       >
         {artifact && (
           <>
+            <SheetTitle id={titleId} className="sr-only">
+              {artifact.title}
+            </SheetTitle>
+            <SheetDescription id={descriptionId} className="sr-only">
+              Preview and download panel for the generated {artifact.kind.toUpperCase()} document.
+            </SheetDescription>
             <header className="border-b border-border px-5 py-4 flex items-start gap-3">
               <div className="h-9 w-9 shrink-0 rounded-md bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
                 <FileText className="h-4 w-4" />
@@ -99,10 +112,10 @@ export function ArtifactDrawer({
             </header>
 
             <div className="flex-1 min-h-0 bg-muted/30">
-              {isPdf ? (
+              {canPreviewInline ? (
                 <iframe
-                  key={artifact.url}
-                  src={artifact.url}
+                  key={previewUrl}
+                  src={previewUrl ?? undefined}
                   title={artifact.title}
                   className="w-full h-full border-0"
                 />
@@ -152,6 +165,8 @@ export function parseArtifactFromMarkdown(md: string): DocArtifact | null {
     kind,
     title: titleMatch?.[1]?.trim() ?? link[2].trim(),
     filename: link[2].trim(),
+    previewUrl: null,
+    previewKind: null,
     sizeKB: Number(link[3]) || undefined,
     url: link[4].trim(),
   };

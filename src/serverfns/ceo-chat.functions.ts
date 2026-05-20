@@ -180,9 +180,17 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
 
       const bytes =
         data.kind === "pdf" ? await renderPdf(outline) : await renderDocx(outline);
+      const previewBytes = data.kind === "docx" ? await renderPdf(outline) : null;
 
       const filename = safeFilename(outline.title, data.kind);
       const storagePath = `${conversationId}/${crypto.randomUUID()}-${filename}`;
+      const previewFilename =
+        data.kind === "docx"
+          ? filename.replace(/\.docx$/i, ".preview.pdf")
+          : null;
+      const previewStoragePath = previewFilename
+        ? `${conversationId}/${crypto.randomUUID()}-${previewFilename}`
+        : null;
       const contentType =
         data.kind === "pdf"
           ? "application/pdf"
@@ -193,9 +201,23 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
         .upload(storagePath, bytes, { contentType, upsert: false });
       if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
+      if (previewBytes && previewStoragePath) {
+        const { error: previewErr } = await supabaseAdmin.storage
+          .from("chat-documents")
+          .upload(previewStoragePath, previewBytes, {
+            contentType: "application/pdf",
+            upsert: false,
+          });
+        if (previewErr) throw new Error(`Preview upload failed: ${previewErr.message}`);
+      }
+
       const {
         data: { publicUrl },
       } = supabaseAdmin.storage.from("chat-documents").getPublicUrl(storagePath);
+      const previewUrl = previewStoragePath
+        ? supabaseAdmin.storage.from("chat-documents").getPublicUrl(previewStoragePath)
+            .data.publicUrl
+        : null;
 
       const sizeKB = Math.max(1, Math.round(bytes.length / 1024));
       const replyMd = [
@@ -216,6 +238,8 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
         subtitle: outline.subtitle ?? null,
         filename,
         url: publicUrl,
+        previewKind: previewUrl ? "pdf" : null,
+        previewUrl,
         sizeKB,
         createdAt: new Date().toISOString(),
       };

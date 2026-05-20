@@ -802,6 +802,9 @@ function MessageRow({
         <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:break-words prose-strong:text-foreground">
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
+        {artifact && onOpenArtifact && (
+          <ArtifactPill artifact={artifact} onOpen={() => onOpenArtifact(artifact)} />
+        )}
         <div className="mt-2 flex items-center gap-1">
           <button
             type="button"

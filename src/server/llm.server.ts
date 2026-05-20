@@ -66,7 +66,7 @@ export async function chatCompletion(opts: {
     const noToolEndpoint =
       res.status === 404 && opts.tools?.length && /tool use|require_parameters/i.test(body);
     if (noToolEndpoint) {
-      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-4o-mini";
+      const fallback = process.env.HERMES_TOOL_FALLBACK_MODEL ?? "openai/gpt-5";
       const retry = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {

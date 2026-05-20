@@ -48,6 +48,8 @@ import {
   Copy,
   Check,
   Menu,
+  Square,
+  Upload,
 } from "lucide-react";
 
 

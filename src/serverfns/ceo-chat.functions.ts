@@ -554,7 +554,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         let assistantMd = "";
         if (target === "board") {
           const decision = await routePrompt({
-            data: { prompt, force_boardroom: true },
+            data: { prompt, force_boardroom: true, model: data.model },
           });
           const result = await dispatch({
             data: {
@@ -565,6 +565,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               boardroom: true,
               freeform: true,
               prompt,
+              model: data.model,
             },
           });
           const consultLines = (result as any).consults?.length

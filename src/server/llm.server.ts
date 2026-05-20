@@ -11,7 +11,7 @@ const MODEL_SLUGS: Record<string, string> = {
   hermes: "nousresearch/hermes-4-405b",
   grok: "x-ai/grok-4",
   gpt: "openai/gpt-5",
-  claude: "anthropic/claude-opus-4.1",
+  claude: "anthropic/claude-opus-4.7",
   deepseek: "deepseek/deepseek-chat",
 };
 

@@ -176,6 +176,7 @@ export type Database = {
       }
       ceo_chat_messages: {
         Row: {
+          artifact_json: Json | null
           content: string
           conversation_id: string | null
           created_at: string
@@ -183,6 +184,7 @@ export type Database = {
           role: string
         }
         Insert: {
+          artifact_json?: Json | null
           content: string
           conversation_id?: string | null
           created_at?: string
@@ -190,6 +192,7 @@ export type Database = {
           role: string
         }
         Update: {
+          artifact_json?: Json | null
           content?: string
           conversation_id?: string | null
           created_at?: string

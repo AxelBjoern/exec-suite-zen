@@ -1,51 +1,70 @@
-## Goal
+# Artifact Panel for Generated Documents
 
-Only these 5 models may ever appear in code, logs, errors, or UI:
-- Hermes 4 405B
-- Grok 4.3
-- ChatGPT 5.3
-- Claude Opus 4.7
-- DeepSeek V4 Pro
+Make `/pdf` and `/docx` outputs from the CEO agent open in a slide-in panel from the right — like Claude/Grok artifacts — instead of just a download link in the message.
 
-No fallback model. No "gpt-4o-mini", no "gpt-5", no "deepseek-chat", no Opus 4.1/4.5/etc.
+## What the user gets
 
-## Changes
+- Assistant message keeps a short summary + outline, but the "📄 Title" becomes a clickable **artifact pill** ("Open document · PDF · 124 KB").
+- Clicking it slides a panel in from the right (overlays chat, chat stays mounted underneath).
+- Panel header: title, subtitle, kind badge, Download button, Copy link, Close (×).
+- Panel body:
+  - PDF → inline `<iframe>` of the public URL (native browser PDF viewer).
+  - DOCX → embedded Office Online viewer (`view.officeapps.live.com/op/embed.aspx?src=...`) with a "Download .docx" fallback button if the embed fails.
+- Width: ~640px on desktop, full-screen on mobile. Closable via ×, Esc, or clicking the chat area.
+- Old messages (link-only, no artifact metadata) still work — we parse the existing download URL/title out of the markdown as a fallback so historical docs also open in the panel.
 
-### `src/server/llm.server.ts`
+## Implementation
 
-1. **Update `gpt` slug**: `openai/gpt-5` → `openai/gpt-5.3` (ChatGPT 5.3 is what the picker advertises; current code lies and routes to GPT-5).
+### 1. Persist artifact metadata on the message
 
-2. **Remove the tool fallback block entirely.** Currently if a selected model has no tool-capable endpoint, the code silently retries against `HERMES_TOOL_FALLBACK_MODEL` (defaulting to `openai/gpt-5`). This violates "no fallback models". Replace with a hard error that names only the selected model:
-   ```
-   throw new Error(`${selectedLabel} has no tool-capable endpoint right now. Pick another model.`)
-   ```
+Migration on `ceo_chat_messages`:
+```sql
+alter table public.ceo_chat_messages
+  add column if not exists artifact_json jsonb;
+```
 
-3. **Remove `DEFAULT_MODEL` env override.** `HERMES_MODEL` could silently point anywhere. Hard-code default to `nousresearch/hermes-4-405b`.
+Shape stored:
+```ts
+{
+  kind: "pdf" | "docx",
+  title: string,
+  subtitle?: string,
+  filename: string,
+  url: string,
+  sizeKB: number,
+  createdAt: string
+}
+```
 
-4. **`resolveChatModel` unknown id**: instead of falling back to Hermes silently, throw — so unknown selector values surface as a real error rather than being masked as Hermes usage.
+### 2. `src/serverfns/ceo-chat.functions.ts`
 
-### `src/lib/chat-models.ts`
+In `generateCeoDocument`, when inserting the assistant reply, also set `artifact_json` with the metadata above. Keep the markdown reply unchanged so the outline still renders. Make sure `getCeoChat` selects `artifact_json` so the client receives it.
 
-Rename `gpt` label `"ChatGPT 5.3"` stays as-is (already correct). Verify all 5 labels match the allowed list exactly.
+### 3. New component `src/components/ArtifactDrawer.tsx`
 
-### Error messages
+- Uses `Sheet` from `@/components/ui/sheet` (`side="right"`, custom width `sm:max-w-[640px] w-full`).
+- Props: `{ open, onOpenChange, artifact }`.
+- Renders header (title, kind chip, Download/Copy/Close) and body (iframe for PDF, Office viewer for DOCX).
+- Reuses existing tokens (`border-rule`, `bg-panel`, `font-serif`, `font-mono`, `text-primary`) — matches the terminal/ceo aesthetic, no new colors.
 
-Audit all `throw new Error(...)` strings in `src/server/llm.server.ts`, `src/serverfns/terminal.functions.ts`, `src/serverfns/ceo-chat.functions.ts` to ensure no disallowed model name leaks into user-facing copy.
+### 4. `src/routes/index.tsx` chat rendering
 
-### OpenRouter slug verification
+- Add `const [openArtifact, setOpenArtifact] = useState<Artifact | null>(null)`.
+- For each assistant message, compute `artifact = m.artifact_json ?? parseArtifactFromMarkdown(m.content)` (small regex helper that picks out the `[Download … (… KB)](url)` line + the bold title).
+- If `artifact`, render a pill button above/below the outline:
+  ```
+  [📄 Quarterly Plan · PDF · 124 KB · Open]
+  ```
+  Clicking it sets `openArtifact`.
+- Render `<ArtifactDrawer open={!!openArtifact} onOpenChange={...} artifact={openArtifact} />` once at the page root.
+- Keep the existing markdown body so the download link still appears as a secondary path.
 
-Confirmed against OpenRouter catalog:
-- `nousresearch/hermes-4-405b` ✓
-- `x-ai/grok-4.3` ✓
-- `anthropic/claude-opus-4.7` ✓
-- `deepseek/deepseek-v4-pro` ✓
-- `openai/gpt-5.3` — needs verification at implementation time; if not published, ask user which OpenRouter slug to map "ChatGPT 5.3" to (do not silently substitute).
+### 5. Auto-open on creation (optional, low-risk)
+
+When `genDoc.mutate` resolves with a new assistant message that has `artifact_json`, immediately set `openArtifact` so the panel slides in as soon as the doc is ready — same UX as Claude/Grok.
 
 ## Out of scope
 
-- UI selector layout, model picker styling.
-- Any change to ceo-chat / terminal dispatch flow (model is already threaded correctly).
-
-## Result
-
-If the user selects DeepSeek V4 Pro and it can't handle the tool call, they see "DeepSeek V4 Pro has no tool-capable endpoint right now. Pick another model." — never a silent swap to another model.
+- No changes to terminal artifacts (`ArtifactCard`), model selector, agent prompts, or doc generation content/format.
+- No artifact list sidebar (can be added later); only the per-message pill + drawer.
+- No editing of docs inside the panel — view + download only.

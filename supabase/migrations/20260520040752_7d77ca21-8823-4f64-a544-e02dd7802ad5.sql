@@ -1,0 +1,1 @@
+ALTER TABLE public.ceo_chat_messages ADD COLUMN IF NOT EXISTS artifact_json jsonb;

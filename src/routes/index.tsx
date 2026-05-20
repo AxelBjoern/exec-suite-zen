@@ -641,10 +641,11 @@ function ChatPage() {
                     handleSubmit();
                   }
                 }}
-                placeholder="Message the CEO…  Try @cfo, @board, /pdf <topic>, /docx <topic>…  (Enter to send, Shift+Enter for newline)"
+                placeholder="Message the CEO… (Enter to send, Shift+Enter for newline)"
                 rows={2}
                 disabled={mutation.isPending || docMutation.isPending}
-                className="w-full resize-none bg-transparent pl-32 pr-14 py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+                className="w-full resize-none bg-transparent pt-3 pb-12 px-3 pr-14 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+
               />
               <input
                 ref={fileInputRef}

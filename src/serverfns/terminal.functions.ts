@@ -358,6 +358,7 @@ export const dispatch = createServerFn({ method: "POST" })
         system: primarySystem,
         user: userPrompt,
         tool: ARTIFACT_TOOL,
+        model: chosenModel,
       });
       var artifact = r.result;
     }

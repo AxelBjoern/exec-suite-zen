@@ -42,17 +42,25 @@ export function ArtifactDrawer({
     }
   }
 
-  const previewUrl = artifact?.kind === "pdf" ? artifact.url : artifact?.previewUrl;
-  const canPreviewInline = Boolean(previewUrl);
+  const officePreviewUrl =
+    artifact?.kind === "docx" && artifact.url
+      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(artifact.url)}`
+      : null;
+  const previewUrl =
+    artifact?.kind === "pdf"
+      ? artifact.url
+      : artifact?.previewUrl || officePreviewUrl;
+  const previewType = artifact?.kind === "docx" && !artifact?.previewUrl ? "office" : "pdf";
+  const canPreviewInline = Boolean(artifact && previewUrl);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-[680px] p-0 flex flex-col gap-0 bg-card"
-        aria-describedby={descriptionId}
-      >
-        {artifact && (
+      {artifact ? (
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-[680px] p-0 flex flex-col gap-0 bg-card"
+          aria-describedby={descriptionId}
+        >
           <>
             <SheetHeader className="sr-only">
               <SheetTitle id={titleId}>{artifact.title}</SheetTitle>
@@ -113,19 +121,28 @@ export function ArtifactDrawer({
 
             <div className="flex-1 min-h-0 bg-muted/30">
               {canPreviewInline ? (
-                <object
-                  key={previewUrl}
-                  data={previewUrl ?? undefined}
-                  type="application/pdf"
-                  aria-label={artifact.title}
-                  className="h-full w-full"
-                >
+                previewType === "pdf" ? (
+                  <object
+                    key={previewUrl}
+                    data={previewUrl ?? undefined}
+                    type="application/pdf"
+                    aria-label={artifact.title}
+                    className="h-full w-full"
+                  >
+                    <iframe
+                      src={previewUrl ?? undefined}
+                      title={artifact.title}
+                      className="h-full w-full border-0"
+                    />
+                  </object>
+                ) : (
                   <iframe
+                    key={previewUrl}
                     src={previewUrl ?? undefined}
                     title={artifact.title}
                     className="h-full w-full border-0"
                   />
-                </object>
+                )
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-8">
                   <div className="max-w-sm w-full text-center space-y-4 rounded-xl border border-border bg-background p-8">
@@ -153,8 +170,8 @@ export function ArtifactDrawer({
               )}
             </div>
           </>
-        )}
-      </SheetContent>
+        </SheetContent>
+      ) : null}
     </Sheet>
   );
 }

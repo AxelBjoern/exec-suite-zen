@@ -578,6 +578,8 @@ function ChatPage() {
                 role={m.role}
                 content={m.content}
                 attachments={m.attachments ?? []}
+                artifact={m.artifact_json ?? parseArtifactFromMarkdown(m.content)}
+                onOpenArtifact={setOpenArtifact}
               />
             ))}
 

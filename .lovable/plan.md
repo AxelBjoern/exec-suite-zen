@@ -1,70 +1,27 @@
-# Artifact Panel for Generated Documents
+## Plan: Install "VDNX Unicorn Execution Mode v2" as the universal base prompt
 
-Make `/pdf` and `/docx` outputs from the CEO agent open in a slide-in panel from the right — like Claude/Grok artifacts — instead of just a download link in the message.
+Every agent in this app already loads `DEFAULT_COMPANY_CONTEXT` at the top of its system prompt via `buildSystemPrompt()` in `src/lib/agent-prompts.ts` (CEO, CFO, COO, CTO, CMO, CCO, sales, linkedin, social, seo, router, and consult/boardroom mode). It's also used by the daily-standup cron. Replacing this one constant cascades the v2 directive into every agent without touching individual role prompts.
 
-## What the user gets
+### Changes
 
-- Assistant message keeps a short summary + outline, but the "📄 Title" becomes a clickable **artifact pill** ("Open document · PDF · 124 KB").
-- Clicking it slides a panel in from the right (overlays chat, chat stays mounted underneath).
-- Panel header: title, subtitle, kind badge, Download button, Copy link, Close (×).
-- Panel body:
-  - PDF → inline `<iframe>` of the public URL (native browser PDF viewer).
-  - DOCX → embedded Office Online viewer (`view.officeapps.live.com/op/embed.aspx?src=...`) with a "Download .docx" fallback button if the embed fails.
-- Width: ~640px on desktop, full-screen on mobile. Closable via ×, Esc, or clicking the chat area.
-- Old messages (link-only, no artifact metadata) still work — we parse the existing download URL/title out of the markdown as a fallback so historical docs also open in the panel.
+**`src/lib/agent-prompts.ts`**
+1. Replace `DEFAULT_COMPANY_CONTEXT` (lines 5–18) with the full v2 directive, condensed to keep token cost reasonable but preserving all 15 sections + final directive verbatim in spirit (Core Objective, Non-Negotiable Rule, Strategic Positioning, Execution Standard, Thinking Model, Growth Lens, Market Strategy, Communication Style, Output Discipline, Authority Protocol, Product Philosophy, Category Creation, Engineering Truths, Build vs Adopt, Final Filter, Final Directive).
+2. Extend `renderCompanyContext()` so that even when a custom company-context row exists in the DB, the v2 directive is appended as the universal execution standard (custom mission/ICP/etc. layer on top, never replace the directive).
+3. Keep `COMPANY_CONTEXT` export pointing at the new value (back-compat).
 
-## Implementation
+### Why this is the right surface
 
-### 1. Persist artifact metadata on the message
+- `buildSystemPrompt()` already prepends `companyContext ?? DEFAULT_COMPANY_CONTEXT` to every agent's identity, including consult/boardroom seats.
+- `buildRouterPrompt()` also takes `companyContext` as input — the router will inherit the directive too.
+- `loadContext()` (in `src/server/cadence.server.ts`) pulls `companyContext` from the DB row and falls back to `DEFAULT_COMPANY_CONTEXT`. Updating `renderCompanyContext()` to always append the v2 directive guarantees it applies even when the operator has set custom company context.
 
-Migration on `ceo_chat_messages`:
-```sql
-alter table public.ceo_chat_messages
-  add column if not exists artifact_json jsonb;
-```
+### Out of scope
 
-Shape stored:
-```ts
-{
-  kind: "pdf" | "docx",
-  title: string,
-  subtitle?: string,
-  filename: string,
-  url: string,
-  sizeKB: number,
-  createdAt: string
-}
-```
+- No changes to role-specific deliverable schemas (`ROLES[...]`), tool contracts (`agent-schemas.ts`), or output enforcement.
+- No DB migration — the directive lives in code so it can't be edited away accidentally.
+- No UI changes.
 
-### 2. `src/serverfns/ceo-chat.functions.ts`
+### Verification
 
-In `generateCeoDocument`, when inserting the assistant reply, also set `artifact_json` with the metadata above. Keep the markdown reply unchanged so the outline still renders. Make sure `getCeoChat` selects `artifact_json` so the client receives it.
-
-### 3. New component `src/components/ArtifactDrawer.tsx`
-
-- Uses `Sheet` from `@/components/ui/sheet` (`side="right"`, custom width `sm:max-w-[640px] w-full`).
-- Props: `{ open, onOpenChange, artifact }`.
-- Renders header (title, kind chip, Download/Copy/Close) and body (iframe for PDF, Office viewer for DOCX).
-- Reuses existing tokens (`border-rule`, `bg-panel`, `font-serif`, `font-mono`, `text-primary`) — matches the terminal/ceo aesthetic, no new colors.
-
-### 4. `src/routes/index.tsx` chat rendering
-
-- Add `const [openArtifact, setOpenArtifact] = useState<Artifact | null>(null)`.
-- For each assistant message, compute `artifact = m.artifact_json ?? parseArtifactFromMarkdown(m.content)` (small regex helper that picks out the `[Download … (… KB)](url)` line + the bold title).
-- If `artifact`, render a pill button above/below the outline:
-  ```
-  [📄 Quarterly Plan · PDF · 124 KB · Open]
-  ```
-  Clicking it sets `openArtifact`.
-- Render `<ArtifactDrawer open={!!openArtifact} onOpenChange={...} artifact={openArtifact} />` once at the page root.
-- Keep the existing markdown body so the download link still appears as a secondary path.
-
-### 5. Auto-open on creation (optional, low-risk)
-
-When `genDoc.mutate` resolves with a new assistant message that has `artifact_json`, immediately set `openArtifact` so the panel slides in as soon as the doc is ready — same UX as Claude/Grok.
-
-## Out of scope
-
-- No changes to terminal artifacts (`ArtifactCard`), model selector, agent prompts, or doc generation content/format.
-- No artifact list sidebar (can be added later); only the per-message pill + drawer.
-- No editing of docs inside the panel — view + download only.
+- Confirm typecheck passes.
+- Spot-check one CEO chat turn and one boardroom dispatch in preview to confirm the new directive is at the top of the system prompt (visible via outputs' tone/structure; no behavior should regress because output tool contracts are unchanged).

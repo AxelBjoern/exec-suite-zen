@@ -88,7 +88,7 @@ export function renderCompanyContext(ctx: {
   if (ctx.current_priorities) lines.push(`Current priorities: ${ctx.current_priorities}`);
   if (ctx.notes) lines.push(`Notes: ${ctx.notes}`);
   lines.push("");
-  lines.push("Every output is reviewed by the operator. Be decision-grade, specific, complete. Founder-grade urgency. Active voice.");
+  lines.push(VDNX_UNICORN_DIRECTIVE);
   return lines.join("\n");
 }
 

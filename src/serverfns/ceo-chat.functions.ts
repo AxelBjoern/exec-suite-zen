@@ -187,6 +187,14 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
 
     // 1. Ensure a conversation
     let conversationId = data.conversationId;
+    if (conversationId) {
+      const { data: existing } = await supabaseAdmin
+        .from("ceo_conversations")
+        .select("id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (!existing) conversationId = null;
+    }
     if (!conversationId) {
       const title = `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`;
       const { data: convo, error } = await supabaseAdmin

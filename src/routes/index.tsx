@@ -171,10 +171,16 @@ function ChatPage() {
   });
 
   const [input, setInput] = useState("");
-  const [pendingUser, setPendingUser] = useState<{
-    content: string;
-    attachments: Attachment[];
-  } | null>(null);
+  // Pending state is scoped per-conversation so that switching chats mid-flight
+  // never bleeds a bubble or "thinking" indicator into the wrong transcript.
+  // Key "__none__" represents "no active conversation yet" (server will mint one).
+  const PENDING_NONE_KEY = "__none__";
+  const [pendingByConvo, setPendingByConvo] = useState<
+    Record<string, { content: string; attachments: Attachment[] }>
+  >({});
+  const [inFlightTargets, setInFlightTargets] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [model, setModel] = useState<string>(CHAT_MODEL_OPTIONS[0].id);
@@ -185,6 +191,27 @@ function ChatPage() {
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
+
+  const pendingKey = activeId ?? PENDING_NONE_KEY;
+  const pendingUser = pendingByConvo[pendingKey] ?? null;
+  const isInFlight = inFlightTargets.has(pendingKey);
+
+  function setPendingFor(key: string, value: { content: string; attachments: Attachment[] } | null) {
+    setPendingByConvo((prev) => {
+      const next = { ...prev };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+  }
+  function markInFlight(key: string, on: boolean) {
+    setInFlightTargets((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -206,27 +233,57 @@ function ChatPage() {
     mutationFn: async (vars: { content: string; attachmentIds: string[] }) => {
       const controller = new AbortController();
       abortRef.current = controller;
-      return send({
+      const targetConvoId = activeId; // snapshot at submit time
+      const targetKey = targetConvoId ?? PENDING_NONE_KEY;
+      markInFlight(targetKey, true);
+      const saved = await send({
         data: {
           content: vars.content,
           model,
           attachmentIds: vars.attachmentIds,
-          conversationId: activeId,
+          conversationId: targetConvoId,
         },
         signal: controller.signal,
       });
+      return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {
-      setPendingUser({ content: vars.content, attachments: [...attachments] });
+      const targetKey = activeId ?? PENDING_NONE_KEY;
+      setPendingFor(targetKey, {
+        content: vars.content,
+        attachments: [...attachments],
+      });
       setAttachments([]);
     },
-    onSettled: async (saved: any) => {
+    onSettled: async (result) => {
       abortRef.current = null;
-      setPendingUser(null);
-      // Server may have auto-created a conversation; adopt it
-      const newId = saved?.conversation_id ?? activeId;
-      if (newId && newId !== activeId) setActiveId(newId);
-      await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
+      const r: any = result ?? {};
+      const targetKey: string = r.targetKey ?? (activeId ?? PENDING_NONE_KEY);
+      const targetConvoId: string | null = r.targetConvoId ?? activeId ?? null;
+      const saved: any = r.saved ?? null;
+      markInFlight(targetKey, false);
+      setPendingFor(targetKey, null);
+
+      const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
+      // If user started with no active conversation, adopt the one the server
+      // minted — but never override an explicit switch the user made in the meantime.
+      if (targetConvoId === null && serverConvoId && activeId == null) {
+        setActiveId(serverConvoId);
+      }
+      // If the server persisted under a different id (rare: stale id fell
+      // through to a fresh row), adopt only if user is still on the snapshot.
+      if (
+        targetConvoId !== null &&
+        serverConvoId &&
+        serverConvoId !== targetConvoId &&
+        activeId === targetConvoId
+      ) {
+        setActiveId(serverConvoId);
+      }
+
+      if (serverConvoId) {
+        await qc.invalidateQueries({ queryKey: ["ceo-chat", serverConvoId] });
+      }
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       requestAnimationFrame(() => inputRef.current?.focus());
     },
@@ -240,9 +297,13 @@ function ChatPage() {
   });
 
   const clearMutation = useMutation({
-    mutationFn: async () => clear({ data: { conversationId: activeId } }),
-    onSuccess: () => {
-      qc.setQueryData(["ceo-chat", activeId], []);
+    mutationFn: async () => {
+      const target = activeId;
+      await clear({ data: { conversationId: target } });
+      return target;
+    },
+    onSuccess: (target) => {
+      if (target) qc.setQueryData(["ceo-chat", target], []);
       toast.success("Conversation cleared");
     },
   });
@@ -260,6 +321,8 @@ function ChatPage() {
     mutationFn: async (id: string) => deleteConvo({ data: { id } }),
     onSuccess: (_d, id) => {
       if (activeId === id) setActiveId(null);
+      setPendingFor(id, null);
+      markInFlight(id, false);
       qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       toast.success("Conversation deleted");
     },
@@ -275,32 +338,60 @@ function ChatPage() {
     mutationFn: async (vars: { kind: "pdf" | "docx"; topic: string }) => {
       const controller = new AbortController();
       abortRef.current = controller;
-      return genDoc({
+      const targetConvoId = activeId;
+      const targetKey = targetConvoId ?? PENDING_NONE_KEY;
+      markInFlight(targetKey, true);
+      const saved = await genDoc({
         data: {
           kind: vars.kind,
           topic: vars.topic,
-          conversationId: activeId,
+          conversationId: targetConvoId,
           model,
         },
         signal: controller.signal,
       });
+      return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {
-      setPendingUser({
+      const targetKey = activeId ?? PENDING_NONE_KEY;
+      setPendingFor(targetKey, {
         content: `/${vars.kind} ${vars.topic}`,
         attachments: [],
       });
     },
-    onSettled: async (saved: any) => {
+    onSettled: async (result) => {
       abortRef.current = null;
-      setPendingUser(null);
-      const newId = saved?.conversation_id ?? activeId;
-      if (newId && newId !== activeId) setActiveId(newId);
-      await qc.invalidateQueries({ queryKey: ["ceo-chat"] });
+      const r: any = result ?? {};
+      const targetKey: string = r.targetKey ?? (activeId ?? PENDING_NONE_KEY);
+      const targetConvoId: string | null = r.targetConvoId ?? activeId ?? null;
+      const saved: any = r.saved ?? null;
+      markInFlight(targetKey, false);
+      setPendingFor(targetKey, null);
+
+      const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
+      if (targetConvoId === null && serverConvoId && activeId == null) {
+        setActiveId(serverConvoId);
+      }
+      if (
+        targetConvoId !== null &&
+        serverConvoId &&
+        serverConvoId !== targetConvoId &&
+        activeId === targetConvoId
+      ) {
+        setActiveId(serverConvoId);
+      }
+
+      if (serverConvoId) {
+        await qc.invalidateQueries({ queryKey: ["ceo-chat", serverConvoId] });
+      }
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
-      const artifact = (saved?.artifact_json as DocArtifact | undefined) ??
-        (saved?.content ? parseArtifactFromMarkdown(saved.content) : null);
-      if (artifact) setOpenArtifact(artifact);
+      // Only auto-open the artifact if the user is still on the chat that produced it.
+      if (activeId === serverConvoId || activeId === targetConvoId) {
+        const artifact =
+          (saved?.artifact_json as DocArtifact | undefined) ??
+          (saved?.content ? parseArtifactFromMarkdown(saved.content) : null);
+        if (artifact) setOpenArtifact(artifact);
+      }
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     onError: (e: any) => {
@@ -421,8 +512,10 @@ function ChatPage() {
     [model],
   );
 
-  const showThinking = mutation.isPending;
-  const showGenerating = docMutation.isPending;
+  // Indicators are scoped to the active conversation only — a reply still
+  // streaming for another chat shouldn't make THIS chat appear to be working.
+  const showThinking = mutation.isPending && isInFlight;
+  const showGenerating = docMutation.isPending && isInFlight;
   const canSend =
     (input.trim().length > 0 || attachments.length > 0) &&
     !mutation.isPending &&
@@ -636,7 +729,7 @@ function ChatPage() {
 
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
-          <div className="max-w-3xl mx-auto py-8 space-y-8">
+          <div key={pendingKey} className="max-w-3xl mx-auto py-8 space-y-8">
             {messages.length === 0 && !pendingUser && (
               <div className="text-center py-20 text-muted-foreground">
                 <div className="text-sm uppercase tracking-[0.2em] mb-3">

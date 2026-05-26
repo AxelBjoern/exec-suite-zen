@@ -683,6 +683,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       select: "id",
     });
     conversationId = ensuredConversationId;
+    if (!userRow?.id) throw new Error("Failed to save CEO chat message");
 
     // Link attachments to the new user message
     if (attachmentRows.length) {

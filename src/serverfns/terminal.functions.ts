@@ -15,6 +15,9 @@ import {
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
 import { callTool, resolveChatModel } from "@/server/llm.server";
+import { gatherVdnxContext } from "@/server/code-context.server";
+
+const CODE_AWARE_AGENTS = new Set(["cto", "ceo"]);
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");
@@ -301,9 +304,26 @@ export const dispatch = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(6);
 
-    const userPrompt = isFreeform
+    // Code-context preflight: for CTO/CEO, let the model pull live VDNX source.
+    let vdnxContextBlock = "";
+    if (CODE_AWARE_AGENTS.has(primary.slug)) {
+      const promptForContext = isFreeform
+        ? (data.prompt ?? "")
+        : `${data.verb} ${data.args ?? ""}`.trim();
+      try {
+        const ctx = await gatherVdnxContext({ prompt: promptForContext, model: chosenModel });
+        vdnxContextBlock = ctx.contextBlock;
+      } catch (e: any) {
+        vdnxContextBlock = `=== VDNX REPO CONTEXT ===\n(unavailable: ${e?.message ?? "error"})\n=== END ===`;
+      }
+    }
+
+    const userPromptBody = isFreeform
       ? `Operator prompt:\n${data.prompt}\n\nRespond now using exactly one of the available tools.`
       : `Verb: ${data.verb}\nArguments: ${data.args || "(none)"}\n\nProduce the structured artifact now.`;
+    const userPrompt = vdnxContextBlock
+      ? `${vdnxContextBlock}\n\n${userPromptBody}`
+      : userPromptBody;
 
     // Primary agent system prompt
     const primarySystem = buildSystemPrompt({

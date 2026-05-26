@@ -4,6 +4,8 @@
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "nousresearch/hermes-4-405b";
+const DEFAULT_MAX_TOKENS = 8000;
+const RETRY_MAX_TOKENS = 12000;
 
 // The ONLY allowed models. No other versions, no fallbacks.
 const MODEL_SLUGS = {
@@ -41,6 +43,7 @@ export async function chatCompletion(opts: {
   tool_choice?: "auto" | { type: "function"; function: { name: string } };
   temperature?: number;
   model?: string;
+  max_tokens?: number;
 }) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY missing");
@@ -59,6 +62,7 @@ export async function chatCompletion(opts: {
     body: JSON.stringify({
       model,
       messages: opts.messages,
+      max_tokens: opts.max_tokens ?? DEFAULT_MAX_TOKENS,
       ...(opts.tools?.length
         ? {
             tools: opts.tools,
@@ -85,6 +89,90 @@ export async function chatCompletion(opts: {
   return res.json();
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// JSON repair for truncated/malformed tool-call arguments
+// ─────────────────────────────────────────────────────────────────────────
+
+function stripFences(s: string): string {
+  return s
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+/**
+ * Attempt to close an unterminated JSON string by walking the text and
+ * tracking quotes, escapes, and bracket/brace depth. Returns a best-effort
+ * closed version of `s`. Not perfect but handles the common case where the
+ * model was cut off mid-array.
+ */
+function repairJson(input: string): string {
+  let s = stripFences(input)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+
+  // Walk to find structural state at end-of-string.
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+  let lastNonWs = -1;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!/\s/.test(ch)) lastNonWs = i;
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}") { if (stack[stack.length - 1] === "{") stack.pop(); }
+    else if (ch === "]") { if (stack[stack.length - 1] === "[") stack.pop(); }
+  }
+
+  // Close an unterminated string.
+  if (inString) s += '"';
+
+  // Drop a trailing dangling comma or partial token before closing.
+  // e.g. `..."foo",` or `..."fo` -> trim to last complete element.
+  // Simplest heuristic: trim trailing whitespace then trailing comma.
+  s = s.replace(/[\s,]+$/g, "");
+
+  // Close remaining open structures in reverse.
+  while (stack.length) {
+    const open = stack.pop();
+    s += open === "{" ? "}" : "]";
+  }
+
+  // Remove trailing commas before } or ]
+  s = s.replace(/,\s*([}\]])/g, "$1");
+
+  return s;
+}
+
+function tryParse(raw: string): { ok: true; value: any } | { ok: false; error: Error } {
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch (e: any) {
+    try {
+      return { ok: true, value: JSON.parse(repairJson(raw)) };
+    } catch (e2: any) {
+      return { ok: false, error: e2 };
+    }
+  }
+}
+
+function snippetAround(s: string, pos: number, span = 80): string {
+  const start = Math.max(0, pos - span);
+  const end = Math.min(s.length, pos + span);
+  return `…${s.slice(start, end).replace(/\s+/g, " ")}…`;
+}
+
+function extractFirstToolCall(json: any) {
+  const choice = json?.choices?.[0];
+  const call = choice?.message?.tool_calls?.[0];
+  const finish = choice?.finish_reason ?? null;
+  return { call, finish };
+}
+
 /** Convenience: structured tool call (one or more tools, returns first tool_call). */
 export async function callTool<T>(opts: {
   system: string;
@@ -104,24 +192,81 @@ export async function callTool<T>(opts: {
           ? ({ type: "function" as const, function: { name: tools[0].function.name } })
           : "auto";
 
-  const json = await chatCompletion({
-    messages: [
-      { role: "system", content: opts.system },
-      { role: "user", content: opts.user },
-    ],
+  const model = opts.model ?? DEFAULT_MODEL;
+  const label = labelFor(model);
+
+  const baseMessages: ChatMessage[] = [
+    { role: "system", content: opts.system },
+    { role: "user", content: opts.user },
+  ];
+
+  // First attempt.
+  let json = await chatCompletion({
+    messages: baseMessages,
     tools,
     tool_choice,
-    model: opts.model,
+    model,
+    max_tokens: DEFAULT_MAX_TOKENS,
   });
+  let { call, finish } = extractFirstToolCall(json);
 
-  const call = json.choices?.[0]?.message?.tool_calls?.[0];
+  // If truncated by length OR no tool call at all, retry once with more room
+  // and a compactness nudge.
+  const truncated = finish === "length";
+  if (truncated || !call?.function?.arguments) {
+    const retryMessages: ChatMessage[] = [
+      { role: "system", content: `${opts.system}\n\nIMPORTANT: Return compact JSON. Keep each body_md under 350 words. Maximum 6 action_items. Maximum 4 sections. Do not pad.` },
+      { role: "user", content: opts.user },
+    ];
+    json = await chatCompletion({
+      messages: retryMessages,
+      tools,
+      tool_choice,
+      model,
+      max_tokens: RETRY_MAX_TOKENS,
+    });
+    ({ call, finish } = extractFirstToolCall(json));
+  }
+
   if (!call?.function?.arguments) {
-    const label = labelFor(opts.model ?? DEFAULT_MODEL);
-    throw new Error(`${label} did not return a structured tool call.`);
+    throw new Error(`${label} did not return a structured tool call (finish_reason: ${finish ?? "unknown"}).`);
   }
-  try {
-    return { name: call.function.name, result: JSON.parse(call.function.arguments) as T };
-  } catch (e: any) {
-    throw new Error(`Failed to parse tool args: ${e.message}`);
+
+  const raw = call.function.arguments as string;
+  const parsed = tryParse(raw);
+  if (!parsed.ok) {
+    // Last-resort retry if first attempt wasn't already a retry.
+    if (!truncated) {
+      const retryMessages: ChatMessage[] = [
+        { role: "system", content: `${opts.system}\n\nIMPORTANT: Return compact, valid JSON. Keep each body_md under 350 words. Maximum 6 action_items. Maximum 4 sections.` },
+        { role: "user", content: opts.user },
+      ];
+      const json2 = await chatCompletion({
+        messages: retryMessages,
+        tools,
+        tool_choice,
+        model,
+        max_tokens: RETRY_MAX_TOKENS,
+      });
+      const { call: call2, finish: finish2 } = extractFirstToolCall(json2);
+      if (call2?.function?.arguments) {
+        const parsed2 = tryParse(call2.function.arguments);
+        if (parsed2.ok) {
+          return { name: call2.function.name, result: parsed2.value as T };
+        }
+        const m = /position (\d+)/.exec(parsed2.error.message);
+        const pos = m ? parseInt(m[1], 10) : (call2.function.arguments as string).length;
+        throw new Error(
+          `${label} returned malformed JSON after retry (finish_reason: ${finish2 ?? "unknown"}, ${(call2.function.arguments as string).length} chars). Near: ${snippetAround(call2.function.arguments as string, pos)}`,
+        );
+      }
+    }
+    const m = /position (\d+)/.exec(parsed.error.message);
+    const pos = m ? parseInt(m[1], 10) : raw.length;
+    throw new Error(
+      `${label} returned malformed JSON (finish_reason: ${finish ?? "unknown"}, ${raw.length} chars). Near: ${snippetAround(raw, pos)}`,
+    );
   }
+
+  return { name: call.function.name, result: parsed.value as T };
 }

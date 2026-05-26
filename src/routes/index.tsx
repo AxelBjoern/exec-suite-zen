@@ -171,10 +171,16 @@ function ChatPage() {
   });
 
   const [input, setInput] = useState("");
-  const [pendingUser, setPendingUser] = useState<{
-    content: string;
-    attachments: Attachment[];
-  } | null>(null);
+  // Pending state is scoped per-conversation so that switching chats mid-flight
+  // never bleeds a bubble or "thinking" indicator into the wrong transcript.
+  // Key "__none__" represents "no active conversation yet" (server will mint one).
+  const PENDING_NONE_KEY = "__none__";
+  const [pendingByConvo, setPendingByConvo] = useState<
+    Record<string, { content: string; attachments: Attachment[] }>
+  >({});
+  const [inFlightTargets, setInFlightTargets] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [model, setModel] = useState<string>(CHAT_MODEL_OPTIONS[0].id);
@@ -185,6 +191,27 @@ function ChatPage() {
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
+
+  const pendingKey = activeId ?? PENDING_NONE_KEY;
+  const pendingUser = pendingByConvo[pendingKey] ?? null;
+  const isInFlight = inFlightTargets.has(pendingKey);
+
+  function setPendingFor(key: string, value: { content: string; attachments: Attachment[] } | null) {
+    setPendingByConvo((prev) => {
+      const next = { ...prev };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+  }
+  function markInFlight(key: string, on: boolean) {
+    setInFlightTargets((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
 
   // Hydrate model from localStorage post-mount to avoid SSR/client mismatch
   useEffect(() => {

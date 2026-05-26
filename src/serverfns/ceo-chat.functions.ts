@@ -290,31 +290,21 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     });
 
     // 1. Ensure a conversation
-    let conversationId = data.conversationId;
-    if (conversationId) {
-      const { data: existing } = await supabaseAdmin
-        .from("ceo_conversations")
-        .select("id")
-        .eq("id", conversationId)
-        .maybeSingle();
-      if (!existing) conversationId = null;
-    }
-    if (!conversationId) {
-      const title = `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`;
-      const { data: convo, error } = await supabaseAdmin
-        .from("ceo_conversations")
-        .insert({ title })
-        .select("id")
-        .single();
-      if (error) throw error;
-      conversationId = convo.id;
-    }
+    let conversationId = await ensureCeoConversation({
+      conversationId: data.conversationId,
+      title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+    });
 
     // 2. Save the operator's "user" message describing the request
     const userMd = `/${data.kind} ${topic}`;
-    await supabaseAdmin
-      .from("ceo_chat_messages")
-      .insert({ role: "user", content: userMd, conversation_id: conversationId });
+    const { conversationId: ensuredConversationId } = await insertCeoChatMessage({
+      role: "user",
+      content: userMd,
+      conversationId,
+      title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+      select: "id",
+    });
+    conversationId = ensuredConversationId;
 
     // 3. Load short history for context
     const { data: history } = await supabaseAdmin
@@ -402,17 +392,15 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
         createdAt: new Date().toISOString(),
       };
 
-      const { data: saved, error: saveErr } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: replyMd,
-          conversation_id: conversationId,
-          artifact_json: artifactJson,
-        })
-        .select("id, role, content, created_at, artifact_json")
-        .single();
-      if (saveErr) throw saveErr;
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: replyMd,
+        conversationId,
+        title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+        artifactJson,
+        select: "id, role, content, created_at, artifact_json",
+      });
+      conversationId = finalConversationId;
 
       await supabaseAdmin
         .from("ceo_conversations")
@@ -422,15 +410,14 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
       return { ...saved, conversation_id: conversationId, downloadUrl: publicUrl };
     } catch (e: any) {
       const errMd = `**Failed to generate ${data.kind.toUpperCase()}:** ${e?.message ?? "unknown error"}`;
-      const { data: saved } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: errMd,
-          conversation_id: conversationId,
-        })
-        .select("id, role, content, created_at")
-        .single();
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: errMd,
+        conversationId,
+        title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+        select: "id, role, content, created_at",
+      });
+      conversationId = finalConversationId;
       return { ...(saved ?? {}), conversation_id: conversationId };
     }
   });
@@ -656,27 +643,10 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     }
 
     // Ensure a conversation exists; create one if needed (auto-title from first message)
-    let conversationId = data.conversationId;
-    if (conversationId) {
-      const { data: existing } = await supabaseAdmin
-        .from("ceo_conversations")
-        .select("id")
-        .eq("id", conversationId)
-        .maybeSingle();
-      if (!existing) conversationId = null;
-    }
-    if (!conversationId) {
-      const autoTitle =
-        (data.content || "New conversation").replace(/\s+/g, " ").trim().slice(0, 80) ||
-        "New conversation";
-      const { data: convo, error: convoErr } = await supabaseAdmin
-        .from("ceo_conversations")
-        .insert({ title: autoTitle })
-        .select("id")
-        .single();
-      if (convoErr) throw convoErr;
-      conversationId = convo.id;
-    }
+    let conversationId = await ensureCeoConversation({
+      conversationId: data.conversationId,
+      title: data.content || "New conversation",
+    });
 
     // Load attachments (if any) for prompt augmentation
     let attachmentBlock = "";
@@ -705,16 +675,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const userContentSaved = data.content;
 
     // Save user message
-    const { data: userRow, error: userErr } = await supabaseAdmin
-      .from("ceo_chat_messages")
-      .insert({
-        role: "user",
-        content: userContentSaved,
-        conversation_id: conversationId,
-      })
-      .select("id")
-      .single();
-    if (userErr) throw userErr;
+    const { data: userRow, conversationId: ensuredConversationId } = await insertCeoChatMessage({
+      role: "user",
+      content: userContentSaved,
+      conversationId,
+      title: data.content || "New conversation",
+      select: "id",
+    });
+    conversationId = ensuredConversationId;
 
     // Link attachments to the new user message
     if (attachmentRows.length) {
@@ -744,16 +712,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         .eq("id", conversationId!);
 
     const saveAssistant = async (markdown: string) => {
-      const { data: saved, error: saveErr } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: markdown,
-          conversation_id: conversationId,
-        })
-        .select("id, role, content, created_at")
-        .single();
-      if (saveErr) throw saveErr;
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: markdown,
+        conversationId,
+        title: data.content || "New conversation",
+        select: "id, role, content, created_at",
+      });
+      conversationId = finalConversationId;
       await bump();
       return { ...saved, conversation_id: conversationId };
     };

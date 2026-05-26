@@ -1,27 +1,48 @@
-## Plan: Install "VDNX Unicorn Execution Mode v2" as the universal base prompt
 
-Every agent in this app already loads `DEFAULT_COMPANY_CONTEXT` at the top of its system prompt via `buildSystemPrompt()` in `src/lib/agent-prompts.ts` (CEO, CFO, COO, CTO, CMO, CCO, sales, linkedin, social, seo, router, and consult/boardroom mode). It's also used by the daily-standup cron. Replacing this one constant cascades the v2 directive into every agent without touching individual role prompts.
+# Sync VDNX agents with the VDNX codebase
 
-### Changes
+Goal: when you give a task to any VDNX agent (CEO, CTO, etc.), the agent can read the actual VDNX repo so its output stays in sync with the real code — no manual pasting.
 
-**`src/lib/agent-prompts.ts`**
-1. Replace `DEFAULT_COMPANY_CONTEXT` (lines 5–18) with the full v2 directive, condensed to keep token cost reasonable but preserving all 15 sections + final directive verbatim in spirit (Core Objective, Non-Negotiable Rule, Strategic Positioning, Execution Standard, Thinking Model, Growth Lens, Market Strategy, Communication Style, Output Discipline, Authority Protocol, Product Philosophy, Category Creation, Engineering Truths, Build vs Adopt, Final Filter, Final Directive).
-2. Extend `renderCompanyContext()` so that even when a custom company-context row exists in the DB, the v2 directive is appended as the universal execution standard (custom mission/ICP/etc. layer on top, never replace the directive).
-3. Keep `COMPANY_CONTEXT` export pointing at the new value (back-compat).
+## Approach
 
-### Why this is the right surface
+Use the **GitHub API** as the source of truth. Both projects live in the same GitHub account, so one Personal Access Token (PAT) with `repo` scope gives the agents read access to the VDNX repo (and any other repo you own).
 
-- `buildSystemPrompt()` already prepends `companyContext ?? DEFAULT_COMPANY_CONTEXT` to every agent's identity, including consult/boardroom seats.
-- `buildRouterPrompt()` also takes `companyContext` as input — the router will inherit the directive too.
-- `loadContext()` (in `src/server/cadence.server.ts`) pulls `companyContext` from the DB row and falls back to `DEFAULT_COMPANY_CONTEXT`. Updating `renderCompanyContext()` to always append the v2 directive guarantees it applies even when the operator has set custom company context.
+Defaults chosen (you can override anytime):
+- **Source**: GitHub API, repo configurable (default `VDNX`)
+- **Scope**: CTO + CEO agents get code access; others can opt in later
+- **Trigger**: Automatic via tool-calling — the agent decides when to fetch files, plus an explicit `/code <path-or-query>` command for predictable injection
 
-### Out of scope
+## What gets built
 
-- No changes to role-specific deliverable schemas (`ROLES[...]`), tool contracts (`agent-schemas.ts`), or output enforcement.
-- No DB migration — the directive lives in code so it can't be edited away accidentally.
-- No UI changes.
+1. **Secret**: store `GITHUB_TOKEN` (your PAT, `repo` read scope) + `VDNX_REPO` (e.g. `your-username/vdnx`).
+2. **Server helper** `src/server/github.server.ts` with three functions:
+   - `listRepoTree(path)` — directory listing
+   - `readRepoFile(path)` — file contents (base64 decoded)
+   - `searchRepoCode(query)` — GitHub code search across the repo
+3. **Agent tools** wired into the existing OpenRouter tool-calling loop (`src/lib/agent-schemas.ts` + dispatch in `src/serverfns/ceo-chat.functions.ts`):
+   - `read_vdnx_file({ path })`
+   - `list_vdnx_dir({ path })`
+   - `search_vdnx_code({ query })`
+   The model calls these when it needs context; results are fed back as tool messages before it emits the final artifact.
+4. **Explicit command**: `/code <path>` in the terminal pre-fetches a file and pastes it into the prompt context — useful when you already know what file matters.
+5. **Per-agent gating**: only CTO and CEO get the tools attached by default. Toggle others in `agent-prompts.ts` role config.
+6. **Prompt update**: small addition to the CTO/CEO identity blocks telling them the tools exist and when to use them ("if the operator references a file, feature, or bug in VDNX, fetch the relevant source before responding").
 
-### Verification
+## Technical details
 
-- Confirm typecheck passes.
-- Spot-check one CEO chat turn and one boardroom dispatch in preview to confirm the new directive is at the top of the system prompt (visible via outputs' tone/structure; no behavior should regress because output tool contracts are unchanged).
+- GitHub REST endpoints used: `GET /repos/{owner}/{repo}/contents/{path}` and `GET /search/code?q={q}+repo={owner}/{repo}`.
+- Tool results are truncated to ~8k chars per file to control token cost; the agent can request more by path.
+- All calls are server-side only (`*.server.ts`), token never reaches the browser.
+- No DB schema changes needed.
+- Failures (token missing, file not found, rate limit) are returned as structured tool errors so the model can recover or surface them.
+
+## What you need to provide before build
+
+- A GitHub PAT with `repo` scope (classic) or a fine-grained token with **Contents: Read** on the VDNX repo. I'll request it via the secret tool once you approve this plan.
+- The exact repo slug (`owner/name`) if it isn't literally `VDNX`.
+
+## Out of scope (call out if you want them)
+
+- Writing to the VDNX repo from agents (kept read-only by design — matches VDNX's "AI drafts, humans authorize" principle).
+- Two-way sync where edits in this project push to VDNX.
+- Snapshot/caching layer (can add later if GitHub rate limits become an issue).

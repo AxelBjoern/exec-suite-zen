@@ -129,6 +129,110 @@ function normalizeDocTopic(value: string | null | undefined) {
     .slice(0, 240);
 }
 
+function conversationTitleFromText(value: string | null | undefined) {
+  return (
+    String(value ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || "New conversation"
+  );
+}
+
+async function ensureCeoConversation(opts: {
+  conversationId?: string | null;
+  title?: string | null;
+}) {
+  const desiredId = opts.conversationId ?? null;
+  const title = conversationTitleFromText(opts.title);
+
+  if (desiredId) {
+    const { data: existing, error: lookupErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("id")
+      .eq("id", desiredId)
+      .maybeSingle();
+
+    const lookupMessage = lookupErr?.message ?? "";
+    if (lookupErr && !/invalid input syntax for type uuid/i.test(lookupMessage)) {
+      throw lookupErr;
+    }
+    if (existing?.id) return existing.id;
+
+    const { data: recreated, error: recreateErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .insert({ id: desiredId, title })
+      .select("id")
+      .single();
+
+    if (!recreateErr && recreated?.id) return recreated.id;
+
+    const recreateMessage = recreateErr?.message ?? "";
+    if (
+      recreateErr &&
+      !/invalid input syntax for type uuid/i.test(recreateMessage) &&
+      !/duplicate key value violates unique constraint/i.test(recreateMessage)
+    ) {
+      throw recreateErr;
+    }
+
+    const { data: afterRace, error: afterRaceErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("id")
+      .eq("id", desiredId)
+      .maybeSingle();
+    if (afterRaceErr) throw afterRaceErr;
+    if (afterRace?.id) return afterRace.id;
+  }
+
+  const { data: convo, error } = await supabaseAdmin
+    .from("ceo_conversations")
+    .insert({ title })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return convo.id;
+}
+
+async function insertCeoChatMessage<TSelect extends string>(opts: {
+  role: "user" | "assistant";
+  content: string;
+  conversationId?: string | null;
+  title?: string | null;
+  artifactJson?: Record<string, any> | null;
+  select: TSelect;
+}) {
+  let conversationId = await ensureCeoConversation({
+    conversationId: opts.conversationId,
+    title: opts.title ?? opts.content,
+  });
+
+  const insertOnce = async () =>
+    supabaseAdmin
+      .from("ceo_chat_messages")
+      .insert({
+        role: opts.role,
+        content: opts.content,
+        conversation_id: conversationId,
+        ...(opts.artifactJson === undefined ? {} : { artifact_json: opts.artifactJson }),
+      })
+      .select(opts.select)
+      .single();
+
+  let { data, error } = await insertOnce();
+  if (error && /ceo_chat_messages_conversation_id_fkey/i.test(error.message ?? "")) {
+    conversationId = await ensureCeoConversation({
+      conversationId,
+      title: opts.title ?? opts.content,
+    });
+    const retry = await insertOnce();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error) throw error;
+  return { data, conversationId };
+}
+
 async function resolveDocumentTopic(opts: {
   kind: "pdf" | "docx";
   explicitTopic?: string | null;

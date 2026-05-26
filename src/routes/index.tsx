@@ -512,8 +512,10 @@ function ChatPage() {
     [model],
   );
 
-  const showThinking = mutation.isPending;
-  const showGenerating = docMutation.isPending;
+  // Indicators are scoped to the active conversation only — a reply still
+  // streaming for another chat shouldn't make THIS chat appear to be working.
+  const showThinking = mutation.isPending && isInFlight;
+  const showGenerating = docMutation.isPending && isInFlight;
   const canSend =
     (input.trim().length > 0 || attachments.length > 0) &&
     !mutation.isPending &&

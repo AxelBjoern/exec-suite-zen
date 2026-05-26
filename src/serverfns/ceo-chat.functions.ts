@@ -129,6 +129,110 @@ function normalizeDocTopic(value: string | null | undefined) {
     .slice(0, 240);
 }
 
+function conversationTitleFromText(value: string | null | undefined) {
+  return (
+    String(value ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || "New conversation"
+  );
+}
+
+async function ensureCeoConversation(opts: {
+  conversationId?: string | null;
+  title?: string | null;
+}) {
+  const desiredId = opts.conversationId ?? null;
+  const title = conversationTitleFromText(opts.title);
+
+  if (desiredId) {
+    const { data: existing, error: lookupErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("id")
+      .eq("id", desiredId)
+      .maybeSingle();
+
+    const lookupMessage = lookupErr?.message ?? "";
+    if (lookupErr && !/invalid input syntax for type uuid/i.test(lookupMessage)) {
+      throw lookupErr;
+    }
+    if (existing?.id) return existing.id;
+
+    const { data: recreated, error: recreateErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .insert({ id: desiredId, title })
+      .select("id")
+      .single();
+
+    if (!recreateErr && recreated?.id) return recreated.id;
+
+    const recreateMessage = recreateErr?.message ?? "";
+    if (
+      recreateErr &&
+      !/invalid input syntax for type uuid/i.test(recreateMessage) &&
+      !/duplicate key value violates unique constraint/i.test(recreateMessage)
+    ) {
+      throw recreateErr;
+    }
+
+    const { data: afterRace, error: afterRaceErr } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("id")
+      .eq("id", desiredId)
+      .maybeSingle();
+    if (afterRaceErr) throw afterRaceErr;
+    if (afterRace?.id) return afterRace.id;
+  }
+
+  const { data: convo, error } = await supabaseAdmin
+    .from("ceo_conversations")
+    .insert({ title })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return convo.id;
+}
+
+async function insertCeoChatMessage<TSelect extends string>(opts: {
+  role: "user" | "assistant";
+  content: string;
+  conversationId?: string | null;
+  title?: string | null;
+  artifactJson?: Record<string, any> | null;
+  select: TSelect;
+}) {
+  let conversationId = await ensureCeoConversation({
+    conversationId: opts.conversationId,
+    title: opts.title ?? opts.content,
+  });
+
+  const insertOnce = async () =>
+    supabaseAdmin
+      .from("ceo_chat_messages")
+      .insert({
+        role: opts.role,
+        content: opts.content,
+        conversation_id: conversationId,
+        ...(opts.artifactJson === undefined ? {} : { artifact_json: opts.artifactJson }),
+      })
+      .select(opts.select)
+      .single();
+
+  let { data, error } = await insertOnce();
+  if (error && /ceo_chat_messages_conversation_id_fkey/i.test(error.message ?? "")) {
+    conversationId = await ensureCeoConversation({
+      conversationId,
+      title: opts.title ?? opts.content,
+    });
+    const retry = await insertOnce();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error) throw error;
+  return { data, conversationId };
+}
+
 async function resolveDocumentTopic(opts: {
   kind: "pdf" | "docx";
   explicitTopic?: string | null;
@@ -186,31 +290,21 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
     });
 
     // 1. Ensure a conversation
-    let conversationId = data.conversationId;
-    if (conversationId) {
-      const { data: existing } = await supabaseAdmin
-        .from("ceo_conversations")
-        .select("id")
-        .eq("id", conversationId)
-        .maybeSingle();
-      if (!existing) conversationId = null;
-    }
-    if (!conversationId) {
-      const title = `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`;
-      const { data: convo, error } = await supabaseAdmin
-        .from("ceo_conversations")
-        .insert({ title })
-        .select("id")
-        .single();
-      if (error) throw error;
-      conversationId = convo.id;
-    }
+    let conversationId = await ensureCeoConversation({
+      conversationId: data.conversationId,
+      title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+    });
 
     // 2. Save the operator's "user" message describing the request
     const userMd = `/${data.kind} ${topic}`;
-    await supabaseAdmin
-      .from("ceo_chat_messages")
-      .insert({ role: "user", content: userMd, conversation_id: conversationId });
+    const { conversationId: ensuredConversationId } = await insertCeoChatMessage({
+      role: "user",
+      content: userMd,
+      conversationId,
+      title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+      select: "id",
+    });
+    conversationId = ensuredConversationId;
 
     // 3. Load short history for context
     const { data: history } = await supabaseAdmin
@@ -298,17 +392,15 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
         createdAt: new Date().toISOString(),
       };
 
-      const { data: saved, error: saveErr } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: replyMd,
-          conversation_id: conversationId,
-          artifact_json: artifactJson,
-        })
-        .select("id, role, content, created_at, artifact_json")
-        .single();
-      if (saveErr) throw saveErr;
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: replyMd,
+        conversationId,
+        title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+        artifactJson,
+        select: "id, role, content, created_at, artifact_json",
+      });
+      conversationId = finalConversationId;
 
       await supabaseAdmin
         .from("ceo_conversations")
@@ -318,15 +410,14 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
       return { ...saved, conversation_id: conversationId, downloadUrl: publicUrl };
     } catch (e: any) {
       const errMd = `**Failed to generate ${data.kind.toUpperCase()}:** ${e?.message ?? "unknown error"}`;
-      const { data: saved } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: errMd,
-          conversation_id: conversationId,
-        })
-        .select("id, role, content, created_at")
-        .single();
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: errMd,
+        conversationId,
+        title: `${data.kind.toUpperCase()}: ${topic.slice(0, 60)}`,
+        select: "id, role, content, created_at",
+      });
+      conversationId = finalConversationId;
       return { ...(saved ?? {}), conversation_id: conversationId };
     }
   });
@@ -552,27 +643,10 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     }
 
     // Ensure a conversation exists; create one if needed (auto-title from first message)
-    let conversationId = data.conversationId;
-    if (conversationId) {
-      const { data: existing } = await supabaseAdmin
-        .from("ceo_conversations")
-        .select("id")
-        .eq("id", conversationId)
-        .maybeSingle();
-      if (!existing) conversationId = null;
-    }
-    if (!conversationId) {
-      const autoTitle =
-        (data.content || "New conversation").replace(/\s+/g, " ").trim().slice(0, 80) ||
-        "New conversation";
-      const { data: convo, error: convoErr } = await supabaseAdmin
-        .from("ceo_conversations")
-        .insert({ title: autoTitle })
-        .select("id")
-        .single();
-      if (convoErr) throw convoErr;
-      conversationId = convo.id;
-    }
+    let conversationId = await ensureCeoConversation({
+      conversationId: data.conversationId,
+      title: data.content || "New conversation",
+    });
 
     // Load attachments (if any) for prompt augmentation
     let attachmentBlock = "";
@@ -601,16 +675,15 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const userContentSaved = data.content;
 
     // Save user message
-    const { data: userRow, error: userErr } = await supabaseAdmin
-      .from("ceo_chat_messages")
-      .insert({
-        role: "user",
-        content: userContentSaved,
-        conversation_id: conversationId,
-      })
-      .select("id")
-      .single();
-    if (userErr) throw userErr;
+    const { data: userRow, conversationId: ensuredConversationId } = await insertCeoChatMessage({
+      role: "user",
+      content: userContentSaved,
+      conversationId,
+      title: data.content || "New conversation",
+      select: "id",
+    });
+    conversationId = ensuredConversationId;
+    if (!userRow?.id) throw new Error("Failed to save CEO chat message");
 
     // Link attachments to the new user message
     if (attachmentRows.length) {
@@ -640,16 +713,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         .eq("id", conversationId!);
 
     const saveAssistant = async (markdown: string) => {
-      const { data: saved, error: saveErr } = await supabaseAdmin
-        .from("ceo_chat_messages")
-        .insert({
-          role: "assistant",
-          content: markdown,
-          conversation_id: conversationId,
-        })
-        .select("id, role, content, created_at")
-        .single();
-      if (saveErr) throw saveErr;
+      const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
+        role: "assistant",
+        content: markdown,
+        conversationId,
+        title: data.content || "New conversation",
+        select: "id, role, content, created_at",
+      });
+      conversationId = finalConversationId;
       await bump();
       return { ...saved, conversation_id: conversationId };
     };

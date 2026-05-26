@@ -145,6 +145,11 @@ async function ensureCeoConversation(opts: {
   const desiredId = opts.conversationId ?? null;
   const title = conversationTitleFromText(opts.title);
 
+  // If the client supplied an id, only use it when it points to a real row.
+  // We deliberately do NOT recreate a missing conversation under the same id —
+  // stale ids (from another browser/tab, after a delete, etc.) must not be
+  // resurrected, since that lets messages leak across chats. Instead, fall
+  // through and mint a fresh conversation.
   if (desiredId) {
     const { data: existing, error: lookupErr } = await supabaseAdmin
       .from("ceo_conversations")
@@ -157,31 +162,6 @@ async function ensureCeoConversation(opts: {
       throw lookupErr;
     }
     if (existing?.id) return existing.id;
-
-    const { data: recreated, error: recreateErr } = await supabaseAdmin
-      .from("ceo_conversations")
-      .insert({ id: desiredId, title })
-      .select("id")
-      .single();
-
-    if (!recreateErr && recreated?.id) return recreated.id;
-
-    const recreateMessage = recreateErr?.message ?? "";
-    if (
-      recreateErr &&
-      !/invalid input syntax for type uuid/i.test(recreateMessage) &&
-      !/duplicate key value violates unique constraint/i.test(recreateMessage)
-    ) {
-      throw recreateErr;
-    }
-
-    const { data: afterRace, error: afterRaceErr } = await supabaseAdmin
-      .from("ceo_conversations")
-      .select("id")
-      .eq("id", desiredId)
-      .maybeSingle();
-    if (afterRaceErr) throw afterRaceErr;
-    if (afterRace?.id) return afterRace.id;
   }
 
   const { data: convo, error } = await supabaseAdmin

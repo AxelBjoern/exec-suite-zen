@@ -1,41 +1,75 @@
-## Goal
+# Fix: CEO chat can't see uploaded images
 
-Fix the CEO chat on `/` so each conversation is fully isolated. Today, sending a message in one chat can show up in (or yank the user back to) another, because the client tracks pending state globally and the server can resurrect a deleted/foreign conversation id.
+## Why this happens
 
-## Root causes
+When you attach a PNG/JPG, the upload handler runs `extracted_text` extraction. For images it hits the `else` branch and stores the literal string:
 
-1. **Client uses one global `pendingUser` state.** When you switch conversations while a reply is in flight, the in-flight bubble renders in the new conversation too (it isn't keyed by `conversationId`).
-2. **`mutation.onSettled` blindly adopts the server's `saved.conversation_id`** and calls `setActiveId(newId)`. If the user switched conversations mid-flight, this yanks them back to the original chat.
-3. **`docMutation` (`/pdf`, `/docx`) has the same two bugs.**
-4. **`ensureCeoConversation` on the server re-creates a conversation row using whatever id the client passed** if it doesn't exist. Stale localStorage ids (after delete, after another tab cleared) cause a "ghost" conversation to be recreated and shared.
-5. **`clearCeoChat` / cache invalidation isn't scoped** — `invalidateQueries(["ceo-chat"])` is fine, but combined with #1 and #2 it surfaces the wrong messages briefly.
+```
+[Unsupported file type: image/png]
+```
 
-## Changes
+That string is the only thing injected into the prompt:
 
-### `src/routes/index.tsx` (CEO chat UI)
+```
+## Attached documents
+### Screenshot 2026-05-27 025724.png
+[Unsupported file type: image/png]
+```
 
-- Replace single `pendingUser` with `pendingByConvo: Record<string, { content; attachments }>`. Set/clear keyed by the `targetConversationId` captured at mutate time, and only render the bubble when `activeId === targetConversationId`.
-- In both `mutation` and `docMutation`:
-  - Capture `const targetConversationId = activeId` in `mutationFn`, pass it through to `onSettled` via the mutation's `context`/return.
-  - In `onSettled`, only `setActiveId(saved.conversation_id)` when `targetConversationId === null` (i.e. we started without an active chat). Never override an explicit switch.
-  - Invalidate only `["ceo-chat", saved.conversation_id]` instead of the whole `["ceo-chat"]` family.
-- Same fix for `clearMutation`: capture the convo id at mutate time so a switch mid-clear can't wipe the wrong chat's cache.
-- Abort the in-flight request when the user switches `activeId` (call `abortRef.current?.abort()` in the existing `useEffect([activeId])`). This prevents a late reply from landing in the wrong chat's cache.
-- Key the messages list container by `activeId` (`<div key={activeId}>`) so React fully unmounts the previous transcript on switch.
+So the model is answering honestly — it was never sent the image, only a filename and an "unsupported" marker. Every selected model (Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro, Hermes 4 405B) supports vision via OpenRouter except Hermes; the bug is on our side, not the model's.
 
-### `src/serverfns/ceo-chat.functions.ts`
+## Fix
 
-- In `ensureCeoConversation`: if a `conversationId` is supplied but no row exists, do NOT recreate it with the same id. Insert a brand-new conversation (let Postgres assign a fresh uuid) and return that id. This breaks the "ghost-revive" path that lets a stale id from one browser/tab reappear elsewhere.
-- `sendCeoMessage`, `generateCeoDocument`, `clearCeoChat`: unchanged externally — they already return `conversation_id`, which the client will use (per the new rule above) only when the user started without an active conversation.
+Send images to the model as proper multimodal content parts (OpenAI/OpenRouter `image_url` format) instead of as a fake text blob.
 
-### Out of scope
+### 1. `src/serverfns/ceo-chat.functions.ts` — `uploadCeoAttachment`
+- Detect images (`mimeType.startsWith("image/")` or extension in `png|jpg|jpeg|webp|gif`).
+- Skip the text-extraction branch for images; store `extracted_text = ""` (or null) so we don't pollute prompts with `[Unsupported file type...]`.
+- Everything else (storage upload, row insert, size limits) stays.
 
-- No auth, no tenancy model. All chats remain globally readable (per the answer to the clarifying question). The fix is strictly about isolating the active conversation from in-flight state of other conversations.
-- No DB schema changes, no RLS changes, no changes to `terminal.functions.ts`, `llm.server.ts`, or other agents.
+### 2. `src/serverfns/ceo-chat.functions.ts` — `sendCeoMessage`
+- When loading attachments, also select `mime_type` and `storage_path`.
+- Split attachments into two groups:
+  - **Text-like** (pdf/docx/txt/md): keep current behavior — append their `extracted_text` into `attachmentBlock`.
+  - **Images**: for each, create a short-lived signed URL via `supabaseAdmin.storage.from("chat-uploads").createSignedUrl(storage_path, 3600)`. Collect into `imageParts`.
+- Build the final user message for the model as multimodal when images exist:
+  ```ts
+  const userMessage = imageParts.length
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: data.content + attachmentBlock },
+          ...imageParts.map(url => ({ type: "image_url", image_url: { url } })),
+        ],
+      }
+    : { role: "user", content: data.content + attachmentBlock };
+  ```
+- Pass this through where the current code sends the user turn to `chatCompletion`. History stays plain text (saved DB messages are text-only); only the live turn carries images.
+- Saved `userContentSaved` (DB row) stays plain text — the image is already linked via `ceo_chat_attachments.message_id`, so the UI bubble already renders the thumbnail.
+
+### 3. `src/server/llm.server.ts`
+- Widen `ChatMessage` to allow multimodal content:
+  ```ts
+  export type ChatMessage = {
+    role: "system" | "user" | "assistant";
+    content: string | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string; detail?: "low"|"high"|"auto" } }
+    >;
+  };
+  ```
+- No other changes — OpenRouter forwards the array as-is.
+
+### 4. Hermes guard (small UX polish)
+- Hermes 4 405B has no vision endpoint. If `data.model` resolves to `nousresearch/hermes-4-405b` and `imageParts.length > 0`, throw a clear error before the call: *"Hermes 4 405B can't read images. Pick Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro to analyze attached images."* (Matches the existing "no fallback models" rule in memory.)
+
+## Out of scope
+- `@board` / `@mention` dispatch still sends text-only prompts to sub-agents. Images attached alongside a `@board` message will still be invisible to the boardroom. We can extend dispatch later if you want; this fix targets the direct CEO chat path the screenshot shows.
+- No DB schema change. `extracted_text` becoming empty for images is forward-compatible with existing rows.
+- No UI changes — image thumbnails in chat bubbles already work.
 
 ## Verification
-
-1. Open chat A, send a long message, immediately switch to chat B before the reply arrives → reply lands in A, B stays empty, no bubble flashes in B, the URL/active id stays on B.
-2. From "no active conversation" send a message → server creates a conversation, UI adopts that id (existing happy path still works).
-3. `/pdf` and `/docx` in chat A, switch to B mid-generation → document lands in A, B unaffected.
-4. Delete chat A while a request is mid-flight → no ghost recreated under A's id; pending bubble disappears.
+1. Upload a PNG, ask "what's in this image?" with Grok 4.3 / Claude Opus 4.7 / GPT 5.3 / DeepSeek V4 Pro selected → model describes it.
+2. Try with Hermes selected → clean error message, no opaque 400 from OpenRouter.
+3. Upload a PDF → still summarized via text extraction (regression check).
+4. Mixed (PDF + PNG in same turn) → both reach the model.

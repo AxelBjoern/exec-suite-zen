@@ -538,9 +538,17 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
       });
     if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
+    const isImage =
+      data.mimeType.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif)$/i.test(lower);
+
     let extracted = "";
     try {
-      if (lower.endsWith(".txt") || lower.endsWith(".md") || data.mimeType.startsWith("text/")) {
+      if (isImage) {
+        // Images are sent to the model directly as multimodal parts;
+        // no text extraction needed.
+        extracted = "";
+      } else if (lower.endsWith(".txt") || lower.endsWith(".md") || data.mimeType.startsWith("text/")) {
         extracted = bytes.toString("utf-8");
       } else if (lower.endsWith(".pdf") || data.mimeType === "application/pdf") {
         const { extractText, getDocumentProxy } = await import("unpdf");

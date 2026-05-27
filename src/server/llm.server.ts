@@ -35,7 +35,13 @@ function labelFor(slug: string): string {
   return MODEL_LABELS[slug] ?? "the selected model";
 }
 
-export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+export type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+export type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | ChatContentPart[];
+};
 
 export async function chatCompletion(opts: {
   messages: ChatMessage[];

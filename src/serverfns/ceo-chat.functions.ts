@@ -538,9 +538,17 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
       });
     if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
+    const isImage =
+      data.mimeType.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif)$/i.test(lower);
+
     let extracted = "";
     try {
-      if (lower.endsWith(".txt") || lower.endsWith(".md") || data.mimeType.startsWith("text/")) {
+      if (isImage) {
+        // Images are sent to the model directly as multimodal parts;
+        // no text extraction needed.
+        extracted = "";
+      } else if (lower.endsWith(".txt") || lower.endsWith(".md") || data.mimeType.startsWith("text/")) {
         extracted = bytes.toString("utf-8");
       } else if (lower.endsWith(".pdf") || data.mimeType === "application/pdf") {
         const { extractText, getDocumentProxy } = await import("unpdf");
@@ -631,24 +639,52 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // Load attachments (if any) for prompt augmentation
     let attachmentBlock = "";
     let attachmentRows: Array<{ id: string; filename: string }> = [];
+    const imageParts: Array<{ type: "image_url"; image_url: { url: string } }> = [];
     if (data.attachmentIds.length) {
       const { data: atts, error: attErr } = await supabaseAdmin
         .from("ceo_chat_attachments")
-        .select("id, filename, extracted_text")
+        .select("id, filename, mime_type, storage_path, extracted_text")
         .in("id", data.attachmentIds)
         .is("message_id", null);
       if (attErr) throw attErr;
       attachmentRows = (atts ?? []).map((a) => ({ id: a.id, filename: a.filename }));
-      if (atts && atts.length) {
+
+      const textAtts = (atts ?? []).filter(
+        (a) => !(a.mime_type ?? "").startsWith("image/"),
+      );
+      const imgAtts = (atts ?? []).filter((a) =>
+        (a.mime_type ?? "").startsWith("image/"),
+      );
+
+      if (textAtts.length) {
         attachmentBlock =
           "\n\n## Attached documents\n" +
-          atts
+          textAtts
             .map(
               (a) =>
                 `### ${a.filename}\n\n${a.extracted_text ?? "[no extracted text]"}`,
             )
             .join("\n\n---\n\n");
       }
+
+      for (const a of imgAtts) {
+        if (!a.storage_path) continue;
+        const { data: signed, error: signErr } = await supabaseAdmin.storage
+          .from("chat-uploads")
+          .createSignedUrl(a.storage_path, 3600);
+        if (signErr || !signed?.signedUrl) continue;
+        imageParts.push({
+          type: "image_url",
+          image_url: { url: signed.signedUrl },
+        });
+      }
+    }
+
+    const resolvedModel = resolveChatModel(data.model);
+    if (imageParts.length && resolvedModel === "nousresearch/hermes-4-405b") {
+      throw new Error(
+        "Hermes 4 405B can't read images. Pick Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro to analyze attached images.",
+      );
     }
 
     const userContentForModel = data.content + attachmentBlock;
@@ -779,17 +815,27 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [
       { role: "system", content: CEO_SYSTEM },
-      ...(history ?? []).map((m) => ({
-        role: m.role as "user" | "assistant",
-        content:
-          m.id === userRow.id ? userContentForModel : m.content,
-      })),
+      ...(history ?? []).map((m): ChatMessage => {
+        if (m.id === userRow.id && imageParts.length) {
+          return {
+            role: "user",
+            content: [
+              { type: "text", text: userContentForModel },
+              ...imageParts,
+            ],
+          };
+        }
+        return {
+          role: m.role as "user" | "assistant",
+          content: m.id === userRow.id ? userContentForModel : m.content,
+        };
+      }),
     ];
 
     const json = await chatCompletion({
       messages,
       temperature: 0.6,
-      model: resolveChatModel(data.model),
+      model: resolvedModel,
     });
     const reply: string =
       json?.choices?.[0]?.message?.content?.trim() || "(no reply)";

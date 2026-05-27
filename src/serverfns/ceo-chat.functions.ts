@@ -815,17 +815,27 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [
       { role: "system", content: CEO_SYSTEM },
-      ...(history ?? []).map((m) => ({
-        role: m.role as "user" | "assistant",
-        content:
-          m.id === userRow.id ? userContentForModel : m.content,
-      })),
+      ...(history ?? []).map((m): ChatMessage => {
+        if (m.id === userRow.id && imageParts.length) {
+          return {
+            role: "user",
+            content: [
+              { type: "text", text: userContentForModel },
+              ...imageParts,
+            ],
+          };
+        }
+        return {
+          role: m.role as "user" | "assistant",
+          content: m.id === userRow.id ? userContentForModel : m.content,
+        };
+      }),
     ];
 
     const json = await chatCompletion({
       messages,
       temperature: 0.6,
-      model: resolveChatModel(data.model),
+      model: resolvedModel,
     });
     const reply: string =
       json?.choices?.[0]?.message?.content?.trim() || "(no reply)";

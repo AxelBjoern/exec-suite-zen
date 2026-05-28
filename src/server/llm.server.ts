@@ -43,6 +43,11 @@ export function resolveChatModel(id?: string | null): string {
   return slug;
 }
 
+export function resolveTextChatModel(id?: string | null): string {
+  const slug = resolveChatModel(id);
+  return isVideoModel(slug) ? DEFAULT_MODEL : slug;
+}
+
 function labelFor(slug: string): string {
   return MODEL_LABELS[slug] ?? "the selected model";
 }

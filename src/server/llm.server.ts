@@ -38,9 +38,15 @@ export function isVideoModel(slug: string): boolean {
 
 export function resolveChatModel(id?: string | null): string {
   if (!id) return DEFAULT_MODEL;
+  if (MODEL_LABELS[id]) return id;
   const slug = MODEL_SLUGS[id as keyof typeof MODEL_SLUGS];
   if (!slug) throw new Error(`Unknown model "${id}". Allowed: Hermes 4 405B, Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro, DeepSeek V4 Flash, Kling v3.0 Std.`);
   return slug;
+}
+
+export function resolveTextChatModel(id?: string | null): string {
+  const slug = resolveChatModel(id);
+  return isVideoModel(slug) ? DEFAULT_MODEL : slug;
 }
 
 function labelFor(slug: string): string {

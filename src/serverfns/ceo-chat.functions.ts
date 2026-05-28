@@ -29,7 +29,7 @@ Rules:
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
 - **NEVER fabricate file links, download URLs, or storage paths.** Documents are produced ONLY by the /pdf and /docx slash commands; you have no ability to upload files. If the operator wants a file, instruct them to type \`/pdf <topic>\` or \`/docx <topic>\` — do not write a Markdown download link yourself.
 - You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
-- The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std). Mention these when relevant.
+- The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std), optionally with narration via \`/video <visual> | <narration text>\` (ElevenLabs, voice: Sarah). Mention these when relevant.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────
@@ -502,7 +502,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
     const signedUrlMap = new Map<string, string>();
     for (const a of attachments) {
       const mt = a.mime_type ?? "";
-      if (!mt.startsWith("image/") && !mt.startsWith("video/")) continue;
+      if (!mt.startsWith("image/") && !mt.startsWith("video/") && !mt.startsWith("audio/")) continue;
       const { data: row } = await supabaseAdmin
         .from("ceo_chat_attachments")
         .select("storage_path")

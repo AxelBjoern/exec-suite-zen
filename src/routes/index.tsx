@@ -931,33 +931,59 @@ function MessageRow({
   artifact?: DocArtifact | null;
   onOpenArtifact?: (a: DocArtifact) => void;
 }) {
-  const mediaAtts = attachments.filter(
-    (a) => a.url && (a.mimeType?.startsWith("video/") || a.mimeType?.startsWith("image/")),
+  const videoAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("video/"),
   );
-  const fileAtts = attachments.filter((a) => !mediaAtts.includes(a));
+  const imageAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("image/"),
+  );
+  const audioAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("audio/"),
+  );
+  // Pair narration audio (filename starts with `narration_`) with its video by stem
+  const narrationByStem = new Map<string, Attachment>();
+  for (const a of audioAtts) {
+    if (a.filename.startsWith("narration_")) {
+      const stem = a.filename.replace(/^narration_/, "").replace(/\.[^.]+$/, "");
+      narrationByStem.set(stem, a);
+    }
+  }
+  const pairedAudioIds = new Set<string>();
+  const standaloneAudio = audioAtts.filter((a) => !pairedAudioIds.has(a.id));
+  const mediaAtts = [...videoAtts, ...imageAtts];
+  const fileAtts = attachments.filter(
+    (a) => !mediaAtts.includes(a) && !audioAtts.includes(a),
+  );
 
   const renderMedia = () =>
-    mediaAtts.length > 0 && (
+    (mediaAtts.length > 0 || standaloneAudio.length > 0) && (
       <div className="flex flex-wrap gap-2">
-        {mediaAtts.map((a) =>
-          a.mimeType.startsWith("video/") ? (
-            <video
+        {videoAtts.map((a) => {
+          const stem = a.filename.replace(/\.[^.]+$/, "");
+          const narration = narrationByStem.get(stem);
+          if (narration) pairedAudioIds.add(narration.id);
+          return (
+            <VideoWithNarration
               key={a.id}
-              src={a.url!}
-              controls
-              className="max-w-full rounded-lg border border-border"
-              style={{ maxHeight: 360 }}
+              videoUrl={a.url!}
+              narrationUrl={narration?.url ?? null}
             />
-          ) : (
-            <img
-              key={a.id}
-              src={a.url!}
-              alt={a.filename}
-              className="max-w-full rounded-lg border border-border"
-              style={{ maxHeight: 360 }}
-            />
-          ),
-        )}
+          );
+        })}
+        {imageAtts.map((a) => (
+          <img
+            key={a.id}
+            src={a.url!}
+            alt={a.filename}
+            className="max-w-full rounded-lg border border-border"
+            style={{ maxHeight: 360 }}
+          />
+        ))}
+        {standaloneAudio
+          .filter((a) => !pairedAudioIds.has(a.id))
+          .map((a) => (
+            <audio key={a.id} src={a.url!} controls className="w-full" />
+          ))}
       </div>
     );
 
@@ -1053,4 +1079,59 @@ function MessageRow({
     </div>
   );
 }
+
+function VideoWithNarration({
+  videoUrl,
+  narrationUrl,
+}: {
+  videoUrl: string;
+  narrationUrl: string | null;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (!v || !a) return;
+    const onPlay = () => {
+      a.currentTime = v.currentTime;
+      a.play().catch(() => {});
+    };
+    const onPause = () => a.pause();
+    const onSeek = () => {
+      a.currentTime = v.currentTime;
+    };
+    const onRate = () => {
+      a.playbackRate = v.playbackRate;
+    };
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("seeking", onSeek);
+    v.addEventListener("ratechange", onRate);
+    return () => {
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("seeking", onSeek);
+      v.removeEventListener("ratechange", onRate);
+    };
+  }, [narrationUrl]);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        controls
+        muted={!!narrationUrl}
+        className="max-w-full rounded-lg border border-border"
+        style={{ maxHeight: 360 }}
+      />
+      {narrationUrl && (
+        <audio ref={audioRef} src={narrationUrl} preload="auto" className="hidden" />
+      )}
+    </div>
+  );
+}
+
 

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   chatCompletion,
   resolveChatModel,
+  resolveTextChatModel,
   type ChatMessage,
 } from "@/server/llm.server";
 import { DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
@@ -793,7 +794,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         let assistantMd = "";
         if (target === "board") {
           const decision = await routePrompt({
-            data: { prompt, force_boardroom: true, model: data.model },
+            data: { prompt, force_boardroom: true, model: resolveTextChatModel(data.model) },
           });
           const result = await dispatch({
             data: {
@@ -804,7 +805,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               boardroom: true,
               freeform: true,
               prompt,
-              model: data.model,
+              model: resolveTextChatModel(data.model),
             },
           });
           const consultLines = (result as any).consults?.length
@@ -831,7 +832,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               args: prompt,
               freeform: true,
               prompt,
-              model: data.model,
+              model: resolveTextChatModel(data.model),
             },
           });
           if ((result as any).chat) {

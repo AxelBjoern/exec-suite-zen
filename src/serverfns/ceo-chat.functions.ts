@@ -648,6 +648,17 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       })) as any;
     }
 
+    // If the Kling video model is selected in the picker, treat the message
+    // as a video prompt (same as /video).
+    if (data.model === "kling" && data.attachmentIds.length === 0 && data.content) {
+      return (await generateCeoVideo({
+        data: {
+          prompt: data.content,
+          conversationId: data.conversationId ?? null,
+        },
+      })) as any;
+    }
+
     // Reroute stray slash-commands (e.g. "/pdf@topic", "/docx topic") that bypassed the client parser.
     const slash = data.content.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
     if (slash && data.attachmentIds.length === 0) {

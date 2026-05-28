@@ -502,7 +502,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
     const signedUrlMap = new Map<string, string>();
     for (const a of attachments) {
       const mt = a.mime_type ?? "";
-      if (!mt.startsWith("image/") && !mt.startsWith("video/")) continue;
+      if (!mt.startsWith("image/") && !mt.startsWith("video/") && !mt.startsWith("audio/")) continue;
       const { data: row } = await supabaseAdmin
         .from("ceo_chat_attachments")
         .select("storage_path")

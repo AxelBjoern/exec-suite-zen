@@ -131,28 +131,26 @@ export const generateCeoVideo = createServerFn({ method: "POST" })
 
     // Run Kling + (optionally) ElevenLabs in parallel
     const klingPromise = (async () => {
-      let prediction = await startPrediction(token, data.visual);
+      const job = await startKlingJob(token, data.visual);
+      let status: OpenRouterVideoStatus = { status: job.status ?? "queued" };
       const startedAt = Date.now();
-      while (
-        prediction.status !== "succeeded" &&
-        prediction.status !== "failed" &&
-        prediction.status !== "canceled"
-      ) {
+      while (status.status !== "completed" && status.status !== "failed") {
         if (Date.now() - startedAt > MAX_TOTAL_WAIT_MS) {
           throw new Error("Kling v3.0 Std timed out. Try again — the model may be cold.");
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-        prediction = await fetchPrediction(token, prediction.id);
+        status = await pollKlingJob(token, job);
       }
-      if (prediction.status !== "succeeded") {
-        throw new Error(`Kling v3.0 Std ${prediction.status}: ${prediction.error ?? "no detail"}`);
+      if (status.status !== "completed") {
+        const detail = typeof status.error === "string" ? status.error : status.error?.message ?? "no detail";
+        throw new Error(`Kling v3.0 Std ${status.status}: ${detail}`);
       }
-      const outputUrl = extractOutputUrl(prediction);
+      const outputUrl = extractVideoUrl(status);
       if (!outputUrl) throw new Error("Kling v3.0 Std returned no video output.");
       const mp4Res = await fetch(outputUrl);
       if (!mp4Res.ok) throw new Error(`Failed to download generated video (${mp4Res.status})`);
       return {
-        predictionId: prediction.id,
+        predictionId: job.id,
         bytes: new Uint8Array(await mp4Res.arrayBuffer()),
       };
     })();

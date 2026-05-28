@@ -14,6 +14,8 @@ const MODEL_SLUGS = {
   gpt: "openai/gpt-5.3-chat",
   claude: "anthropic/claude-opus-4.7",
   deepseek: "deepseek/deepseek-v4-pro",
+  "deepseek-flash": "deepseek/deepseek-v4-flash",
+  kling: "kwaivgi/kling-v3.0-std",
 } as const;
 
 const MODEL_LABELS: Record<string, string> = {
@@ -22,7 +24,17 @@ const MODEL_LABELS: Record<string, string> = {
   "openai/gpt-5.3-chat": "ChatGPT 5.3",
   "anthropic/claude-opus-4.7": "Claude Opus 4.7",
   "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
+  "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "kwaivgi/kling-v3.0-std": "Kling v3.0 Std",
 };
+
+// Video-generation models. These don't use chat completions — callers must
+// route them through a video-generation path instead.
+export const VIDEO_MODEL_SLUGS = new Set<string>(["kwaivgi/kling-v3.0-std"]);
+
+export function isVideoModel(slug: string): boolean {
+  return VIDEO_MODEL_SLUGS.has(slug);
+}
 
 export function resolveChatModel(id?: string | null): string {
   if (!id) return DEFAULT_MODEL;

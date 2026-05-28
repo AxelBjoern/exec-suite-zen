@@ -1080,3 +1080,58 @@ function MessageRow({
   );
 }
 
+function VideoWithNarration({
+  videoUrl,
+  narrationUrl,
+}: {
+  videoUrl: string;
+  narrationUrl: string | null;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (!v || !a) return;
+    const onPlay = () => {
+      a.currentTime = v.currentTime;
+      a.play().catch(() => {});
+    };
+    const onPause = () => a.pause();
+    const onSeek = () => {
+      a.currentTime = v.currentTime;
+    };
+    const onRate = () => {
+      a.playbackRate = v.playbackRate;
+    };
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("seeking", onSeek);
+    v.addEventListener("ratechange", onRate);
+    return () => {
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("seeking", onSeek);
+      v.removeEventListener("ratechange", onRate);
+    };
+  }, [narrationUrl]);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        controls
+        muted={!!narrationUrl}
+        className="max-w-full rounded-lg border border-border"
+        style={{ maxHeight: 360 }}
+      />
+      {narrationUrl && (
+        <audio ref={audioRef} src={narrationUrl} preload="auto" className="hidden" />
+      )}
+    </div>
+  );
+}
+
+

@@ -3,7 +3,10 @@
 // selected model fails, the error surfaces with that model's name.
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "nousresearch/hermes-4-405b";
+// Default text model. Must be tool-capable on OpenRouter — Hermes 4 405B
+// currently has no tool-capable endpoint, so we use Grok 4.3 (which is also
+// what a video-model selection falls back to for @-mention dispatch).
+const DEFAULT_MODEL = "x-ai/grok-4.3";
 const DEFAULT_MAX_TOKENS = 8000;
 const RETRY_MAX_TOKENS = 12000;
 

@@ -12,6 +12,7 @@ import {
   renderPdf,
   type DocOutline,
 } from "@/server/doc-generator.server";
+import { generateCeoVideo } from "@/serverfns/video.functions";
 
 const VALID_DISPATCH_SLUGS = [
   "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",

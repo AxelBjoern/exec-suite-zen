@@ -103,8 +103,8 @@ export const generateCeoVideo = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
-    const token = process.env.REPLICATE_API_TOKEN;
-    if (!token) throw new Error("REPLICATE_API_TOKEN missing — add it in project secrets.");
+    const token = process.env.OPENROUTER_API_KEY;
+    if (!token) throw new Error("OPENROUTER_API_KEY missing — add it in project secrets.");
 
     // Ensure conversation
     let conversationId = data.conversationId;

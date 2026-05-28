@@ -14,7 +14,7 @@ import {
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
-import { callTool, resolveChatModel } from "@/server/llm.server";
+import { callTool, resolveTextChatModel } from "@/server/llm.server";
 import { gatherVdnxContext } from "@/server/code-context.server";
 
 const CODE_AWARE_AGENTS = new Set(["cto", "ceo"]);
@@ -255,7 +255,7 @@ export const dispatch = createServerFn({ method: "POST" })
     model?: string;
   }) => d)
   .handler(async ({ data }) => {
-    const chosenModel = resolveChatModel(data.model);
+    const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);
     if (!primary) throw new Error(`Unknown agent: ${data.agent_slug}`);
@@ -533,7 +533,7 @@ export const dispatch = createServerFn({ method: "POST" })
 export const routePrompt = createServerFn({ method: "POST" })
   .inputValidator((d: { prompt: string; force_boardroom?: boolean; model?: string }) => d)
   .handler(async ({ data }) => {
-    const chosenModel = resolveChatModel(data.model);
+    const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin
       .from("agents").select("slug,role,mandate").order("sort_order");
     const { data: ctxRow } = await supabaseAdmin

@@ -68,6 +68,9 @@ export async function chatCompletion(opts: {
 
   const model = opts.model ?? DEFAULT_MODEL;
   const label = labelFor(model);
+  if (isVideoModel(model)) {
+    throw new Error(`${label} is a video-generation model and can't be used for chat. Pick a text model to chat, or trigger video generation explicitly.`);
+  }
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",

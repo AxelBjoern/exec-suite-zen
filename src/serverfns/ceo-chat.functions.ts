@@ -637,6 +637,17 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }) => {
+    // /video <prompt> → Kling v3.0 Std via Replicate
+    const videoSlash = data.content.match(/^\/video\b[\s:@-]*([\s\S]*)$/i);
+    if (videoSlash && data.attachmentIds.length === 0) {
+      return (await generateCeoVideo({
+        data: {
+          prompt: videoSlash[1].trim(),
+          conversationId: data.conversationId ?? null,
+        },
+      })) as any;
+    }
+
     // Reroute stray slash-commands (e.g. "/pdf@topic", "/docx topic") that bypassed the client parser.
     const slash = data.content.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
     if (slash && data.attachmentIds.length === 0) {

@@ -12,6 +12,7 @@ import {
   renderPdf,
   type DocOutline,
 } from "@/server/doc-generator.server";
+import { generateCeoVideo } from "@/serverfns/video.functions";
 
 const VALID_DISPATCH_SLUGS = [
   "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
@@ -28,7 +29,7 @@ Rules:
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
 - **NEVER fabricate file links, download URLs, or storage paths.** Documents are produced ONLY by the /pdf and /docx slash commands; you have no ability to upload files. If the operator wants a file, instruct them to type \`/pdf <topic>\` or \`/docx <topic>\` — do not write a Markdown download link yourself.
 - You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
-- The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. Mention this when relevant (e.g., "want this as a PDF? Type \`/pdf <topic>\`").
+- The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std). Mention these when relevant.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────
@@ -496,6 +497,24 @@ export const getCeoChat = createServerFn({ method: "GET" })
       attachments = atts ?? [];
     }
 
+    // Generate signed URLs for media attachments so the UI can render
+    // images/videos inline. chat-uploads is a private bucket.
+    const signedUrlMap = new Map<string, string>();
+    for (const a of attachments) {
+      const mt = a.mime_type ?? "";
+      if (!mt.startsWith("image/") && !mt.startsWith("video/")) continue;
+      const { data: row } = await supabaseAdmin
+        .from("ceo_chat_attachments")
+        .select("storage_path")
+        .eq("id", a.id)
+        .maybeSingle();
+      if (!row?.storage_path) continue;
+      const { data: signed } = await supabaseAdmin.storage
+        .from("chat-uploads")
+        .createSignedUrl(row.storage_path, 3600);
+      if (signed?.signedUrl) signedUrlMap.set(a.id, signed.signedUrl);
+    }
+
     return (messages ?? []).map((m) => ({
       ...m,
       attachments: attachments
@@ -505,6 +524,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
           filename: a.filename,
           mimeType: a.mime_type,
           sizeBytes: a.size_bytes,
+          url: signedUrlMap.get(a.id) ?? null,
         })),
     }));
   });
@@ -617,6 +637,17 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }) => {
+    // /video <prompt> → Kling v3.0 Std via Replicate
+    const videoSlash = data.content.match(/^\/video\b[\s:@-]*([\s\S]*)$/i);
+    if (videoSlash && data.attachmentIds.length === 0) {
+      return (await generateCeoVideo({
+        data: {
+          prompt: videoSlash[1].trim(),
+          conversationId: data.conversationId ?? null,
+        },
+      })) as any;
+    }
+
     // Reroute stray slash-commands (e.g. "/pdf@topic", "/docx topic") that bypassed the client parser.
     const slash = data.content.match(/^\/(pdf|docx)\b[\s:@-]*([\s\S]*)$/i);
     if (slash && data.attachmentIds.length === 0) {

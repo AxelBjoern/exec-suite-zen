@@ -931,13 +931,44 @@ function MessageRow({
   artifact?: DocArtifact | null;
   onOpenArtifact?: (a: DocArtifact) => void;
 }) {
+  const mediaAtts = attachments.filter(
+    (a) => a.url && (a.mimeType?.startsWith("video/") || a.mimeType?.startsWith("image/")),
+  );
+  const fileAtts = attachments.filter((a) => !mediaAtts.includes(a));
+
+  const renderMedia = () =>
+    mediaAtts.length > 0 && (
+      <div className="flex flex-wrap gap-2">
+        {mediaAtts.map((a) =>
+          a.mimeType.startsWith("video/") ? (
+            <video
+              key={a.id}
+              src={a.url!}
+              controls
+              className="max-w-full rounded-lg border border-border"
+              style={{ maxHeight: 360 }}
+            />
+          ) : (
+            <img
+              key={a.id}
+              src={a.url!}
+              alt={a.filename}
+              className="max-w-full rounded-lg border border-border"
+              style={{ maxHeight: 360 }}
+            />
+          ),
+        )}
+      </div>
+    );
+
   if (role === "user") {
     return (
       <div className="flex justify-end">
         <div className="max-w-[85%] space-y-2">
-          {attachments.length > 0 && (
+          {renderMedia()}
+          {fileAtts.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1.5">
-              {attachments.map((a) => (
+              {fileAtts.map((a) => (
                 <div
                   key={a.id}
                   className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs"

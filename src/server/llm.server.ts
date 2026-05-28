@@ -14,6 +14,8 @@ const MODEL_SLUGS = {
   gpt: "openai/gpt-5.3-chat",
   claude: "anthropic/claude-opus-4.7",
   deepseek: "deepseek/deepseek-v4-pro",
+  "deepseek-flash": "deepseek/deepseek-v4-flash",
+  kling: "kwaivgi/kling-v3.0-std",
 } as const;
 
 const MODEL_LABELS: Record<string, string> = {
@@ -22,12 +24,22 @@ const MODEL_LABELS: Record<string, string> = {
   "openai/gpt-5.3-chat": "ChatGPT 5.3",
   "anthropic/claude-opus-4.7": "Claude Opus 4.7",
   "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
+  "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "kwaivgi/kling-v3.0-std": "Kling v3.0 Std",
 };
+
+// Video-generation models. These don't use chat completions — callers must
+// route them through a video-generation path instead.
+export const VIDEO_MODEL_SLUGS = new Set<string>(["kwaivgi/kling-v3.0-std"]);
+
+export function isVideoModel(slug: string): boolean {
+  return VIDEO_MODEL_SLUGS.has(slug);
+}
 
 export function resolveChatModel(id?: string | null): string {
   if (!id) return DEFAULT_MODEL;
   const slug = MODEL_SLUGS[id as keyof typeof MODEL_SLUGS];
-  if (!slug) throw new Error(`Unknown model "${id}". Allowed: Hermes 4 405B, Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro.`);
+  if (!slug) throw new Error(`Unknown model "${id}". Allowed: Hermes 4 405B, Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro, DeepSeek V4 Flash, Kling v3.0 Std.`);
   return slug;
 }
 
@@ -56,6 +68,9 @@ export async function chatCompletion(opts: {
 
   const model = opts.model ?? DEFAULT_MODEL;
   const label = labelFor(model);
+  if (isVideoModel(model)) {
+    throw new Error(`${label} is a video-generation model and can't be used for chat. Pick a text model to chat, or trigger video generation explicitly.`);
+  }
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",

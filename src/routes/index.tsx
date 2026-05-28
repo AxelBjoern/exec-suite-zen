@@ -72,6 +72,7 @@ type Attachment = {
   filename: string;
   mimeType: string;
   sizeBytes: number;
+  url?: string | null;
 };
 
 type Msg = {

@@ -931,33 +931,59 @@ function MessageRow({
   artifact?: DocArtifact | null;
   onOpenArtifact?: (a: DocArtifact) => void;
 }) {
-  const mediaAtts = attachments.filter(
-    (a) => a.url && (a.mimeType?.startsWith("video/") || a.mimeType?.startsWith("image/")),
+  const videoAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("video/"),
   );
-  const fileAtts = attachments.filter((a) => !mediaAtts.includes(a));
+  const imageAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("image/"),
+  );
+  const audioAtts = attachments.filter(
+    (a) => a.url && a.mimeType?.startsWith("audio/"),
+  );
+  // Pair narration audio (filename starts with `narration_`) with its video by stem
+  const narrationByStem = new Map<string, Attachment>();
+  for (const a of audioAtts) {
+    if (a.filename.startsWith("narration_")) {
+      const stem = a.filename.replace(/^narration_/, "").replace(/\.[^.]+$/, "");
+      narrationByStem.set(stem, a);
+    }
+  }
+  const pairedAudioIds = new Set<string>();
+  const standaloneAudio = audioAtts.filter((a) => !pairedAudioIds.has(a.id));
+  const mediaAtts = [...videoAtts, ...imageAtts];
+  const fileAtts = attachments.filter(
+    (a) => !mediaAtts.includes(a) && !audioAtts.includes(a),
+  );
 
   const renderMedia = () =>
-    mediaAtts.length > 0 && (
+    (mediaAtts.length > 0 || standaloneAudio.length > 0) && (
       <div className="flex flex-wrap gap-2">
-        {mediaAtts.map((a) =>
-          a.mimeType.startsWith("video/") ? (
-            <video
+        {videoAtts.map((a) => {
+          const stem = a.filename.replace(/\.[^.]+$/, "");
+          const narration = narrationByStem.get(stem);
+          if (narration) pairedAudioIds.add(narration.id);
+          return (
+            <VideoWithNarration
               key={a.id}
-              src={a.url!}
-              controls
-              className="max-w-full rounded-lg border border-border"
-              style={{ maxHeight: 360 }}
+              videoUrl={a.url!}
+              narrationUrl={narration?.url ?? null}
             />
-          ) : (
-            <img
-              key={a.id}
-              src={a.url!}
-              alt={a.filename}
-              className="max-w-full rounded-lg border border-border"
-              style={{ maxHeight: 360 }}
-            />
-          ),
-        )}
+          );
+        })}
+        {imageAtts.map((a) => (
+          <img
+            key={a.id}
+            src={a.url!}
+            alt={a.filename}
+            className="max-w-full rounded-lg border border-border"
+            style={{ maxHeight: 360 }}
+          />
+        ))}
+        {standaloneAudio
+          .filter((a) => !pairedAudioIds.has(a.id))
+          .map((a) => (
+            <audio key={a.id} src={a.url!} controls className="w-full" />
+          ))}
       </div>
     );
 

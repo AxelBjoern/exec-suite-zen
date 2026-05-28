@@ -496,6 +496,24 @@ export const getCeoChat = createServerFn({ method: "GET" })
       attachments = atts ?? [];
     }
 
+    // Generate signed URLs for media attachments so the UI can render
+    // images/videos inline. chat-uploads is a private bucket.
+    const signedUrlMap = new Map<string, string>();
+    for (const a of attachments) {
+      const mt = a.mime_type ?? "";
+      if (!mt.startsWith("image/") && !mt.startsWith("video/")) continue;
+      const { data: row } = await supabaseAdmin
+        .from("ceo_chat_attachments")
+        .select("storage_path")
+        .eq("id", a.id)
+        .maybeSingle();
+      if (!row?.storage_path) continue;
+      const { data: signed } = await supabaseAdmin.storage
+        .from("chat-uploads")
+        .createSignedUrl(row.storage_path, 3600);
+      if (signed?.signedUrl) signedUrlMap.set(a.id, signed.signedUrl);
+    }
+
     return (messages ?? []).map((m) => ({
       ...m,
       attachments: attachments
@@ -505,6 +523,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
           filename: a.filename,
           mimeType: a.mime_type,
           sizeBytes: a.size_bytes,
+          url: signedUrlMap.get(a.id) ?? null,
         })),
     }));
   });

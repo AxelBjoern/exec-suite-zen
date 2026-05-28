@@ -1,54 +1,64 @@
-// /video <visual prompt> [| <narration>] — generate a clip with Kling v3.0 Std via Replicate.
+// /video <visual prompt> [| <narration>] — generate a clip with Kling v3.0 Std via OpenRouter.
 // Optional narration is synthesized with ElevenLabs (voice: Sarah) and attached
 // as a separate audio track. The chat UI syncs the audio to the video element.
 
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const REPLICATE_MODEL = "kwaivgi/kling-v3.0-std";
+const OPENROUTER_VIDEO_URL = "https://openrouter.ai/api/v1/videos";
+const KLING_MODEL = "kwaivgi/kling-v3.0-std";
 const POLL_INTERVAL_MS = 5000;
-const MAX_TOTAL_WAIT_MS = 180_000; // 3 minutes
+const MAX_TOTAL_WAIT_MS = 240_000; // 4 minutes
 const ELEVENLABS_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah
 
-type ReplicatePrediction = {
+type OpenRouterVideoJob = {
   id: string;
-  status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
-  output?: string | string[] | null;
-  error?: string | null;
+  polling_url?: string;
+  status?: string;
 };
 
-async function startPrediction(token: string, prompt: string): Promise<ReplicatePrediction> {
-  const res = await fetch(`https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`, {
+type OpenRouterVideoStatus = {
+  id?: string;
+  status: "queued" | "processing" | "completed" | "failed" | string;
+  unsigned_urls?: string[];
+  signed_urls?: string[];
+  urls?: string[];
+  error?: string | { message?: string } | null;
+};
+
+async function startKlingJob(token: string, prompt: string): Promise<OpenRouterVideoJob> {
+  const res = await fetch(OPENROUTER_VIDEO_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      Prefer: "wait=60",
+      "HTTP-Referer": "https://lovable.app",
+      "X-Title": "VDNX Agents",
     },
-    body: JSON.stringify({ input: { prompt, duration: 5 } }),
+    body: JSON.stringify({ model: KLING_MODEL, prompt }),
   });
   const body = await res.text();
   if (!res.ok) {
     throw new Error(`Kling v3.0 Std request failed (${res.status}): ${body.slice(0, 400)}`);
   }
-  return JSON.parse(body) as ReplicatePrediction;
+  const json = JSON.parse(body) as OpenRouterVideoJob;
+  if (!json.id) throw new Error("Kling v3.0 Std returned no job id.");
+  return json;
 }
 
-async function fetchPrediction(token: string, id: string): Promise<ReplicatePrediction> {
-  const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+async function pollKlingJob(token: string, job: OpenRouterVideoJob): Promise<OpenRouterVideoStatus> {
+  const url = job.polling_url ?? `${OPENROUTER_VIDEO_URL}/${job.id}`;
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     throw new Error(`Kling v3.0 Std poll failed (${res.status})`);
   }
-  return (await res.json()) as ReplicatePrediction;
+  return (await res.json()) as OpenRouterVideoStatus;
 }
 
-function extractOutputUrl(p: ReplicatePrediction): string | null {
-  if (!p.output) return null;
-  if (typeof p.output === "string") return p.output;
-  if (Array.isArray(p.output) && p.output.length) return p.output[0];
-  return null;
+function extractVideoUrl(s: OpenRouterVideoStatus): string | null {
+  return s.unsigned_urls?.[0] ?? s.signed_urls?.[0] ?? s.urls?.[0] ?? null;
 }
 
 async function synthesizeNarration(text: string): Promise<Uint8Array> {
@@ -93,8 +103,8 @@ export const generateCeoVideo = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
-    const token = process.env.REPLICATE_API_TOKEN;
-    if (!token) throw new Error("REPLICATE_API_TOKEN missing — add it in project secrets.");
+    const token = process.env.OPENROUTER_API_KEY;
+    if (!token) throw new Error("OPENROUTER_API_KEY missing — add it in project secrets.");
 
     // Ensure conversation
     let conversationId = data.conversationId;
@@ -121,28 +131,26 @@ export const generateCeoVideo = createServerFn({ method: "POST" })
 
     // Run Kling + (optionally) ElevenLabs in parallel
     const klingPromise = (async () => {
-      let prediction = await startPrediction(token, data.visual);
+      const job = await startKlingJob(token, data.visual);
+      let status: OpenRouterVideoStatus = { status: job.status ?? "queued" };
       const startedAt = Date.now();
-      while (
-        prediction.status !== "succeeded" &&
-        prediction.status !== "failed" &&
-        prediction.status !== "canceled"
-      ) {
+      while (status.status !== "completed" && status.status !== "failed") {
         if (Date.now() - startedAt > MAX_TOTAL_WAIT_MS) {
           throw new Error("Kling v3.0 Std timed out. Try again — the model may be cold.");
         }
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-        prediction = await fetchPrediction(token, prediction.id);
+        status = await pollKlingJob(token, job);
       }
-      if (prediction.status !== "succeeded") {
-        throw new Error(`Kling v3.0 Std ${prediction.status}: ${prediction.error ?? "no detail"}`);
+      if (status.status !== "completed") {
+        const detail = typeof status.error === "string" ? status.error : status.error?.message ?? "no detail";
+        throw new Error(`Kling v3.0 Std ${status.status}: ${detail}`);
       }
-      const outputUrl = extractOutputUrl(prediction);
+      const outputUrl = extractVideoUrl(status);
       if (!outputUrl) throw new Error("Kling v3.0 Std returned no video output.");
       const mp4Res = await fetch(outputUrl);
       if (!mp4Res.ok) throw new Error(`Failed to download generated video (${mp4Res.status})`);
       return {
-        predictionId: prediction.id,
+        predictionId: job.id,
         bytes: new Uint8Array(await mp4Res.arrayBuffer()),
       };
     })();

@@ -14,6 +14,7 @@ import {
   type DocOutline,
 } from "@/server/doc-generator.server";
 import { generateCeoVideo } from "@/serverfns/video.functions";
+import { webSearch, webFetch, extractUrls } from "@/server/web.server";
 
 const VALID_DISPATCH_SLUGS = [
   "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
@@ -31,6 +32,7 @@ Rules:
 - **NEVER fabricate file links, download URLs, or storage paths.** Documents are produced ONLY by the /pdf and /docx slash commands; you have no ability to upload files. If the operator wants a file, instruct them to type \`/pdf <topic>\` or \`/docx <topic>\` — do not write a Markdown download link yourself.
 - You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
 - The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std), optionally with narration via \`/video <visual> | <narration text>\` (ElevenLabs, voice: Sarah). Mention these when relevant.
+- You have live internet access: \`/search <query>\` runs a web search and \`/fetch <url>\` reads a page. You can also paste a URL into a normal message and the page contents will be fetched automatically and provided to you — cite sources inline as \`[domain](url)\` when you use them.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────
@@ -673,7 +675,92 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       })) as any;
     }
 
-    // Ensure a conversation exists; create one if needed (auto-title from first message)
+    // /search <query> — live web search via Firecrawl, then synthesized reply with citations.
+    const searchSlash = data.content.match(/^\/search\b[\s:@-]*([\s\S]*)$/i);
+    if (searchSlash && data.attachmentIds.length === 0) {
+      const q = searchSlash[1].trim();
+      if (!q) throw new Error("Usage: /search <query>");
+      const convId = await ensureCeoConversation({
+        conversationId: data.conversationId,
+        title: `Search: ${q}`,
+      });
+      await insertCeoChatMessage({ role: "user", content: data.content, conversationId: convId, title: q, select: "id" });
+      let assistantMd: string;
+      try {
+        const results = await webSearch(q, 6);
+        if (!results.length) {
+          assistantMd = `**No web results** for \`${q}\`.`;
+        } else {
+          const block = results
+            .map((r, i) => `[${i + 1}] **${r.title ?? r.url}** — ${r.url}\n${r.description ?? ""}`)
+            .join("\n\n");
+          const json = await chatCompletion({
+            model: resolveTextChatModel(data.model),
+            temperature: 0.4,
+            messages: [
+              { role: "system", content: CEO_SYSTEM },
+              {
+                role: "user",
+                content:
+                  `Web search query: "${q}"\n\nResults:\n\n${block}\n\n` +
+                  `Synthesize a tight, founder-grade answer grounded ONLY in these results. ` +
+                  `Cite sources inline as [domain](url). End with a "Sources" list.`,
+              },
+            ],
+          });
+          assistantMd = json?.choices?.[0]?.message?.content?.trim() || `_(no synthesis)_\n\n${block}`;
+        }
+      } catch (e: any) {
+        assistantMd = `**Web search failed:** ${e?.message ?? "unknown error"}`;
+      }
+      return await (async () => {
+        const { data: saved, conversationId: finalId } = await insertCeoChatMessage({
+          role: "assistant", content: assistantMd, conversationId: convId, title: q, select: "id, role, content, created_at",
+        });
+        await supabaseAdmin.from("ceo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", finalId!);
+        return { ...saved, conversation_id: finalId };
+      })();
+    }
+
+    // /fetch <url> — scrape a page via Firecrawl, then summarize.
+    const fetchSlash = data.content.match(/^\/fetch\b[\s:@-]*([\s\S]*)$/i);
+    if (fetchSlash && data.attachmentIds.length === 0) {
+      const u = fetchSlash[1].trim();
+      if (!u) throw new Error("Usage: /fetch <url>");
+      const convId = await ensureCeoConversation({
+        conversationId: data.conversationId,
+        title: `Fetch: ${u}`,
+      });
+      await insertCeoChatMessage({ role: "user", content: data.content, conversationId: convId, title: u, select: "id" });
+      let assistantMd: string;
+      try {
+        const page = await webFetch(u);
+        const json = await chatCompletion({
+          model: resolveTextChatModel(data.model),
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: CEO_SYSTEM },
+            {
+              role: "user",
+              content:
+                `Fetched page: ${page.title ?? page.url}\nURL: ${page.url}\n\n--- PAGE CONTENT (markdown) ---\n${page.markdown}\n--- END ---\n\n` +
+                `Summarize the key points, then give a sharp CEO-grade take. Cite as [${new URL(page.url).hostname}](${page.url}).`,
+            },
+          ],
+        });
+        assistantMd = json?.choices?.[0]?.message?.content?.trim() || `_(no summary)_`;
+      } catch (e: any) {
+        assistantMd = `**Fetch failed:** ${e?.message ?? "unknown error"}`;
+      }
+      return await (async () => {
+        const { data: saved, conversationId: finalId } = await insertCeoChatMessage({
+          role: "assistant", content: assistantMd, conversationId: convId, title: u, select: "id, role, content, created_at",
+        });
+        await supabaseAdmin.from("ceo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", finalId!);
+        return { ...saved, conversation_id: finalId };
+      })();
+    }
+
     let conversationId = await ensureCeoConversation({
       conversationId: data.conversationId,
       title: data.content || "New conversation",
@@ -720,6 +807,25 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           type: "image_url",
           image_url: { url: signed.signedUrl },
         });
+      }
+    }
+
+    // Auto-fetch URLs pasted into a normal message (skip @mention dispatch and slash commands).
+    const isMention = /^@(board|[a-z]+)\s+/i.test(data.content);
+    if (!isMention) {
+      const urls = extractUrls(data.content).slice(0, 3);
+      if (urls.length) {
+        const pages = await Promise.all(
+          urls.map(async (u) => {
+            try {
+              const p = await webFetch(u);
+              return `### ${p.title ?? p.url}\nURL: ${p.url}\n\n${p.markdown.slice(0, 6000)}`;
+            } catch (e: any) {
+              return `### ${u}\n[fetch failed: ${e?.message ?? "unknown"}]`;
+            }
+          }),
+        );
+        attachmentBlock += `\n\n## Fetched URLs\n\n${pages.join("\n\n---\n\n")}`;
       }
     }
 

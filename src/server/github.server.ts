@@ -4,12 +4,24 @@
 const API = "https://api.github.com";
 const MAX_FILE_CHARS = 8000;
 
-function repo(): string {
+function defaultRepo(): string {
   const r = process.env.VDNX_REPO;
   if (!r || !r.includes("/")) {
-    throw new Error('VDNX_REPO env var missing or malformed. Expected "owner/repo".');
+    throw new Error('No repo specified and VDNX_REPO env var missing/malformed. Use "owner/repo".');
   }
   return r;
+}
+
+function normalizeRepo(repo?: string | null): string {
+  const r = (repo ?? "").trim();
+  if (!r) return defaultRepo();
+  // Accept full GitHub URLs.
+  const m = r.match(/github\.com\/([^/]+\/[^/?#]+)/i);
+  const slug = (m ? m[1] : r).replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  if (!/^[^/]+\/[^/]+$/.test(slug)) {
+    throw new Error(`Invalid repo "${repo}". Expected "owner/repo" or a GitHub URL.`);
+  }
+  return slug;
 }
 
 function headers(): Record<string, string> {

@@ -4,12 +4,24 @@
 const API = "https://api.github.com";
 const MAX_FILE_CHARS = 8000;
 
-function repo(): string {
+function defaultRepo(): string {
   const r = process.env.VDNX_REPO;
   if (!r || !r.includes("/")) {
-    throw new Error('VDNX_REPO env var missing or malformed. Expected "owner/repo".');
+    throw new Error('No repo specified and VDNX_REPO env var missing/malformed. Use "owner/repo".');
   }
   return r;
+}
+
+function normalizeRepo(repo?: string | null): string {
+  const r = (repo ?? "").trim();
+  if (!r) return defaultRepo();
+  // Accept full GitHub URLs.
+  const m = r.match(/github\.com\/([^/]+\/[^/?#]+)/i);
+  const slug = (m ? m[1] : r).replace(/\.git$/i, "").replace(/^\/+|\/+$/g, "");
+  if (!/^[^/]+\/[^/]+$/.test(slug)) {
+    throw new Error(`Invalid repo "${repo}". Expected "owner/repo" or a GitHub URL.`);
+  }
+  return slug;
 }
 
 function headers(): Record<string, string> {
@@ -23,36 +35,38 @@ function headers(): Record<string, string> {
   };
 }
 
-async function gh(path: string): Promise<any> {
+async function gh(path: string, repoForError?: string): Promise<any> {
   const res = await fetch(`${API}${path}`, { headers: headers() });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     if (res.status === 404) throw new Error(`GitHub 404: ${path}`);
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`GitHub auth failed (${res.status}). Check GITHUB_TOKEN scopes for ${repo()}.`);
+      throw new Error(`GitHub auth failed (${res.status}). Check GITHUB_TOKEN scopes for ${repoForError ?? "this repo"}.`);
     }
     throw new Error(`GitHub ${res.status}: ${body.slice(0, 200)}`);
   }
   return res.json();
 }
 
-export async function listRepoDir(path = ""): Promise<{ path: string; entries: { name: string; path: string; type: string; size?: number }[] }> {
+export async function listRepoDir(path = "", repo?: string): Promise<{ repo: string; path: string; entries: { name: string; path: string; type: string; size?: number }[] }> {
+  const slug = normalizeRepo(repo);
   const clean = path.replace(/^\/+|\/+$/g, "");
-  const data = await gh(`/repos/${repo()}/contents/${encodeURI(clean)}`);
+  const data = await gh(`/repos/${slug}/contents/${encodeURI(clean)}`, slug);
   if (!Array.isArray(data)) {
-    // It's a file, not a directory
-    return { path: clean, entries: [{ name: data.name, path: data.path, type: data.type, size: data.size }] };
+    return { repo: slug, path: clean, entries: [{ name: data.name, path: data.path, type: data.type, size: data.size }] };
   }
   return {
+    repo: slug,
     path: clean,
     entries: data.map((d: any) => ({ name: d.name, path: d.path, type: d.type, size: d.size })),
   };
 }
 
-export async function readRepoFile(path: string): Promise<{ path: string; content: string; truncated: boolean; size: number }> {
+export async function readRepoFile(path: string, repo?: string): Promise<{ repo: string; path: string; content: string; truncated: boolean; size: number }> {
+  const slug = normalizeRepo(repo);
   const clean = path.replace(/^\/+/, "");
   if (!clean) throw new Error("path is required");
-  const data = await gh(`/repos/${repo()}/contents/${encodeURI(clean)}`);
+  const data = await gh(`/repos/${slug}/contents/${encodeURI(clean)}`, slug);
   if (Array.isArray(data)) throw new Error(`${clean} is a directory, not a file`);
   if (data.encoding !== "base64" || typeof data.content !== "string") {
     throw new Error(`Unexpected GitHub response for ${clean}`);
@@ -60,14 +74,16 @@ export async function readRepoFile(path: string): Promise<{ path: string; conten
   const raw = Buffer.from(data.content, "base64").toString("utf8");
   const truncated = raw.length > MAX_FILE_CHARS;
   const content = truncated ? raw.slice(0, MAX_FILE_CHARS) + `\n\n…[truncated; ${raw.length - MAX_FILE_CHARS} more chars]` : raw;
-  return { path: clean, content, truncated, size: data.size ?? raw.length };
+  return { repo: slug, path: clean, content, truncated, size: data.size ?? raw.length };
 }
 
-export async function searchRepoCode(query: string): Promise<{ query: string; matches: { path: string; snippet?: string }[] }> {
-  const q = `${query} repo:${repo()}`;
-  const data = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=10`);
+export async function searchRepoCode(query: string, repo?: string): Promise<{ repo: string; query: string; matches: { path: string; snippet?: string }[] }> {
+  const slug = normalizeRepo(repo);
+  const q = `${query} repo:${slug}`;
+  const data = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=10`, slug);
   const items = Array.isArray(data?.items) ? data.items : [];
   return {
+    repo: slug,
     query,
     matches: items.map((it: any) => ({
       path: it.path,
@@ -75,3 +91,16 @@ export async function searchRepoCode(query: string): Promise<{ query: string; ma
     })),
   };
 }
+
+// Parse "owner/repo" or "owner/repo/some/path" (or a github.com URL) into { repo, path }.
+export function parseRepoTarget(input: string): { repo: string; path: string } {
+  const s = input.trim();
+  const urlMatch = s.match(/github\.com\/([^/]+)\/([^/?#]+)(?:\/(?:tree|blob)\/[^/]+)?\/?(.*)/i);
+  if (urlMatch) {
+    return { repo: `${urlMatch[1]}/${urlMatch[2].replace(/\.git$/i, "")}`, path: (urlMatch[3] ?? "").replace(/[?#].*$/, "") };
+  }
+  const parts = s.replace(/^\/+|\/+$/g, "").split("/");
+  if (parts.length < 2) throw new Error(`Invalid repo target "${input}". Use "owner/repo[/path]".`);
+  return { repo: `${parts[0]}/${parts[1]}`, path: parts.slice(2).join("/") };
+}
+

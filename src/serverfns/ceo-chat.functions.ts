@@ -34,6 +34,7 @@ Rules:
 - You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
 - The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std), optionally with narration via \`/video <visual> | <narration text>\` (ElevenLabs, voice: Sarah). Mention these when relevant.
 - You have live internet access: \`/search <query>\` runs a web search and \`/fetch <url>\` reads a page. You can also paste a URL into a normal message and the page contents will be fetched automatically and provided to you — cite sources inline as \`[domain](url)\` when you use them.
+- You can read GitHub repos (read-only): \`/repo <owner/repo>\` for an overview, \`/repo ls <owner/repo>[/path]\`, \`/repo cat <owner/repo>/<file>\`, \`/repo search <owner/repo> <query>\`. Full GitHub URLs are also accepted.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────

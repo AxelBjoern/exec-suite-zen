@@ -762,6 +762,87 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       })();
     }
 
+    // /repo <ls|cat|search|overview> <owner/repo>[/path] [query] — read public/private repos via GitHub.
+    const repoSlash = data.content.match(/^\/repo\b[\s:@-]*([\s\S]*)$/i);
+    if (repoSlash && data.attachmentIds.length === 0) {
+      const rest = repoSlash[1].trim();
+      if (!rest) throw new Error("Usage: /repo ls <owner/repo>[/path]  |  /repo cat <owner/repo>/<file>  |  /repo search <owner/repo> <query>  |  /repo <owner/repo> (overview)");
+
+      const convId = await ensureCeoConversation({
+        conversationId: data.conversationId,
+        title: `Repo: ${rest.slice(0, 60)}`,
+      });
+      await insertCeoChatMessage({ role: "user", content: data.content, conversationId: convId, title: rest, select: "id" });
+
+      let assistantMd: string;
+      try {
+        const tokens = rest.split(/\s+/);
+        const verbs = new Set(["ls", "list", "cat", "read", "search", "find", "overview", "show"]);
+        const hasVerb = verbs.has(tokens[0].toLowerCase());
+        const verb = hasVerb ? tokens[0].toLowerCase() : "overview";
+        const target = hasVerb ? tokens[1] ?? "" : tokens[0];
+        const extra = (hasVerb ? tokens.slice(2) : tokens.slice(1)).join(" ").trim();
+        if (!target) throw new Error("Missing repo. Use owner/repo or a GitHub URL.");
+
+        const { repo, path } = parseRepoTarget(target);
+
+        let contextBlock = "";
+        let userInstruction = "";
+
+        if (verb === "ls" || verb === "list") {
+          const r = await listRepoDir(path, repo);
+          const lines = r.entries.map((e) => `- ${e.type === "dir" ? "📁" : "📄"} \`${e.path}\`${e.size ? ` (${e.size}b)` : ""}`).join("\n");
+          contextBlock = `Listing \`${r.repo}/${r.path || ""}\`:\n\n${lines || "_(empty)_"}`;
+          userInstruction = `Summarize what this directory contains and what the repo likely does at a glance.`;
+        } else if (verb === "cat" || verb === "read") {
+          if (!path) throw new Error("/repo cat needs a file path.");
+          const f = await readRepoFile(path, repo);
+          contextBlock = `File \`${f.repo}/${f.path}\` (${f.size} bytes${f.truncated ? ", truncated" : ""}):\n\n\`\`\`\n${f.content}\n\`\`\``;
+          userInstruction = `Explain what this file does. Call out key entry points, risky parts, and suggested improvements (CEO-grade, terse).`;
+        } else if (verb === "search" || verb === "find") {
+          const q = extra || path;
+          if (!q) throw new Error("/repo search needs a query.");
+          const r = await searchRepoCode(q, repo);
+          const lines = r.matches.map((m) => `- \`${m.path}\`${m.snippet ? ` — ${m.snippet.replace(/\s+/g, " ").slice(0, 160)}` : ""}`).join("\n");
+          contextBlock = `Code search in \`${r.repo}\` for \`${r.query}\`:\n\n${lines || "_(no matches)_"}`;
+          userInstruction = `Synthesize what these matches tell us. Recommend which files to open next.`;
+        } else {
+          // overview: list root + try README
+          const r = await listRepoDir(path || "", repo);
+          const lines = r.entries.map((e) => `- ${e.type === "dir" ? "📁" : "📄"} \`${e.path}\``).join("\n");
+          let readme = "";
+          const readmeEntry = r.entries.find((e) => /^readme(\.|$)/i.test(e.name));
+          if (readmeEntry) {
+            try {
+              const f = await readRepoFile(readmeEntry.path, repo);
+              readme = `\n\n### README (\`${f.path}\`)\n\n${f.content.slice(0, 4000)}`;
+            } catch { /* ignore */ }
+          }
+          contextBlock = `Repository \`${r.repo}\` — root listing:\n\n${lines}${readme}`;
+          userInstruction = `Give a sharp executive overview: what this repo is, who it's for, its architecture, and 3 immediate observations or risks.`;
+        }
+
+        const json = await chatCompletion({
+          model: resolveTextChatModel(data.model),
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: CEO_SYSTEM },
+            { role: "user", content: `${contextBlock}\n\n---\n\n${userInstruction}` },
+          ],
+        });
+        const synth = json?.choices?.[0]?.message?.content?.trim() || "_(no synthesis)_";
+        assistantMd = `${synth}\n\n<details><summary>Raw repo data</summary>\n\n${contextBlock}\n\n</details>`;
+      } catch (e: any) {
+        assistantMd = `**/repo failed:** ${e?.message ?? "unknown error"}`;
+      }
+
+      const { data: saved, conversationId: finalId } = await insertCeoChatMessage({
+        role: "assistant", content: assistantMd, conversationId: convId, title: rest, select: "id, role, content, created_at",
+      });
+      await supabaseAdmin.from("ceo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", finalId!);
+      return { ...saved, conversation_id: finalId };
+    }
+
     let conversationId = await ensureCeoConversation({
       conversationId: data.conversationId,
       title: data.content || "New conversation",

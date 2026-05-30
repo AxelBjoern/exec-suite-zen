@@ -7,6 +7,7 @@ export const CHAT_MODEL_OPTIONS = [
   { id: "claude", label: "Claude Opus 4.7" },
   { id: "deepseek", label: "DeepSeek V4 Pro" },
   { id: "deepseek-flash", label: "DeepSeek V4 Flash" },
+  { id: "nemotron", label: "Nemotron 3 Nano Omni 30B" },
   { id: "kling", label: "Kling v3.0 Std (video)" },
 ] as const;
 

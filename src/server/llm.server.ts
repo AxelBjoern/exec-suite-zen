@@ -18,6 +18,7 @@ const MODEL_SLUGS = {
   claude: "anthropic/claude-opus-4.7",
   deepseek: "deepseek/deepseek-v4-pro",
   "deepseek-flash": "deepseek/deepseek-v4-flash",
+  nemotron: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   kling: "kwaivgi/kling-v3.0-std",
 } as const;
 
@@ -28,6 +29,7 @@ const MODEL_LABELS: Record<string, string> = {
   "anthropic/claude-opus-4.7": "Claude Opus 4.7",
   "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
   "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "Nemotron 3 Nano Omni 30B",
   "kwaivgi/kling-v3.0-std": "Kling v3.0 Std",
 };
 

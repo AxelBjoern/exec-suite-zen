@@ -22,6 +22,8 @@ const SYSTEM: CommandEntry[] = [
   { id: "manual",     category: "system", syntax: "/manual",     template: "/manual",     summary: "Open the VDNX instruction manual v3.1." },
   { id: "verify",     category: "system", syntax: "/verify",     template: "/verify",     summary: "Verify the integrity of the audit chain." },
   { id: "clear",      category: "system", syntax: "/clear",      template: "/clear",      summary: "Clear the scrollback." },
+  { id: "search",     category: "system", syntax: "/search <query>", template: "/search ", summary: "Live web search (Firecrawl) + synthesized answer with citations.", needsArgs: true, example: "/search latest AI infra funding rounds" },
+  { id: "fetch",      category: "system", syntax: "/fetch <url>",    template: "/fetch ",  summary: "Fetch and summarize any URL.", needsArgs: true, example: "/fetch https://stripe.com/atlas" },
   { id: "directive",  category: "system", syntax: "/directive <agent> <text>", template: "/directive ", summary: "Pin a standing directive to an agent.", needsArgs: true, example: "/directive cfo Always model base/best/worst." },
 ];
 

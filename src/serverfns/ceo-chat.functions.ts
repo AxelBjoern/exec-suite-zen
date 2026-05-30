@@ -810,7 +810,25 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
-    const resolvedModel = resolveChatModel(data.model);
+    // Auto-fetch URLs pasted into a normal message (skip @mention dispatch and slash commands).
+    const isMention = /^@(board|[a-z]+)\s+/i.test(data.content);
+    if (!isMention) {
+      const urls = extractUrls(data.content).slice(0, 3);
+      if (urls.length) {
+        const pages = await Promise.all(
+          urls.map(async (u) => {
+            try {
+              const p = await webFetch(u);
+              return `### ${p.title ?? p.url}\nURL: ${p.url}\n\n${p.markdown.slice(0, 6000)}`;
+            } catch (e: any) {
+              return `### ${u}\n[fetch failed: ${e?.message ?? "unknown"}]`;
+            }
+          }),
+        );
+        attachmentBlock += `\n\n## Fetched URLs\n\n${pages.join("\n\n---\n\n")}`;
+      }
+    }
+
     if (imageParts.length && resolvedModel === "nousresearch/hermes-4-405b") {
       throw new Error(
         "Hermes 4 405B can't read images. Pick Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro to analyze attached images.",

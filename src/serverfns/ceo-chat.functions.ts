@@ -829,6 +829,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    const resolvedModel = resolveChatModel(data.model);
     if (imageParts.length && resolvedModel === "nousresearch/hermes-4-405b") {
       throw new Error(
         "Hermes 4 405B can't read images. Pick Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro to analyze attached images.",

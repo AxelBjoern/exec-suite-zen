@@ -675,7 +675,92 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       })) as any;
     }
 
-    // Ensure a conversation exists; create one if needed (auto-title from first message)
+    // /search <query> — live web search via Firecrawl, then synthesized reply with citations.
+    const searchSlash = data.content.match(/^\/search\b[\s:@-]*([\s\S]*)$/i);
+    if (searchSlash && data.attachmentIds.length === 0) {
+      const q = searchSlash[1].trim();
+      if (!q) throw new Error("Usage: /search <query>");
+      const convId = await ensureCeoConversation({
+        conversationId: data.conversationId,
+        title: `Search: ${q}`,
+      });
+      await insertCeoChatMessage({ role: "user", content: data.content, conversationId: convId, title: q, select: "id" });
+      let assistantMd: string;
+      try {
+        const results = await webSearch(q, 6);
+        if (!results.length) {
+          assistantMd = `**No web results** for \`${q}\`.`;
+        } else {
+          const block = results
+            .map((r, i) => `[${i + 1}] **${r.title ?? r.url}** — ${r.url}\n${r.description ?? ""}`)
+            .join("\n\n");
+          const json = await chatCompletion({
+            model: resolveTextChatModel(data.model),
+            temperature: 0.4,
+            messages: [
+              { role: "system", content: CEO_SYSTEM },
+              {
+                role: "user",
+                content:
+                  `Web search query: "${q}"\n\nResults:\n\n${block}\n\n` +
+                  `Synthesize a tight, founder-grade answer grounded ONLY in these results. ` +
+                  `Cite sources inline as [domain](url). End with a "Sources" list.`,
+              },
+            ],
+          });
+          assistantMd = json?.choices?.[0]?.message?.content?.trim() || `_(no synthesis)_\n\n${block}`;
+        }
+      } catch (e: any) {
+        assistantMd = `**Web search failed:** ${e?.message ?? "unknown error"}`;
+      }
+      return await (async () => {
+        const { data: saved, conversationId: finalId } = await insertCeoChatMessage({
+          role: "assistant", content: assistantMd, conversationId: convId, title: q, select: "id, role, content, created_at",
+        });
+        await supabaseAdmin.from("ceo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", finalId!);
+        return { ...saved, conversation_id: finalId };
+      })();
+    }
+
+    // /fetch <url> — scrape a page via Firecrawl, then summarize.
+    const fetchSlash = data.content.match(/^\/fetch\b[\s:@-]*([\s\S]*)$/i);
+    if (fetchSlash && data.attachmentIds.length === 0) {
+      const u = fetchSlash[1].trim();
+      if (!u) throw new Error("Usage: /fetch <url>");
+      const convId = await ensureCeoConversation({
+        conversationId: data.conversationId,
+        title: `Fetch: ${u}`,
+      });
+      await insertCeoChatMessage({ role: "user", content: data.content, conversationId: convId, title: u, select: "id" });
+      let assistantMd: string;
+      try {
+        const page = await webFetch(u);
+        const json = await chatCompletion({
+          model: resolveTextChatModel(data.model),
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: CEO_SYSTEM },
+            {
+              role: "user",
+              content:
+                `Fetched page: ${page.title ?? page.url}\nURL: ${page.url}\n\n--- PAGE CONTENT (markdown) ---\n${page.markdown}\n--- END ---\n\n` +
+                `Summarize the key points, then give a sharp CEO-grade take. Cite as [${new URL(page.url).hostname}](${page.url}).`,
+            },
+          ],
+        });
+        assistantMd = json?.choices?.[0]?.message?.content?.trim() || `_(no summary)_`;
+      } catch (e: any) {
+        assistantMd = `**Fetch failed:** ${e?.message ?? "unknown error"}`;
+      }
+      return await (async () => {
+        const { data: saved, conversationId: finalId } = await insertCeoChatMessage({
+          role: "assistant", content: assistantMd, conversationId: convId, title: u, select: "id, role, content, created_at",
+        });
+        await supabaseAdmin.from("ceo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", finalId!);
+        return { ...saved, conversation_id: finalId };
+      })();
+    }
+
     let conversationId = await ensureCeoConversation({
       conversationId: data.conversationId,
       title: data.content || "New conversation",

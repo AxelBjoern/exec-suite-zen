@@ -289,6 +289,16 @@ async function insertCeoChatMessage<TSelect extends string>(opts: {
   }
 
   if (error) throw error;
+
+  // Auto-title the conversation after the first assistant reply lands.
+  if (opts.role === "assistant" && conversationId) {
+    await maybeAutoTitleConversation({
+      conversationId,
+      userText: opts.title ?? "",
+      assistantText: opts.content,
+    });
+  }
+
   return { data, conversationId };
 }
 

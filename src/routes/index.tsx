@@ -731,7 +731,7 @@ function ChatPage() {
 
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
-          <div key={pendingKey} className="max-w-3xl mx-auto py-8 space-y-8">
+          <div key={pendingKey} className="max-w-[46rem] mx-auto py-8 space-y-10">
             {messages.length === 0 && !pendingUser && (
               <div className="text-center py-20 text-muted-foreground">
                 <div className="text-sm uppercase tracking-[0.2em] mb-3">

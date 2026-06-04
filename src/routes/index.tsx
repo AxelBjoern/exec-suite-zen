@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   getCeoChat,
   sendCeoMessage,
@@ -311,10 +312,19 @@ function ChatPage() {
 
   const newConvoMutation = useMutation({
     mutationFn: async () => createConvo({ data: { title: "New conversation" } }),
+    onMutate: () => {
+      // Open a clean slate immediately — input, attachments, pending state.
+      setInput("");
+      setAttachments([]);
+    },
     onSuccess: (convo: any) => {
       setActiveId(convo.id);
+      setPendingFor(convo.id, null);
       qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        scrollRef.current?.scrollTo({ top: 0 });
+      });
     },
   });
 
@@ -730,7 +740,7 @@ function ChatPage() {
 
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-0">
-          <div key={pendingKey} className="max-w-3xl mx-auto py-8 space-y-8">
+          <div key={pendingKey} className="max-w-[46rem] mx-auto py-8 space-y-10">
             {messages.length === 0 && !pendingUser && (
               <div className="text-center py-20 text-muted-foreground">
                 <div className="text-sm uppercase tracking-[0.2em] mb-3">
@@ -990,7 +1000,7 @@ function MessageRow({
   if (role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] space-y-2">
+        <div className="max-w-[80%] space-y-2">
           {renderMedia()}
           {fileAtts.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1.5">
@@ -1009,7 +1019,7 @@ function MessageRow({
             </div>
           )}
           {content && (
-            <div className="rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm whitespace-pre-wrap">
+            <div className="rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2.5 text-[15px] leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">
               {content}
             </div>
           )}
@@ -1048,8 +1058,10 @@ function MessageRow({
       </div>
       <div className="flex-1 min-w-0 space-y-2">
         {renderMedia()}
-        <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:break-words prose-strong:text-foreground">
-          <ReactMarkdown>{content}</ReactMarkdown>
+        <div className="prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] text-[15px] leading-7 prose-p:my-3 prose-li:my-1 prose-ul:my-3 prose-ol:my-3 prose-headings:mt-5 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:rounded-lg prose-pre:p-3 prose-pre:text-[13px] prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-strong:text-foreground prose-a:text-primary prose-a:underline-offset-2 prose-table:my-4 prose-table:w-full prose-table:text-sm prose-table:border-collapse prose-th:bg-muted/60 prose-th:font-semibold prose-th:text-left prose-th:px-3 prose-th:py-2 prose-th:border prose-th:border-border/60 prose-td:px-3 prose-td:py-2 prose-td:align-top prose-td:border prose-td:border-border/50 prose-thead:border-b prose-thead:border-border">
+          <div className="overflow-x-auto">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
         </div>
         {artifact && onOpenArtifact && (
           <ArtifactPill artifact={artifact} onOpen={() => onOpenArtifact(artifact)} />

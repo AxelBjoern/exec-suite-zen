@@ -1049,8 +1049,10 @@ function MessageRow({
       </div>
       <div className="flex-1 min-w-0 space-y-2">
         {renderMedia()}
-        <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-2 prose-headings:mt-4 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:break-words prose-strong:text-foreground">
-          <ReactMarkdown>{content}</ReactMarkdown>
+        <div className="prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] text-[15px] leading-7 prose-p:my-3 prose-li:my-1 prose-ul:my-3 prose-ol:my-3 prose-headings:mt-5 prose-headings:mb-2 prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:rounded-lg prose-pre:p-3 prose-pre:text-[13px] prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-strong:text-foreground prose-a:text-primary prose-a:underline-offset-2 prose-table:my-4 prose-table:w-full prose-table:text-sm prose-table:border-collapse prose-th:bg-muted/60 prose-th:font-semibold prose-th:text-left prose-th:px-3 prose-th:py-2 prose-th:border prose-th:border-border/60 prose-td:px-3 prose-td:py-2 prose-td:align-top prose-td:border prose-td:border-border/50 prose-thead:border-b prose-thead:border-border">
+          <div className="overflow-x-auto">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
         </div>
         {artifact && onOpenArtifact && (
           <ArtifactPill artifact={artifact} onOpen={() => onOpenArtifact(artifact)} />

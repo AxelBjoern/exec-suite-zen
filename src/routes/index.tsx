@@ -312,10 +312,19 @@ function ChatPage() {
 
   const newConvoMutation = useMutation({
     mutationFn: async () => createConvo({ data: { title: "New conversation" } }),
+    onMutate: () => {
+      // Open a clean slate immediately — input, attachments, pending state.
+      setInput("");
+      setAttachments([]);
+    },
     onSuccess: (convo: any) => {
       setActiveId(convo.id);
+      setPendingFor(convo.id, null);
       qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        scrollRef.current?.scrollTo({ top: 0 });
+      });
     },
   });
 

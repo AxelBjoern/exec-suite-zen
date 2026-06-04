@@ -991,7 +991,7 @@ function MessageRow({
   if (role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] space-y-2">
+        <div className="max-w-[80%] space-y-2">
           {renderMedia()}
           {fileAtts.length > 0 && (
             <div className="flex flex-wrap justify-end gap-1.5">

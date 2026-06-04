@@ -144,6 +144,79 @@ function conversationTitleFromText(value: string | null | undefined) {
   );
 }
 
+function sanitizeAutoTitle(raw: string): string {
+  const cleaned = String(raw ?? "")
+    .replace(/^```[\s\S]*?\n|```$/g, "")
+    .replace(/[`*_#>]/g, "")
+    .replace(/^["'“”‘’\s]+|["'“”‘’\s.!?,;:]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  const words = cleaned.split(" ").slice(0, 4).join(" ");
+  return words.slice(0, 60);
+}
+
+/**
+ * Generate a 2–4 word title for a conversation using a cheap allowed model.
+ * Fire-and-forget; failures are swallowed so naming never breaks the chat.
+ */
+async function maybeAutoTitleConversation(opts: {
+  conversationId: string;
+  userText: string;
+  assistantText: string;
+}) {
+  try {
+    const { data: convo } = await supabaseAdmin
+      .from("ceo_conversations")
+      .select("title")
+      .eq("id", opts.conversationId)
+      .maybeSingle();
+    if (!convo) return;
+
+    const currentTitle = String(convo.title ?? "").trim();
+    const derivedFromFirst = conversationTitleFromText(opts.userText);
+    const isPlaceholder =
+      currentTitle === "" ||
+      currentTitle === "New conversation" ||
+      currentTitle === derivedFromFirst;
+    if (!isPlaceholder) return;
+
+    // Only title once we have at least the first user + assistant pair.
+    const { count } = await supabaseAdmin
+      .from("ceo_chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", opts.conversationId);
+    if ((count ?? 0) < 2) return;
+
+    const json = await chatCompletion({
+      model: "deepseek/deepseek-v4-flash",
+      temperature: 0.2,
+      max_tokens: 30,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Return ONLY a 2–4 word title in Title Case summarizing the conversation. No quotes, no punctuation at the end, no prefix like 'Title:'. Just the words.",
+        },
+        {
+          role: "user",
+          content: `User: ${opts.userText.slice(0, 400)}\n\nAssistant: ${opts.assistantText.slice(0, 400)}\n\nTitle:`,
+        },
+      ],
+    });
+    const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    const title = sanitizeAutoTitle(raw);
+    if (!title) return;
+
+    await supabaseAdmin
+      .from("ceo_conversations")
+      .update({ title, updated_at: new Date().toISOString() })
+      .eq("id", opts.conversationId);
+  } catch {
+    // swallow — auto-title is best-effort
+  }
+}
+
 async function ensureCeoConversation(opts: {
   conversationId?: string | null;
   title?: string | null;

@@ -136,8 +136,43 @@ async function performSend(
   }
 }
 
+// ── Owner role bootstrap ─────────────────────────────────────────────────
+export const ensureOwnerRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    const owner = process.env.OWNER_EMAIL?.toLowerCase();
+    if (!owner) return { isOwner: false };
+    const email = (claims?.email ?? "").toLowerCase();
+    if (email !== owner) {
+      const { data } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .eq("user_id", userId)
+        .eq("role", "owner")
+        .maybeSingle();
+      return { isOwner: !!data };
+    }
+    await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: userId, role: "owner" }, { onConflict: "user_id,role" });
+    return { isOwner: true };
+  });
 
-// ── Request flow ─────────────────────────────────────────────────────────
+// ── Settings lookup helper ───────────────────────────────────────────────
+async function getAutoSend(userId: string) {
+  const { data } = await supabaseAdmin
+    .from("user_settings")
+    .select("auto_send_email, auto_send_linkedin")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    email: data?.auto_send_email ?? false,
+    linkedin: data?.auto_send_linkedin ?? false,
+  };
+}
+
+
 const EmailReq = z.object({
   to: z.string().email().max(320),
   subject: z.string().min(1).max(255),

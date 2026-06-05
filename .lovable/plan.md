@@ -1,38 +1,53 @@
 ## Goal
 
-Make VDNX Terminal installable on your phone's home screen as a PWA — manifest only, no offline/service worker.
+Make the app comfortable to use on a phone (the PWA target) and make moving between the **Chat (CEO)** view and the **Terminal** view fast on any screen size.
 
-## Changes
+Today:
+- `/` (Chat) is already mostly mobile-ready (drawer sidebar, responsive header, drag/drop). Small polish needed.
+- `/terminal` is **desktop-only**: 224px fixed roster sidebar, horizontal tab bar, a 176px scrollback panel, plus a ticker — all stacked, so on a 390px phone the active panel is squeezed to almost nothing and the roster blocks half the screen.
+- Navigating between the two views requires hunting: only an arrow icon in the chat sidebar header and a small "Chat with CEO →" link inside the Roster panel.
 
-**1. Create `public/manifest.webmanifest`**
-- `name`: "VDNX Terminal"
-- `short_name`: "VDNX"
-- `description`: matches existing meta
-- `start_url`: "/"
-- `scope`: "/"
-- `display`: "standalone"
-- `background_color` + `theme_color`: derived from existing app palette (dark navy `#1c2438` background, gold `#c9a96a` theme accent — taken from styles.css oklch tokens)
-- `orientation`: "portrait"
-- `icons`: 192x192 and 512x512 (regular + maskable)
+## Plan
 
-**2. Generate app icons (in `public/`)**
-- `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png` (180x180)
-- Style: VDNX monogram on dark navy background with gold accent, matching terminal aesthetic
+### 1. Mobile-optimize `/terminal` (`src/components/Terminal.tsx`)
 
-**3. Update `src/routes/__root.tsx` head**
-Add to `links` and `meta`:
-- `<link rel="manifest" href="/manifest.webmanifest">`
-- `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`
-- `<meta name="theme-color" content="#1c2438">`
-- `<meta name="apple-mobile-web-app-capable" content="yes">`
-- `<meta name="apple-mobile-web-app-title" content="VDNX">`
-- `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`
+- **Roster aside** → hidden on mobile (`hidden md:flex`); add a `Menu` button in the header that opens it as a left drawer with a backdrop, same pattern as `/` (translate-x transition, click-outside to close, auto-close on agent select).
+- **Header** → tighten padding on mobile (`px-3 py-2 md:px-5 md:py-3`), drop the "Authority · Auditability · Atomicity" tagline below `md`, shrink clock to icon-only / wrap below title.
+- **Tabs row** → already `overflow-x-auto`; add `scrollbar-hide`, snap-x, and make each tab `whitespace-nowrap text-[11px] md:text-[12px]` with a thicker tap target (`py-2.5`).
+- **Scrollback panel** → reduce from fixed `h-44` to `h-28 md:h-44`, and add a collapse toggle button (chevron in its top-right) that stores state in `useState`; collapsed = `h-8` showing just the last line.
+- **Command line** → keep visible, but stack `⌘K` button hidden on mobile (palette can still be opened via long-press of the input or a dedicated `+` button), enlarge tap target on the input (`py-3 text-[14px]`), `inputMode="text"` and `autoCapitalize="off"`.
+- **Audit ticker** → hide on mobile (`hidden md:block`) to free vertical space; user can open `/audit` panel for the full log.
+- **ThreadPanel right aside** (Mandate/Tone/Consult/Directives) → on mobile, collapse into a single expandable `<details>` block above the messages instead of a 288px side rail; on `md+` keep current layout.
+- **AgentsPanel grid** → already `grid-cols-1 md:grid-cols-2`; reduce padding from `p-8` → `p-4 md:p-8` and font sizes one step on mobile.
+- **AuditPanel table** → on mobile, render rows as stacked cards (the current 4-column grid overflows).
+- Apply the same `p-4 md:p-8` padding pass to Tasks/Approvals/Leads/Manual panels.
 
-## Not included
-- No service worker, no `vite-plugin-pwa`, no offline caching (per your choice). App requires internet to load, same as today.
+### 2. Improve chat ↔ terminal navigation
 
-## How to install after deploy
-- **iOS Safari**: Share → Add to Home Screen
-- **Android Chrome**: menu → Install app / Add to Home Screen
+- **Chat header (`/`)** → add a visible "Terminal" pill button next to the model selector (icon + label on `md+`, icon-only on mobile) that links to `/terminal`. Today the only link is the back-arrow in the sidebar header, which isn't discoverable.
+- **Terminal header (`/terminal`)** → add a matching "Chat" pill button next to the clock that links to `/`. Today the only entry point is buried inside the Roster panel.
+- Both buttons use `Link` from `@tanstack/react-router`, `aria-label`, and the existing button styles — no new components.
 
-Install prompts only appear on the published `.lovable.app` URL (or your custom domain), not in the editor preview.
+### 3. Chat sidebar polish (`src/routes/index.tsx`)
+
+- On mobile, surface the "New conversation" button as a sticky bottom-left FAB inside the chat panel (visible when sidebar is closed) so starting a new chat doesn't require opening the drawer first.
+- Make conversation rows' rename/delete buttons always visible on touch devices (currently `md:opacity-0 md:group-hover:opacity-100` — fine, but add `opacity-100 md:opacity-0` so they appear by default on mobile).
+- Auto-close sidebar after `newConvoMutation` success on mobile.
+
+### 4. Viewport / safe area
+
+- In `src/routes/__root.tsx` head, ensure the viewport meta includes `viewport-fit=cover` so the PWA respects iPhone notch insets.
+- Add `pb-[env(safe-area-inset-bottom)]` to the chat input bar and the terminal command line so they don't sit under the iOS home indicator.
+
+### Out of scope
+
+- No changes to server functions, agent logic, AI models, or data shape.
+- No redesign of message bubbles, artifacts, or the command palette behavior — only sizing and discoverability.
+- No new routes.
+
+### Files touched
+
+- `src/components/Terminal.tsx` (largest change — mobile shell + drawer + panel polish)
+- `src/routes/index.tsx` (Terminal link in header, FAB, sidebar polish)
+- `src/routes/__root.tsx` (viewport meta `viewport-fit=cover`)
+- Possibly `src/styles.css` for a small `.scrollbar-hide` utility if not present

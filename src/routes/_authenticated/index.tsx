@@ -1,5 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ArrowRight } from "lucide-react";
+import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, ArrowRight } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
+import { ensureOwnerRole } from "@/lib/outbound.functions";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({

@@ -670,6 +670,13 @@ function OutboundPage() {
                         )}
                       </div>
                     </div>
+                    <textarea
+                      className={inputCls}
+                      rows={2}
+                      placeholder="Describe the image you want (optional — e.g. dark navy background with abstract geometric shapes and gold accents)"
+                      value={editImgDescription}
+                      onChange={(e) => setEditImgDescription(e.target.value)}
+                    />
                     <input
                       ref={editFileInputRef}
                       type="file"

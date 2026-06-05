@@ -305,6 +305,27 @@ export const requestReminder = createServerFn({ method: "POST" })
     });
   });
 
+// Internal helper for the chat handler. Files an outbound row (pending or
+// auto-sent) on behalf of the authenticated user. Returns { id, status }.
+export async function fileOutboundFromChat(opts: {
+  userId: string;
+  userEmail?: string;
+  kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin";
+  payload: Record<string, any>;
+}) {
+  if (opts.kind === "outbound_reminder") {
+    const owner = process.env.OWNER_EMAIL;
+    if (!owner) throw new Error("OWNER_EMAIL not configured");
+    const p = {
+      to: owner,
+      subject: `[Reminder] ${opts.payload.subject ?? "Reminder"}`,
+      body: opts.payload.body ?? "",
+    };
+    return fileRequest(opts.userId, opts.userEmail, "outbound_reminder", p);
+  }
+  return fileRequest(opts.userId, opts.userEmail, opts.kind, opts.payload);
+}
+
 export const requestLinkedIn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => LinkedInReq.parse(i))

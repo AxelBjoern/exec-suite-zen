@@ -287,8 +287,12 @@ async function performSend(
       await sendOwnerDigestEmail(payload.to, payload.subject, payload.body);
     }
   } else if (kind === "outbound_linkedin") {
-    // LinkedIn currently requires per-user OAuth (no workspace fallback).
-    await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
+    const conn = await getUserConnection(userId, "linkedin");
+    if (conn) {
+      await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
+    } else {
+      await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
+    }
   }
 }
 

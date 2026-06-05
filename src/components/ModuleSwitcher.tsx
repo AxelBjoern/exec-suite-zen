@@ -5,10 +5,10 @@ import { LogOut, LayoutGrid, MessageSquare, TerminalSquare, LineChart, Cpu } fro
 
 const MODS = [
   { to: "/", label: "Hub", icon: LayoutGrid },
-  { to: "/_authenticated/chat", label: "Chat", icon: MessageSquare },
-  { to: "/_authenticated/terminal", label: "Terminal", icon: TerminalSquare },
-  { to: "/_authenticated/budget", label: "Budget", icon: LineChart },
-  { to: "/_authenticated/forge", label: "Forge", icon: Cpu },
+  { to: "/chat", label: "Chat", icon: MessageSquare },
+  { to: "/terminal", label: "Terminal", icon: TerminalSquare },
+  { to: "/budget", label: "Budget", icon: LineChart },
+  { to: "/forge", label: "Forge", icon: Cpu },
 ] as const;
 
 export function ModuleSwitcher() {

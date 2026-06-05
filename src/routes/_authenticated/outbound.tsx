@@ -361,14 +361,22 @@ function OutboundPage() {
           <ul className="divide-y divide-border">
             {data?.rows?.map((r: any) => {
               const p = (r.payload ?? {}) as Record<string, string>;
+              const clickable = r.status === "pending";
               return (
-                <li key={r.id} className="flex items-start justify-between gap-3 py-3">
+                <li
+                  key={r.id}
+                  className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
+                  onClick={clickable ? () => openEdit(r) : undefined}
+                >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-xs">
                       <span className="font-medium uppercase tracking-wider text-muted-foreground">
                         {r.kind.replace("outbound_", "")}
                       </span>
                       <StatusBadge status={r.status} />
+                      {clickable && (
+                        <span className="text-[10px] text-primary">Click to edit</span>
+                      )}
                     </div>
                     <p className="mt-1 truncate text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
                     {r.notes && r.status !== "sent" && (
@@ -384,7 +392,7 @@ function OutboundPage() {
                         type="button"
                         className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
                         disabled={rowBusy === r.id}
-                        onClick={() => sendNow(r.id)}
+                        onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
                       >
                         {rowBusy === r.id ? "Sending…" : "Send now"}
                       </button>
@@ -396,6 +404,96 @@ function OutboundPage() {
           </ul>
         </section>
       </div>
+
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={closeEdit}
+        >
+          <div
+            className="w-full max-w-lg rounded-lg border border-border bg-panel p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-serif text-lg font-semibold">
+                Edit {editing.kind.replace("outbound_", "")}
+              </h3>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground"
+                onClick={closeEdit}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid gap-2">
+              {editing.kind === "outbound_linkedin" ? (
+                <textarea
+                  className={inputCls}
+                  rows={10}
+                  value={editDraft.text ?? ""}
+                  onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })}
+                />
+              ) : (
+                <>
+                  {editing.kind === "outbound_email" && (
+                    <input
+                      className={inputCls}
+                      placeholder="to@example.com"
+                      value={editDraft.to ?? ""}
+                      onChange={(e) => setEditDraft({ ...editDraft, to: e.target.value })}
+                    />
+                  )}
+                  <input
+                    className={inputCls}
+                    placeholder="Subject"
+                    value={editDraft.subject ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, subject: e.target.value })}
+                  />
+                  <textarea
+                    className={inputCls}
+                    rows={8}
+                    placeholder="Body"
+                    value={editDraft.body ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, body: e.target.value })}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                onClick={closeEdit}
+                disabled={!!editBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                onClick={() => saveEdit({ send: false })}
+                disabled={!!editBusy}
+              >
+                {editBusy === "save" ? "Saving…" : "Save draft"}
+              </button>
+              {owner.data?.isOwner && (
+                <button
+                  type="button"
+                  className={btnCls}
+                  onClick={() => saveEdit({ send: true })}
+                  disabled={!!editBusy}
+                >
+                  {editBusy === "send" ? "Sending…" : "Save & send"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
+}
 }

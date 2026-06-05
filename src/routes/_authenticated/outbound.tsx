@@ -343,6 +343,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     try {
       const t = await tagline({ data: { text: editDraft.text } });
+      const visual = editImgDescription.trim() || t.visual_prompt;
       // Run 3 generations in parallel; collect the final frames
       const results = await Promise.allSettled(
         [0, 1, 2].map(
@@ -350,7 +351,7 @@ function OutboundPage() {
             new Promise<string>((resolve, reject) => {
               streamImage(
                 "/api/generate-linkedin-image",
-                { tagline: t.tagline, visualPrompt: `${t.visual_prompt} (variant ${i + 1})` },
+                { tagline: t.tagline, visualPrompt: `${visual} (variant ${i + 1})` },
                 (_dataUrl, b64, isFinal) => {
                   if (isFinal) resolve(b64);
                 },

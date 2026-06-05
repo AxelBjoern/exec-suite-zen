@@ -15,6 +15,7 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
+import { filePlanFromChat } from "@/lib/outbound.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import {
   ArtifactDrawer,

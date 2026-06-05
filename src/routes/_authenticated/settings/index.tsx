@@ -27,19 +27,29 @@ function SettingsPage() {
 
   const [email, setEmail] = useState(false);
   const [li, setLi] = useState(false);
+  const [designRules, setDesignRules] = useState("");
+  const [defaultApplied, setDefaultApplied] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (settings.data) {
       setEmail(settings.data.auto_send_email);
       setLi(settings.data.auto_send_linkedin);
+      setDesignRules(settings.data.design_rules ?? "");
+      setDefaultApplied(!!settings.data.design_rules_default_applied);
     }
   }, [settings.data]);
 
   async function save() {
     setSaving(true);
     try {
-      await update({ data: { auto_send_email: email, auto_send_linkedin: li } });
+      await update({
+        data: {
+          auto_send_email: email,
+          auto_send_linkedin: li,
+          design_rules: designRules.trim() || null,
+        },
+      });
       toast.success("Saved");
       qc.invalidateQueries({ queryKey: ["my-settings"] });
     } catch (e) {

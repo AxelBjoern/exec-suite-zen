@@ -514,7 +514,7 @@ export const sendOwnOutbound = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !row) throw new Error("Request not found");
     if (row.requester_id !== userId) throw new Error("Forbidden");
-    if (row.status !== "pending") throw new Error(`Already ${row.status}`);
+    if (row.status !== "pending" && row.status !== "failed") throw new Error(`Already ${row.status}`);
     try {
       await performSend(userId, row.kind as any, (row.payload ?? {}) as any);
       await supabaseAdmin

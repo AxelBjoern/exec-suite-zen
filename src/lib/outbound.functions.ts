@@ -384,6 +384,39 @@ export const listPendingApprovals = createServerFn({ method: "GET" })
 
 const DecisionInput = z.object({ id: z.string().uuid(), notes: z.string().max(2000).optional() });
 
+// Allow a requester to edit their own pending request's payload
+const UpdateDraftInput = z.object({
+  id: z.string().uuid(),
+  payload: z.record(z.string(), z.any()),
+});
+
+export const updateOutboundDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => UpdateDraftInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const { data: row, error } = await supabaseAdmin
+      .from("approvals")
+      .select("id, status, requester_id, payload")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    if (row.status !== "pending") throw new Error(`Cannot edit a ${row.status} request`);
+    // Preserve imageBase64 (the list strips it) unless explicitly overwritten
+    const prev = (row.payload ?? {}) as Record<string, any>;
+    const merged: Record<string, any> = { ...prev, ...data.payload };
+    if (data.payload.imageBase64 === undefined && prev.imageBase64) {
+      merged.imageBase64 = prev.imageBase64;
+    }
+    const { error: upErr } = await supabaseAdmin
+      .from("approvals")
+      .update({ payload: merged })
+      .eq("id", data.id);
+    if (upErr) throw new Error(upErr.message);
+    return { ok: true };
+  });
+
 export const approveOutbound = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => DecisionInput.parse(i))

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 
@@ -31,16 +32,27 @@ export const Route = createFileRoute("/api/public/cron/daily-reminder")({
         }
 
         const today = new Date().toISOString().slice(0, 10);
-        const raw = base64url(
-          [
-            `To: ${owner}`,
-            `Subject: [VDNX] Daily digest — ${today}`,
-            'Content-Type: text/plain; charset="UTF-8"',
-            "MIME-Version: 1.0",
-            "",
-            `Daily reminder from your VDNX board.\n\nDate: ${today}\n`,
-          ].join("\r\n"),
-        );
+
+        const { count: pendingCount } = await supabaseAdmin
+          .from("approvals")
+          .select("id", { count: "exact", head: true })
+          .in("kind", ["outbound_email", "outbound_linkedin", "outbound_reminder"])
+          .eq("status", "pending");
+
+        const lines = [
+          `To: ${owner}`,
+          `Subject: [VDNX] Daily digest — ${today}`,
+          'Content-Type: text/plain; charset="UTF-8"',
+          "MIME-Version: 1.0",
+          "",
+          `Daily digest from your VDNX board.`,
+          ``,
+          `Date: ${today}`,
+          `Pending outbound approvals: ${pendingCount ?? 0}`,
+          ``,
+          `Review queue: /approvals`,
+        ];
+        const raw = base64url(lines.join("\r\n"));
 
         const res = await fetch(`${GMAIL_GATEWAY}/users/me/messages/send`, {
           method: "POST",

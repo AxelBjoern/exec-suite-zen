@@ -97,6 +97,7 @@ export type Database = {
           kind: string
           notes: string | null
           payload: Json | null
+          requester_id: string | null
           reviewer: string | null
           status: string
           task_id: string | null
@@ -108,6 +109,7 @@ export type Database = {
           kind?: string
           notes?: string | null
           payload?: Json | null
+          requester_id?: string | null
           reviewer?: string | null
           status?: string
           task_id?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           kind?: string
           notes?: string | null
           payload?: Json | null
+          requester_id?: string | null
           reviewer?: string | null
           status?: string
           task_id?: string | null
@@ -956,9 +959,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_owner: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "owner"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1086,7 +1090,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "owner"],
     },
   },
 } as const

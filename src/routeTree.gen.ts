@@ -18,6 +18,7 @@ import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
+import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
@@ -67,6 +68,11 @@ const AuthenticatedBudgetRoute = AuthenticatedBudgetRouteImport.update({
   path: '/budget',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicCronMondayBoardRoute =
   ApiPublicCronMondayBoardRouteImport.update({
     id: '/api/public/cron/monday-board',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/approvals': typeof AuthenticatedApprovalsRoute
   '/budget': typeof AuthenticatedBudgetRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/approvals': typeof AuthenticatedApprovalsRoute
   '/budget': typeof AuthenticatedBudgetRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/budget': typeof AuthenticatedBudgetRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/approvals'
     | '/budget'
     | '/chat'
     | '/forge'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/reset-password'
+    | '/approvals'
     | '/budget'
     | '/chat'
     | '/forge'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/approvals'
     | '/_authenticated/budget'
     | '/_authenticated/chat'
     | '/_authenticated/forge'
@@ -256,6 +268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBudgetRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/approvals': {
+      id: '/_authenticated/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/cron/monday-board': {
       id: '/api/public/cron/monday-board'
       path: '/api/public/cron/monday-board'
@@ -288,6 +307,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
@@ -297,6 +317,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedBudgetRoute: AuthenticatedBudgetRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, ArrowRight } from "lucide-react";
+import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, Settings as SettingsIcon, ArrowRight } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { ensureOwnerRole } from "@/lib/outbound.functions";
@@ -49,6 +49,13 @@ const TILES = [
     desc: "Send email, self-reminders, and LinkedIn posts from the board.",
     icon: Send,
     badge: "Live",
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    desc: "Connect your Gmail & LinkedIn, set your guardrail preferences.",
+    icon: SettingsIcon,
+    badge: "Account",
   },
 ] as const;
 

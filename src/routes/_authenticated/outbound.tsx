@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2,
+  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers,
 } from "lucide-react";
 import {
   requestEmail,
@@ -103,8 +103,14 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | null>(null);
   const [aiInstr, setAiInstr] = useState("");
+  // edit-modal image state (LinkedIn only)
+  const [editImgB64, setEditImgB64] = useState<string | null>(null);
+  const [editImgUrl, setEditImgUrl] = useState<string | null>(null);
+  const [editImgFinal, setEditImgFinal] = useState(false);
+  const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -226,6 +232,10 @@ function OutboundPage() {
     if (r.status !== "pending") return;
     const p = (r.payload ?? {}) as Record<string, string>;
     setEditing(r);
+    setEditImgB64(null);
+    setEditImgUrl(null);
+    setEditImgFinal(false);
+    setCarouselVariants([]);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "" });
     } else {
@@ -238,13 +248,23 @@ function OutboundPage() {
     setEditDraft({});
     setEditBusy(null);
     setAiInstr("");
+    setEditImgB64(null);
+    setEditImgUrl(null);
+    setEditImgFinal(false);
+    setCarouselVariants([]);
   }
 
   async function saveEdit(opts: { send: boolean }) {
     if (!editing) return;
     setEditBusy(opts.send ? "send" : "save");
     try {
-      await updateDraft({ data: { id: editing.id, payload: editDraft } });
+      const payload: Record<string, any> = { ...editDraft };
+      // Strip the "[image]" sentinel so we don't overwrite the stored bytes
+      if (payload.imageBase64 === "[image]") delete payload.imageBase64;
+      if (editing.kind === "outbound_linkedin" && editImgFinal && editImgB64) {
+        payload.imageBase64 = editImgB64;
+      }
+      await updateDraft({ data: { id: editing.id, payload } });
       if (opts.send) {
         await selfSend({ data: { id: editing.id } });
         toast.success("Sent");
@@ -258,6 +278,105 @@ function OutboundPage() {
     } finally {
       setEditBusy(null);
     }
+  }
+
+  async function generateEditImage() {
+    if (!editing || !editDraft.text?.trim()) {
+      toast.error("Post text required.");
+      return;
+    }
+    setEditBusy("img");
+    setEditImgFinal(false);
+    setEditImgB64(null);
+    setEditImgUrl(null);
+    setCarouselVariants([]);
+    try {
+      const t = await tagline({ data: { text: editDraft.text } });
+      await streamImage(
+        "/api/generate-linkedin-image",
+        { tagline: t.tagline, visualPrompt: t.visual_prompt },
+        (dataUrl, b64, isFinal) => {
+          setEditImgUrl(dataUrl);
+          if (isFinal) {
+            setEditImgB64(b64);
+            setEditImgFinal(true);
+          }
+        },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Image generation failed");
+    } finally {
+      setEditBusy(null);
+    }
+  }
+
+  async function uploadEditImage(file: File) {
+    if (file.size > 6_000_000) {
+      toast.error("Image must be under 6 MB.");
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin);
+    setEditImgB64(b64);
+    setEditImgUrl(`data:${file.type || "image/png"};base64,${b64}`);
+    setEditImgFinal(true);
+    setCarouselVariants([]);
+    toast.success("Image attached");
+  }
+
+  async function generateCarousel() {
+    if (!editing || !editDraft.text?.trim()) {
+      toast.error("Post text required.");
+      return;
+    }
+    setEditBusy("carousel");
+    setCarouselVariants([]);
+    setEditImgFinal(false);
+    setEditImgB64(null);
+    setEditImgUrl(null);
+    try {
+      const t = await tagline({ data: { text: editDraft.text } });
+      // Run 3 generations in parallel; collect the final frames
+      const results = await Promise.allSettled(
+        [0, 1, 2].map(
+          (i) =>
+            new Promise<string>((resolve, reject) => {
+              streamImage(
+                "/api/generate-linkedin-image",
+                { tagline: t.tagline, visualPrompt: `${t.visual_prompt} (variant ${i + 1})` },
+                (_dataUrl, b64, isFinal) => {
+                  if (isFinal) resolve(b64);
+                },
+              ).catch(reject);
+            }),
+        ),
+      );
+      const variants = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      if (!variants.length) throw new Error("All variants failed");
+      setCarouselVariants(variants);
+      toast.success(`${variants.length} variants ready — pick one`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Carousel generation failed");
+    } finally {
+      setEditBusy(null);
+    }
+  }
+
+  function pickCarouselVariant(b64: string) {
+    setEditImgB64(b64);
+    setEditImgUrl(`data:image/png;base64,${b64}`);
+    setEditImgFinal(true);
+    setCarouselVariants([]);
+  }
+
+  function clearEditImage() {
+    setEditImgB64(null);
+    setEditImgUrl(null);
+    setEditImgFinal(false);
+    setCarouselVariants([]);
   }
 
   async function runAiEdit() {
@@ -486,12 +605,100 @@ function OutboundPage() {
 
             <div className="grid gap-2">
               {editing.kind === "outbound_linkedin" ? (
-                <textarea
-                  className={inputCls}
-                  rows={10}
-                  value={editDraft.text ?? ""}
-                  onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })}
-                />
+                <>
+                  <textarea
+                    className={inputCls}
+                    rows={10}
+                    value={editDraft.text ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })}
+                  />
+                  <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Image
+                        {editDraft.imageBase64 === "[image]" && !editImgUrl && (
+                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">attached</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={generateEditImage}
+                          disabled={!!editBusy}
+                        >
+                          {editBusy === "img" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Generate
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editFileInputRef.current?.click()}
+                          disabled={!!editBusy}
+                        >
+                          <Upload className="h-3 w-3" />
+                          Upload
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={generateCarousel}
+                          disabled={!!editBusy}
+                        >
+                          {editBusy === "carousel" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
+                          Carousel ×3
+                        </button>
+                        {(editImgUrl || editDraft.imageBase64 === "[image]") && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                            onClick={() => {
+                              clearEditImage();
+                              // Explicitly drop existing image bytes on save
+                              setEditDraft({ ...editDraft, imageBase64: "" });
+                            }}
+                            disabled={!!editBusy}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadEditImage(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    {editImgUrl && (
+                      <img
+                        src={editImgUrl}
+                        alt="LinkedIn share"
+                        className={`mx-auto h-auto w-full max-w-[240px] rounded-md transition-[filter] ${editImgFinal ? "blur-0" : "blur-md"}`}
+                      />
+                    )}
+                    {carouselVariants.length > 0 && (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {carouselVariants.map((b64, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="overflow-hidden rounded-md border border-border transition hover:border-primary"
+                            onClick={() => pickCarouselVariant(b64)}
+                          >
+                            <img src={`data:image/png;base64,${b64}`} alt={`Variant ${i + 1}`} className="h-auto w-full" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   {editing.kind === "outbound_email" && (

@@ -21,15 +21,6 @@ const PROVIDER_META = {
   },
 } as const;
 
-const PROVIDER_CONNECT_SUPPORT: Record<Provider, { supported: boolean; message?: string }> = {
-  gmail: { supported: true },
-  linkedin: {
-    supported: false,
-    message:
-      "LinkedIn personal account connection isn't available in this app yet. Gmail can be connected now, but LinkedIn still needs a workspace-level connection.",
-  },
-};
-
 type Provider = keyof typeof PROVIDER_META;
 
 const StartInput = z.object({
@@ -42,14 +33,6 @@ export const startConnect = createServerFn({ method: "POST" })
   .inputValidator((i) => StartInput.parse(i))
   .handler(async ({ data, context }) => {
     const { userId } = context as { userId: string };
-    const support = PROVIDER_CONNECT_SUPPORT[data.provider as Provider];
-    if (!support.supported) {
-      return {
-        unsupported: true as const,
-        message: support.message ?? "This connection isn't available.",
-      };
-    }
-
     const meta = PROVIDER_META[data.provider as Provider];
     const clientId = process.env[meta.clientIdEnv];
     if (!clientId) {
@@ -67,7 +50,7 @@ export const startConnect = createServerFn({ method: "POST" })
       webMessageTargetOrigin: data.targetOrigin,
       credentialsConfiguration: { scopes: meta.scopes },
     });
-    return { unsupported: false as const, authorizationUrl };
+    return { authorizationUrl };
   });
 
 const SaveInput = z.object({

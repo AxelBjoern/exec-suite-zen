@@ -705,6 +705,7 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
   });
 
 export const sendCeoMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
       content: string;

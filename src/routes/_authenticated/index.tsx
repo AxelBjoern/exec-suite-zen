@@ -50,6 +50,13 @@ const TILES = [
     icon: Send,
     badge: "Live",
   },
+  {
+    to: "/settings",
+    label: "Settings",
+    desc: "Connect your Gmail & LinkedIn, set your guardrail preferences.",
+    icon: SettingsIcon,
+    badge: "Account",
+  },
 ] as const;
 
 function Hub() {

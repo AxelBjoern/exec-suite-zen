@@ -139,25 +139,31 @@ export const disconnectProvider = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ─── Settings (auto-send toggles) ────────────────────────────────────────
+// ─── Settings (auto-send toggles + design rules) ────────────────────────
 export const getMySettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { userId } = context as { userId: string };
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
     const { data } = await supabaseAdmin
       .from("user_settings")
-      .select("auto_send_email, auto_send_linkedin")
+      .select("auto_send_email, auto_send_linkedin, design_rules")
       .eq("user_id", userId)
       .maybeSingle();
+    // Surface the VDNX default to axel so the textarea isn't empty.
+    const { VDNX_DESIGN_RULES } = await import("@/server/designRules.server");
+    const isVdnxOwner = (claims?.email ?? "").toLowerCase() === "axel@natax.co.uk";
     return {
       auto_send_email: data?.auto_send_email ?? false,
       auto_send_linkedin: data?.auto_send_linkedin ?? false,
+      design_rules: data?.design_rules ?? (isVdnxOwner ? VDNX_DESIGN_RULES : ""),
+      design_rules_default_applied: !data?.design_rules && isVdnxOwner,
     };
   });
 
 const SettingsInput = z.object({
   auto_send_email: z.boolean(),
   auto_send_linkedin: z.boolean(),
+  design_rules: z.string().max(4000).optional().nullable(),
 });
 
 export const updateMySettings = createServerFn({ method: "POST" })
@@ -167,7 +173,15 @@ export const updateMySettings = createServerFn({ method: "POST" })
     const { userId } = context as { userId: string };
     const { error } = await supabaseAdmin
       .from("user_settings")
-      .upsert({ user_id: userId, ...data }, { onConflict: "user_id" });
+      .upsert(
+        {
+          user_id: userId,
+          auto_send_email: data.auto_send_email,
+          auto_send_linkedin: data.auto_send_linkedin,
+          design_rules: data.design_rules ?? null,
+        },
+        { onConflict: "user_id" },
+      );
     if (error) throw new Error(error.message);
     return { ok: true };
   });

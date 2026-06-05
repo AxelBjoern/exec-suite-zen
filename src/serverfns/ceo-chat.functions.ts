@@ -1206,9 +1206,12 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               payload.visualPrompt = tag.visual_prompt;
               try {
                 const { generateLinkedInImageBase64 } = await import("@/server/linkedinImage.server");
+                const { getDesignRulesForUser } = await import("@/server/designRules.server");
+                const designRules = await getDesignRulesForUser({ userId, email: userEmail });
                 payload.imageBase64 = await generateLinkedInImageBase64({
                   tagline: tag.tagline,
                   visualPrompt: tag.visual_prompt,
+                  designRules,
                 });
               } catch (imgErr: any) {
                 payload.imageError = imgErr?.message ?? "image generation failed";

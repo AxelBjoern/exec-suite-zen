@@ -1,36 +1,55 @@
 ## Goal
 
-Restore the working "centralized send" behavior: emails and LinkedIn posts go out via the **workspace** Gmail + LinkedIn connectors (the ones already linked via `LOVABLE_API_KEY` + `GMAIL_API_KEY` / `LINKEDIN_API_KEY`), exactly like before. No per-user OAuth required, no "Connect your Gmail/LinkedIn first" gate.
+Use the workspace-level Lovable connectors (the ones you set up once with username/password in Lovable Connectors) for Gmail and LinkedIn. No popups, no per-user OAuth, no client IDs. Same model as before.
 
-The per-user Connect flow in Settings can stay as an *optional* enhancement, but it must NOT block sending.
+## What gets removed
 
-## Changes
+- `src/integrations/lovable/appUserConnector.ts` (server) — deleted
+- `src/integrations/lovable/appUserConnectorClient.ts` (popup helper) — deleted
+- `user_connections` table reads/writes in `saveConnection`, `listMyConnections`, `disconnectProvider`, `startConnect`, `getConnectionCapabilities` — deleted
+- Personal-vs-shared capability logic, popup button, "Connect Gmail / Connect LinkedIn" UI — deleted
+- `GOOGLE_APP_USER_CONNECTOR_CLIENT_ID` / `LINKEDIN_APP_USER_CONNECTOR_CLIENT_ID` references — gone
+- Hybrid "if user connection exists, use it, else workspace fallback" branches in `outbound.functions.ts` — collapsed to workspace-only
 
-### 1. `src/lib/outbound.functions.ts` — `performSend`
+## What gets rebuilt
 
-Revert the gating logic so it always falls back to the workspace connector when no per-user connection exists.
+### 1. `src/lib/outbound.functions.ts`
+- `sendGmailAsUser` / `postLinkedInAsUser` removed.
+- `performSend` always uses the workspace connector path:
+  - Email → existing workspace Gmail helper (`GOOGLE_MAIL_API_KEY` via gateway)
+  - LinkedIn → existing `postLinkedInAsWorkspace` (`LINKEDIN_API_KEY` via gateway)
+- Errors clearly say "Workspace Gmail/LinkedIn connector not connected — connect it in Lovable Connectors".
 
-**Email path (`outbound_email`, `outbound_reminder`):**
-- If the user has a personal Gmail connection → send as that user via `callAsAppUser`.
-- Else → send via the workspace Gmail gateway (`GMAIL_GATEWAY` + `LOVABLE_API_KEY` + `GMAIL_API_KEY`) using the existing `sendOwnerDigestEmail`-style call. **Do NOT throw "Connect your Gmail first."**
+### 2. `src/lib/connections.functions.ts`
+Replaced with a thin status-only module:
+- `getConnectorStatus` server fn returns `{ gmail: boolean, linkedin: boolean }` based on whether `GOOGLE_MAIL_API_KEY` and `LINKEDIN_API_KEY` env vars exist.
+- `getMySettings` / `updateMySettings` (auto-send toggles + design rules) preserved — those are user-level prefs, not credentials.
 
-**LinkedIn path (`outbound_linkedin`):**
-- If the user has a personal LinkedIn connection → post as that user via `callAsAppUser`.
-- Else → post via the workspace LinkedIn gateway using `LOVABLE_API_KEY` + `LINKEDIN_API_KEY` against `POST v2/ugcPosts` (the original centralized flow). **Do NOT throw "Connect your LinkedIn first."**
+### 3. `src/routes/_authenticated/settings/connections.tsx`
+Simplified page:
+- Shows two cards: Gmail and LinkedIn.
+- Each card shows green "Connected (workspace)" or grey "Not connected".
+- Single CTA per card: "Manage in Lovable Connectors" (opens the connectors panel) — no popup, no OAuth.
+- Keeps the auto-send toggles + design rules section as-is.
 
-Keep the `status === "sent"` short-circuit added earlier (prevents "Already sent" crash on Retry).
+### 4. Tool calls required
+- Call `standard_connectors--connect` with `connector_id: "google_mail"` and again with `connector_id: "linkedin"` so the connectors picker is what handles credentials. Lovable's connector picker is where you sign in / paste credentials — that's the "username + password" step you want.
 
-### 2. `src/routes/_authenticated/settings/connections.tsx`
+## Files touched
 
-- Keep the LinkedIn + Gmail Connect buttons, but reframe copy: "Optional — connect your own account so posts/emails show as you instead of the shared workspace account." Default behavior without connecting = centralized send.
-- No other logic changes.
+```text
+deleted:
+  src/integrations/lovable/appUserConnector.ts
+  src/integrations/lovable/appUserConnectorClient.ts
+edited:
+  src/lib/connections.functions.ts        (replace personal-OAuth surface with workspace-status surface)
+  src/lib/outbound.functions.ts           (collapse to workspace-only send/post)
+  src/routes/_authenticated/settings/connections.tsx  (status page, no popups)
+unchanged:
+  src/server/* (LLM, settings, design rules)
+  user_settings table (auto-send, design rules)
+```
 
-### 3. Leave alone
+## Confirmation before I implement
 
-- `src/lib/connections.functions.ts` — per-user OAuth helpers stay as-is for the optional flow.
-- No DB migration, no secret changes (`GMAIL_API_KEY`, `LINKEDIN_API_KEY`, `LOVABLE_API_KEY` already present).
-- No changes to retry/scheduler logic.
-
-## Why this fixes the symptom
-
-The previous send worked because it used the workspace LinkedIn/Gmail connector. Recent edits added a hard requirement that each user first complete per-user OAuth, and LinkedIn's app-user connector isn't registered on the gateway for this workspace (returns `connector_not_found`), so every send now throws. Reverting the gate restores centralized send while leaving the optional personal-connect path in place.
+This intentionally drops the "each app user signs in with their own Gmail/LinkedIn" feature. All sends go from your workspace's connected accounts. That matches what you asked for ("like before where I added username and password"). Reply "go" and I'll execute the plan.

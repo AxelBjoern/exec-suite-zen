@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette } from "lucide-react";
-import { getMySettings, updateMySettings, listMyConnections } from "@/lib/connections.functions";
+import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   head: () => ({
@@ -20,10 +20,10 @@ function SettingsPage() {
   const qc = useQueryClient();
   const get = useServerFn(getMySettings);
   const update = useServerFn(updateMySettings);
-  const conns = useServerFn(listMyConnections);
+  const status = useServerFn(getConnectorStatus);
 
   const settings = useQuery({ queryKey: ["my-settings"], queryFn: () => get() });
-  const connections = useQuery({ queryKey: ["my-connections"], queryFn: () => conns() });
+  const connectorStatus = useQuery({ queryKey: ["connector-status"], queryFn: () => status() });
 
   const [email, setEmail] = useState(false);
   const [li, setLi] = useState(false);
@@ -59,8 +59,8 @@ function SettingsPage() {
     }
   }
 
-  const gmail = connections.data?.rows?.find((r: any) => r.provider === "gmail");
-  const linkedin = connections.data?.rows?.find((r: any) => r.provider === "linkedin");
+  const gmailConnected = connectorStatus.data?.gmail ?? false;
+  const linkedinConnected = connectorStatus.data?.linkedin ?? false;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 md:py-16">
@@ -79,7 +79,7 @@ function SettingsPage() {
           <li className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
-              Gmail — {gmail ? <strong>{gmail.provider_email ?? "connected"}</strong> : <span className="text-muted-foreground">not connected</span>}
+              Gmail — {gmailConnected ? <strong>workspace connector</strong> : <span className="text-muted-foreground">not connected</span>}
             </span>
             <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
               Manage →
@@ -88,7 +88,7 @@ function SettingsPage() {
           <li className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2">
               <Linkedin className="h-4 w-4" />
-              LinkedIn — {linkedin ? <strong>{linkedin.provider_name ?? linkedin.provider_email ?? "connected"}</strong> : <span className="text-muted-foreground">not connected</span>}
+              LinkedIn — {linkedinConnected ? <strong>workspace connector</strong> : <span className="text-muted-foreground">not connected</span>}
             </span>
             <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
               Manage →

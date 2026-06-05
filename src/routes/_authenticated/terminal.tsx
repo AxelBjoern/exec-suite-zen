@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Terminal } from "@/components/Terminal";
 import { Toaster } from "@/components/ui/sonner";
 
-export const Route = createFileRoute("/terminal")({
+export const Route = createFileRoute("/_authenticated/terminal")({
   head: () => ({
     meta: [
       { title: "VDNX Terminal — Authority · Auditability · Atomicity" },

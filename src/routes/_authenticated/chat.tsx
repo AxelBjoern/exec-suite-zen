@@ -55,7 +55,7 @@ import {
 
 
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({
     meta: [
       { title: "Chat — VDNX CEO Agent" },

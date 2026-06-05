@@ -2,11 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callAsAppUser } from "@/integrations/lovable/appUserConnector";
-import { GATEWAY_BASE_URL } from "@/lib/connections.functions";
 import { chatCompletion } from "@/server/llm.server";
 
-// ── Workspace connector (owner-only fallback for cron digest) ────────────
+// ── Workspace connectors (shared, Lovable Connectors) ────────────────────
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
 

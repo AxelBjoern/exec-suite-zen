@@ -110,6 +110,7 @@ function OutboundPage() {
   const [editImgUrl, setEditImgUrl] = useState<string | null>(null);
   const [editImgFinal, setEditImgFinal] = useState(false);
   const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
+  const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // LinkedIn image gen state

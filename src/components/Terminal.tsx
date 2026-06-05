@@ -89,6 +89,8 @@ export function Terminal() {
   const [histIdx, setHistIdx] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [scrollbackCollapsed, setScrollbackCollapsed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const sbRef = useRef<HTMLDivElement>(null);
 

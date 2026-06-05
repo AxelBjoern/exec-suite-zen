@@ -433,16 +433,27 @@ function OutboundPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
                     </span>
-                    {r.status === "pending" && (
+                    <div className="flex items-center gap-2">
+                      {r.status === "pending" && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                          disabled={rowBusy === r.id}
+                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        >
+                          {rowBusy === r.id ? "Sending…" : "Send now"}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                         disabled={rowBusy === r.id}
-                        onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
+                        title="Delete"
                       >
-                        {rowBusy === r.id ? "Sending…" : "Send now"}
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </li>
               );

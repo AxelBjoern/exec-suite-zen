@@ -710,8 +710,16 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            <Link
+              to="/terminal"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
+              title="Open VDNX Terminal"
+            >
+              <Square className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Terminal</span>
+            </Link>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="h-8 w-[120px] md:w-[180px] text-xs">
+              <SelectTrigger className="h-8 w-[110px] md:w-[180px] text-xs">
                 <SelectValue>{hydrated ? activeModelLabel : CHAT_MODEL_OPTIONS[0].label}</SelectValue>
               </SelectTrigger>
               <SelectContent>

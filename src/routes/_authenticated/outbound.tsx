@@ -12,6 +12,7 @@ import {
   requestLinkedIn,
   listMyRequests,
   ensureOwnerRole,
+  approveOutbound,
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
@@ -76,9 +77,10 @@ function OutboundPage() {
   const reqLi = useServerFn(requestLinkedIn);
   const myList = useServerFn(listMyRequests);
   const claimOwner = useServerFn(ensureOwnerRole);
+  const approveReq = useServerFn(approveOutbound);
   const tagline = useServerFn(composeLinkedInTagline);
 
-  useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });
+  const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });
 
   const { data } = useQuery({
     queryKey: ["my-outbound"],
@@ -90,6 +92,7 @@ function OutboundPage() {
   const [reminder, setReminder] = useState({ subject: "", body: "" });
   const [post, setPost] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -179,6 +182,19 @@ function OutboundPage() {
     setImgFinal(false);
     setTaglineText("");
     setVisualPrompt("");
+  }
+
+  async function sendNow(id: string) {
+    setRowBusy(id);
+    try {
+      await approveReq({ data: { id } });
+      toast.success("Sent");
+      qc.invalidateQueries({ queryKey: ["my-outbound"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send");
+    } finally {
+      setRowBusy(null);
+    }
   }
 
   return (
@@ -317,9 +333,21 @@ function OutboundPage() {
                       <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
                     )}
                   </div>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
-                    {new Date(r.created_at).toLocaleString()}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(r.created_at).toLocaleString()}
+                    </span>
+                    {owner.data?.isOwner && r.status === "pending" && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                        disabled={rowBusy === r.id}
+                        onClick={() => sendNow(r.id)}
+                      >
+                        {rowBusy === r.id ? "Sending…" : "Send now"}
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
             })}

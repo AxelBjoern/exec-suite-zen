@@ -1127,6 +1127,45 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    // ── Outbound intent: if user asked to send mail / post / set reminder,
+    //    short-circuit with a draft link to /outbound. No silent inserts.
+    if (!imageParts.length) {
+      try {
+        const { parseOutboundIntent } = await import("@/server/chat-intent.server");
+        const { encodeDraft } = await import("@/lib/draftLink");
+        const intent = await parseOutboundIntent(
+          data.content,
+          (history ?? []).slice(-6).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        );
+        if (intent.kind !== "none") {
+          if (intent.missing?.length) {
+            const ask = intent.missing.join(", ");
+            return await saveAssistant(
+              `📨 I can ${intent.kind === "linkedin" ? "draft this LinkedIn post" : intent.kind === "reminder" ? "draft this reminder" : "draft this email"} — but I still need: **${ask}**. What should I use?`,
+            );
+          }
+          let draft: any;
+          let label: string;
+          if (intent.kind === "email") {
+            draft = { kind: "email", to: intent.to, subject: intent.subject, body: intent.body };
+            label = `email to **${intent.to}**`;
+          } else if (intent.kind === "reminder") {
+            draft = { kind: "reminder", subject: intent.subject, body: intent.body };
+            label = `reminder for the owner`;
+          } else {
+            draft = { kind: "linkedin", text: intent.text };
+            label = `LinkedIn post`;
+          }
+          const link = `/outbound?draft=${encodeDraft(draft)}`;
+          return await saveAssistant(
+            `📨 Drafted ${label}. **[Open in Outbound →](${link})** to review and submit. Nothing is sent until you approve it.`,
+          );
+        }
+      } catch {
+        // intent detection is best-effort; fall through to normal reply
+      }
+    }
+
     // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [
       { role: "system", content: CEO_SYSTEM },

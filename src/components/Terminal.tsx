@@ -393,7 +393,7 @@ export function Terminal() {
         </div>
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
           <Link
-            to="/_authenticated/chat"
+            to="/chat"
             className="flex items-center gap-1.5 font-mono text-[11px] uppercase border border-rule px-2 py-1 hover:border-primary hover:text-primary text-muted-foreground"
             title="Open CEO chat"
           >
@@ -661,7 +661,7 @@ function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) =
       <div className="flex items-center justify-between gap-4 mb-1">
         <h1 className="font-serif text-3xl">The Executive Team</h1>
         <Link
-          to="/_authenticated/chat"
+          to="/chat"
           className="smallcaps text-[20px] text-muted-foreground hover:text-primary border border-rule px-5 py-2 rounded-sm transition-colors"
         >
           Chat with CEO →

@@ -551,7 +551,7 @@ function ChatPage() {
       >
         <div className="px-4 py-4 border-b border-border/40 flex items-center gap-2">
           <Link
-            to="/_authenticated/terminal"
+            to="/terminal"
             className="text-muted-foreground hover:text-foreground transition-colors"
             title="Back to terminal"
           >
@@ -711,7 +711,7 @@ function ChatPage() {
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <Link
-              to="/_authenticated/terminal"
+              to="/terminal"
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
               title="Open VDNX Terminal"
             >

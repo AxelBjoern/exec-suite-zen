@@ -36,9 +36,10 @@ export const startConnect = createServerFn({ method: "POST" })
     const meta = PROVIDER_META[data.provider as Provider];
     const clientId = process.env[meta.clientIdEnv];
     if (!clientId) {
-      throw new Error(
-        `${meta.clientIdEnv} is not configured. Ask the workspace owner to add it in Lovable secrets.`,
-      );
+      return {
+        unsupported: true as const,
+        message: `${data.provider === "gmail" ? "Gmail" : "LinkedIn"} personal connect isn't configured. Sends use the shared workspace account.`,
+      };
     }
     const { authorizationUrl } = await authorizeAppUserOAuth({
       gatewayBaseUrl: GATEWAY_BASE_URL,
@@ -50,7 +51,7 @@ export const startConnect = createServerFn({ method: "POST" })
       webMessageTargetOrigin: data.targetOrigin,
       credentialsConfiguration: { scopes: meta.scopes },
     });
-    return { authorizationUrl };
+    return { unsupported: false as const, authorizationUrl };
   });
 
 const SaveInput = z.object({

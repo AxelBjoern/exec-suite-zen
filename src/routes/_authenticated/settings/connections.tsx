@@ -43,6 +43,9 @@ function ConnectionsPage() {
         gatewayBaseUrl: GATEWAY_BASE_URL,
         start: async (targetOrigin) => {
           const res = await start({ data: { provider, targetOrigin } });
+          if (res.unsupported || !res.authorizationUrl) {
+            throw new Error(res.message ?? "Personal connect not configured");
+          }
           return { authorizationUrl: res.authorizationUrl };
         },
       });

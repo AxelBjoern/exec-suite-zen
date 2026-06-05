@@ -53,6 +53,7 @@ import {
   Square,
   Upload,
   ClipboardPaste,
+  Send as SendIcon,
 } from "lucide-react";
 
 async function copyToClipboard(text: string) {

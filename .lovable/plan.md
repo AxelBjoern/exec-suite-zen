@@ -1,53 +1,124 @@
+
 ## Goal
 
-Make the app comfortable to use on a phone (the PWA target) and make moving between the **Chat (CEO)** view and the **Terminal** view fast on any screen size.
+Turn this project into a multi-module workspace:
 
-Today:
-- `/` (Chat) is already mostly mobile-ready (drawer sidebar, responsive header, drag/drop). Small polish needed.
-- `/terminal` is **desktop-only**: 224px fixed roster sidebar, horizontal tab bar, a 176px scrollback panel, plus a ticker — all stacked, so on a 390px phone the active panel is squeezed to almost nothing and the roster blocks half the screen.
-- Navigating between the two views requires hunting: only an arrow icon in the chat sidebar header and a small "Chat with CEO →" link inside the Roster panel.
+```text
+                ┌─ /chat       (current Veridian chat)
+   /auth ──►    ├─ /terminal   (current Veridian terminal)
+   (gate)       ├─ /budget/*   (from Budget Dashboard Buddy)
+                └─ /forge/*    (from AI Forge)
+                  ▲
+                  └─ /  =  neutral hub (4 module cards + user menu)
+```
 
-## Plan
+All modules share the dark/gold VDNX theme, one Supabase, one auth, one router.
 
-### 1. Mobile-optimize `/terminal` (`src/components/Terminal.tsx`)
+---
 
-- **Roster aside** → hidden on mobile (`hidden md:flex`); add a `Menu` button in the header that opens it as a left drawer with a backdrop, same pattern as `/` (translate-x transition, click-outside to close, auto-close on agent select).
-- **Header** → tighten padding on mobile (`px-3 py-2 md:px-5 md:py-3`), drop the "Authority · Auditability · Atomicity" tagline below `md`, shrink clock to icon-only / wrap below title.
-- **Tabs row** → already `overflow-x-auto`; add `scrollbar-hide`, snap-x, and make each tab `whitespace-nowrap text-[11px] md:text-[12px]` with a thicker tap target (`py-2.5`).
-- **Scrollback panel** → reduce from fixed `h-44` to `h-28 md:h-44`, and add a collapse toggle button (chevron in its top-right) that stores state in `useState`; collapsed = `h-8` showing just the last line.
-- **Command line** → keep visible, but stack `⌘K` button hidden on mobile (palette can still be opened via long-press of the input or a dedicated `+` button), enlarge tap target on the input (`py-3 text-[14px]`), `inputMode="text"` and `autoCapitalize="off"`.
-- **Audit ticker** → hide on mobile (`hidden md:block`) to free vertical space; user can open `/audit` panel for the full log.
-- **ThreadPanel right aside** (Mandate/Tone/Consult/Directives) → on mobile, collapse into a single expandable `<details>` block above the messages instead of a 288px side rail; on `md+` keep current layout.
-- **AgentsPanel grid** → already `grid-cols-1 md:grid-cols-2`; reduce padding from `p-8` → `p-4 md:p-8` and font sizes one step on mobile.
-- **AuditPanel table** → on mobile, render rows as stacked cards (the current 4-column grid overflows).
-- Apply the same `p-4 md:p-8` padding pass to Tasks/Approvals/Leads/Manual panels.
+## 1. Auth + neutral start
 
-### 2. Improve chat ↔ terminal navigation
+- Add Supabase auth: email/password + Google (via `lovable.auth.signInWithOAuth("google")`, plus `configure_social_auth`).
+- New routes (top-level, public):
+  - `/auth` — sign-in / sign-up tabs, neutral VDNX-styled card.
+  - `/reset-password` — password recovery.
+- New pathless layout `src/routes/_authenticated/route.tsx` (`ssr: false`, `beforeLoad` → `supabase.auth.getUser()`, redirect to `/auth`).
+- Move existing app routes under the gate:
+  - `src/routes/index.tsx`     → `src/routes/_authenticated/chat.tsx`
+  - `src/routes/terminal.tsx`  → `src/routes/_authenticated/terminal.tsx`
+- New `src/routes/_authenticated/index.tsx` = **neutral hub** at `/`:
+  - VDNX dark + gold, app logo, user email, sign-out.
+  - Four big tiles → **Chat**, **Terminal**, **Budget**, **Forge** (each with one-line description + status pill).
+- Shared top bar `<ModuleSwitcher>` shown on every authenticated route (Chat · Terminal · Budget · Forge · Hub · avatar).
 
-- **Chat header (`/`)** → add a visible "Terminal" pill button next to the model selector (icon + label on `md+`, icon-only on mobile) that links to `/terminal`. Today the only link is the back-arrow in the sidebar header, which isn't discoverable.
-- **Terminal header (`/terminal`)** → add a matching "Chat" pill button next to the clock that links to `/`. Today the only entry point is buried inside the Roster panel.
-- Both buttons use `Link` from `@tanstack/react-router`, `aria-label`, and the existing button styles — no new components.
+---
 
-### 3. Chat sidebar polish (`src/routes/index.tsx`)
+## 2. Budget module (full code + DB merge)
 
-- On mobile, surface the "New conversation" button as a sticky bottom-left FAB inside the chat panel (visible when sidebar is closed) so starting a new chat doesn't require opening the drawer first.
-- Make conversation rows' rename/delete buttons always visible on touch devices (currently `md:opacity-0 md:group-hover:opacity-100` — fine, but add `opacity-100 md:opacity-0` so they appear by default on mobile).
-- Auto-close sidebar after `newConvoMutation` success on mobile.
+Copy from `Budget Dashboard Buddy` and re-skin to VDNX tokens.
 
-### 4. Viewport / safe area
+**Routes** (under `/_authenticated/budget/`):
+`index` (overview) · `board` · `budget` · `monthly` · `statements` · `compare` · `scenarios` · `sensitivity` · `financing` · `results` · `changelog`.
 
-- In `src/routes/__root.tsx` head, ensure the viewport meta includes `viewport-fit=cover` so the PWA respects iPhone notch insets.
-- Add `pb-[env(safe-area-inset-bottom)]` to the chat input bar and the terminal command line so they don't sit under the iOS home indicator.
+**Code**: copy `src/components/budget/*` and `src/lib/budget/*` (engine, financing, sensitivity, exports, format, seed, types). Budget's `Topbar` is replaced by the shared `<ModuleSwitcher>`.
 
-### Out of scope
+**DB migration** — Budget had zero migrations (zustand + localStorage). Persist properly per-user:
 
-- No changes to server functions, agent logic, AI models, or data shape.
-- No redesign of message bubbles, artifacts, or the command palette behavior — only sizing and discoverability.
-- No new routes.
+```sql
+create table public.budget_scenarios (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  assumptions jsonb not null,
+  actuals jsonb not null default '{"rows":[]}'::jsonb,
+  contract_start_date date,
+  is_base boolean not null default false,
+  is_locked boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table public.budget_audit (
+  id bigserial primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  scenario_id uuid references public.budget_scenarios(id) on delete set null,
+  field text, summary text,
+  created_at timestamptz not null default now()
+);
+-- + grants + RLS scoped to auth.uid()
+```
 
-### Files touched
+Server fns in `src/serverfns/budget.functions.ts`: `listScenarios`, `upsertScenario`, `deleteScenario`, `setBase`, `toggleLock`, `setActual`, `clearActuals`, `appendAudit`. Zustand store keeps client cache; persistence layer swapped to React Query + server fns (seed scenario auto-created on first visit).
 
-- `src/components/Terminal.tsx` (largest change — mobile shell + drawer + panel polish)
-- `src/routes/index.tsx` (Terminal link in header, FAB, sidebar polish)
-- `src/routes/__root.tsx` (viewport meta `viewport-fit=cover`)
-- Possibly `src/styles.css` for a small `.scrollbar-hide` utility if not present
+---
+
+## 3. AI Forge merge (full feature parity)
+
+Copy from `AI Forge` and re-skin.
+
+**Routes** (under `/_authenticated/forge/`):
+`dashboard` · `agent-types` · `base-models` · `models` · `deployments` · `training.new` · `settings`.
+
+**Components**: `app-sidebar.tsx`, `top-bar.tsx` (kept as forge-internal sub-nav inside the module).
+
+**DB migration**: port AI Forge's tables verbatim — `profiles`, `agent_types`, `base_models`, `trainings`, `deployments`, `user_secrets` — including the `handle_new_user` trigger, all RLS, and the 20 seed agent types + 6 seed base models. (`profiles` is reused for the whole app.)
+
+**Storage**: create `colab-notebooks` bucket (public read, per-user folder write).
+
+**Server fns**: copy `agent-types.functions.ts`, `trainings.functions.ts`, `training-ai.functions.ts`, `colab.functions.ts`, `secrets.functions.ts`. Rewrite any LLM/model selection to go through `src/server/llm.server.ts` (OpenRouter) — only the 8 allowed models. Drop Fireworks-specific endpoints; replace with OpenRouter-backed deploy stub that records `endpoint_url = OpenRouter model id`. `user_secrets.fireworks_api_key` repurposed as generic `provider_api_key` (column rename in migration).
+
+---
+
+## 4. Theme + shell unification
+
+- All copied components stripped of project-specific colors, switched to VDNX tokens (`bg-background`, `text-foreground`, `text-primary` gold, etc.) from `src/styles.css`.
+- Each module's internal nav uses VDNX pill style already established in Terminal/Chat headers.
+- `<ModuleSwitcher>` component lives in `src/components/ModuleSwitcher.tsx`, rendered by `_authenticated/route.tsx`.
+
+---
+
+## 5. Out of scope
+
+- No data migration of existing `agents/threads/messages/...` tables — they remain as the Chat/Terminal backend.
+- No multi-tenant org model — single user owns their budget scenarios and forge trainings.
+- No Fireworks training pipeline; Forge's "Train" button creates a `trainings` row + Colab notebook only, deploy uses OpenRouter.
+- Existing email/cron/research server fns untouched.
+
+---
+
+## Technical notes
+
+- Migration order (single migration): profiles + trigger → agent_types → base_models → trainings → deployments → user_secrets → budget_scenarios → budget_audit → storage bucket + policies → seeds.
+- `configure_social_auth(["google"])` called in same turn as Google button.
+- Existing `index.tsx` / `terminal.tsx` moved (not duplicated) to avoid double `/` route conflict.
+- `attachSupabaseAuth` already wired in `src/start.ts` — verify after edits.
+- Existing serverfns that currently run unauthenticated (`dispatch`, `routePrompt`, etc.) gain `requireSupabaseAuth` middleware so chat/terminal data becomes per-user (acceptable since you're now behind auth). If you'd rather keep them shared/global for now, say so and I'll skip this part.
+
+---
+
+## Files (high level)
+
+- new: `src/routes/auth.tsx`, `reset-password.tsx`, `_authenticated/route.tsx`, `_authenticated/index.tsx`, `_authenticated/chat.tsx`, `_authenticated/terminal.tsx`, `_authenticated/budget/*` (11 files), `_authenticated/forge/*` (7 files)
+- new: `src/components/ModuleSwitcher.tsx`, `src/components/budget/*` (6 files copied + reskinned), `src/components/forge/{app-sidebar,top-bar}.tsx`
+- new: `src/lib/budget/*` (8 files), `src/serverfns/budget.functions.ts`, `src/serverfns/forge/*.ts` (5 files)
+- migration: one big SQL file (Forge schema + Budget schema + seeds + storage)
+- delete: `src/routes/index.tsx`, `src/routes/terminal.tsx` (replaced by moved versions)

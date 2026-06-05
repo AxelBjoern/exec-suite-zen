@@ -222,6 +222,7 @@ function OutboundPage() {
     setEditing(null);
     setEditDraft({});
     setEditBusy(null);
+    setAiInstr("");
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -229,8 +230,8 @@ function OutboundPage() {
     setEditBusy(opts.send ? "send" : "save");
     try {
       await updateDraft({ data: { id: editing.id, payload: editDraft } });
-      if (opts.send && owner.data?.isOwner) {
-        await approveReq({ data: { id: editing.id } });
+      if (opts.send) {
+        await selfSend({ data: { id: editing.id } });
         toast.success("Sent");
       } else {
         toast.success("Saved");
@@ -239,6 +240,31 @@ function OutboundPage() {
       closeEdit();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setEditBusy(null);
+    }
+  }
+
+  async function runAiEdit() {
+    if (!editing || !aiInstr.trim()) return;
+    setEditBusy("ai");
+    try {
+      const out: any = await aiEdit({
+        data: { kind: editing.kind, instruction: aiInstr, draft: editDraft },
+      });
+      if (editing.kind === "outbound_linkedin") {
+        setEditDraft({ ...editDraft, text: out.text ?? editDraft.text });
+      } else {
+        setEditDraft({
+          ...editDraft,
+          subject: out.subject ?? editDraft.subject,
+          body: out.body ?? editDraft.body,
+        });
+      }
+      setAiInstr("");
+      toast.success("AI edit applied");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI edit failed");
     } finally {
       setEditBusy(null);
     }

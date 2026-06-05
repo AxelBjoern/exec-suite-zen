@@ -295,9 +295,10 @@ function OutboundPage() {
     setCarouselVariants([]);
     try {
       const t = await tagline({ data: { text: editDraft.text } });
+      const visual = editImgDescription.trim() || t.visual_prompt;
       await streamImage(
         "/api/generate-linkedin-image",
-        { tagline: t.tagline, visualPrompt: t.visual_prompt },
+        { tagline: t.tagline, visualPrompt: visual },
         (dataUrl, b64, isFinal) => {
           setEditImgUrl(dataUrl);
           if (isFinal) {

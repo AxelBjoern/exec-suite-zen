@@ -1050,9 +1050,22 @@ function MessageRow({
       </div>
     );
 
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      setCopied(true);
+      toast.success("Copied to clipboard");
+      setTimeout(() => setCopied(false), 1500);
+    } else {
+      toast.error("Copy failed");
+    }
+  }
+
   if (role === "user") {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end group">
         <div className="max-w-[80%] space-y-2">
           {renderMedia()}
           {fileAtts.length > 0 && (
@@ -1076,30 +1089,41 @@ function MessageRow({
               {content}
             </div>
           )}
+          {content && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                aria-label="Copy prompt"
+                title="Copy prompt"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3 w-3" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
-  const [copied, setCopied] = useState(false);
 
-  async function handleCopy() {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(content);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = content;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
+  async function handleCopyAssistant() {
+    const ok = await copyToClipboard(content);
+    if (ok) {
       setCopied(true);
       toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 1500);
-    } catch {
+    } else {
       toast.error("Copy failed");
     }
   }

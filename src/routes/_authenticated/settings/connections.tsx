@@ -121,14 +121,13 @@ function ConnectionsPage() {
               <button
                 className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
                 onClick={() => connect(provider)} disabled={busy === provider || !isConfigured}
-                disabled={busy === provider}
               >
                 Reconnect
               </button>
               <button
                 className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-destructive hover:bg-muted disabled:opacity-50"
                 onClick={() => unlink(provider)}
-                disabled={busy === provider}
+                disabled={busy === provider || !isConfigured}
               >
                 Disconnect
               </button>
@@ -144,7 +143,6 @@ function ConnectionsPage() {
             <button
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={() => connect(provider)} disabled={busy === provider || !isConfigured}
-              disabled={busy === provider}
             >
               <Plug className="h-3.5 w-3.5" />
               {busy === provider ? "Opening…" : `Connect ${label}`}

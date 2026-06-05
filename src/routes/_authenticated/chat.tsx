@@ -919,6 +919,30 @@ function ChatPage() {
                 >
                   <FileType className="h-4 w-4" />
                 </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      if (!text) {
+                        toast.info("Clipboard is empty");
+                        return;
+                      }
+                      setInput((prev) => prev + text);
+                      requestAnimationFrame(() => inputRef.current?.focus());
+                    } catch {
+                      toast.error("Paste failed — allow clipboard access");
+                    }
+                  }}
+                  disabled={mutation.isPending || docMutation.isPending}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  aria-label="Paste from clipboard"
+                  title="Paste from clipboard"
+                >
+                  <ClipboardPaste className="h-4 w-4" />
+                </Button>
               </div>
               {mutation.isPending || docMutation.isPending ? (
                 <button

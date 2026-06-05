@@ -64,13 +64,19 @@ export const startConnect = createServerFn({ method: "POST" })
     const meta = PROVIDER_META[data.provider as Provider];
     const providerLabel = data.provider === "gmail" ? "Gmail" : "LinkedIn";
     const capability = getProviderCapability(data.provider as Provider);
+    const clientId = process.env[meta.clientIdEnv];
     if (!capability.personalAvailable) {
       return {
         unsupported: true as const,
         message: capability.message,
       };
     }
-    const clientId = process.env[meta.clientIdEnv];
+    if (!clientId) {
+      return {
+        unsupported: true as const,
+        message: capability.message,
+      };
+    }
 
     try {
       const { authorizationUrl } = await authorizeAppUserOAuth({

@@ -2,80 +2,161 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { callAsAppUser } from "@/integrations/lovable/appUserConnector";
+import { GATEWAY_BASE_URL } from "@/lib/connections.functions";
 
+// ── Workspace connector (owner-only fallback for cron digest) ────────────
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
-const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
 
-function gwHeaders(connectorKey: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
-  if (!connectorKey) throw new Error("Connector API key missing");
-  return {
-    Authorization: `Bearer ${lovableKey}`,
-    "X-Connection-Api-Key": connectorKey,
-    "Content-Type": "application/json",
-  };
-}
-
-function base64url(input: string) {
-  return Buffer.from(input, "utf-8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+function base64url(input: string | Buffer) {
+  const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function buildRawEmail(to: string, subject: string, body: string) {
-  const msg = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    "MIME-Version: 1.0",
-    "",
-    body,
-  ].join("\r\n");
-  return base64url(msg);
+  return base64url(
+    [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "MIME-Version: 1.0",
+      "",
+      body,
+    ].join("\r\n"),
+  );
 }
 
-async function sendGmailRaw(to: string, subject: string, body: string) {
-  const key = process.env.GOOGLE_MAIL_API_KEY!;
-  const res = await fetch(`${GMAIL_GATEWAY}/users/me/messages/send`, {
-    method: "POST",
-    headers: gwHeaders(key),
-    body: JSON.stringify({ raw: buildRawEmail(to, subject, body) }),
+// ── Per-user send helpers ────────────────────────────────────────────────
+async function getUserConnection(userId: string, provider: "gmail" | "linkedin") {
+  const { data } = await supabaseAdmin
+    .from("user_connections")
+    .select("connection_id, provider_email")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .maybeSingle();
+  return data;
+}
+
+async function sendGmailAsUser(userId: string, to: string, subject: string, body: string) {
+  const conn = await getUserConnection(userId, "gmail");
+  if (!conn) throw new Error("Connect your Gmail in Settings first.");
+  const res = await callAsAppUser({
+    gatewayBaseUrl: GATEWAY_BASE_URL,
+    connectionId: conn.connection_id,
+    connectorId: "google_mail",
+    path: "/gmail/v1/users/me/messages/send",
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw: buildRawEmail(to, subject, body) }),
+    },
   });
   if (!res.ok) throw new Error(`Gmail send failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
 
-async function postLinkedInRaw(text: string) {
-  const key = process.env.LINKEDIN_API_KEY!;
-  const headers = gwHeaders(key);
-  const meRes = await fetch(`${LINKEDIN_GATEWAY}/v2/userinfo`, { headers });
-  if (!meRes.ok) throw new Error(`LinkedIn userinfo failed (${meRes.status}): ${await meRes.text()}`);
-  const me = (await meRes.json()) as { sub?: string };
-  if (!me.sub) throw new Error("LinkedIn userinfo missing sub");
-  const body = {
-    author: `urn:li:person:${me.sub}`,
-    lifecycleState: "PUBLISHED",
-    specificContent: {
-      "com.linkedin.ugc.ShareContent": {
-        shareCommentary: { text },
-        shareMediaCategory: "NONE",
+async function postLinkedInAsUser(
+  userId: string,
+  text: string,
+  imageBase64?: string | null,
+) {
+  const conn = await getUserConnection(userId, "linkedin");
+  if (!conn) throw new Error("Connect your LinkedIn in Settings first.");
+  const connId = conn.connection_id;
+
+  // Resolve author URN
+  const me = await callAsAppUser({
+    gatewayBaseUrl: GATEWAY_BASE_URL,
+    connectionId: connId,
+    connectorId: "linkedin",
+    path: "/v2/userinfo",
+  });
+  if (!me.ok) throw new Error(`LinkedIn userinfo failed (${me.status}): ${await me.text()}`);
+  const { sub } = (await me.json()) as { sub?: string };
+  if (!sub) throw new Error("LinkedIn userinfo missing sub");
+  const author = `urn:li:person:${sub}`;
+
+  let mediaAsset: string | null = null;
+  if (imageBase64) {
+    // 1. Register upload
+    const regRes = await callAsAppUser({
+      gatewayBaseUrl: GATEWAY_BASE_URL,
+      connectionId: connId,
+      connectorId: "linkedin",
+      path: "/v2/assets?action=registerUpload",
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registerUploadRequest: {
+            recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+            owner: author,
+            serviceRelationships: [
+              { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
+            ],
+          },
+        }),
       },
+    });
+    if (!regRes.ok) throw new Error(`LinkedIn registerUpload failed (${regRes.status}): ${await regRes.text()}`);
+    const reg = (await regRes.json()) as any;
+    const uploadUrl: string | undefined =
+      reg?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
+    mediaAsset = reg?.value?.asset ?? null;
+    if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
+
+    // 2. PUT image bytes
+    const bytes = Buffer.from(imageBase64, "base64");
+    const upload = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: bytes,
+    });
+    if (!upload.ok) throw new Error(`LinkedIn image upload failed (${upload.status}): ${await upload.text()}`);
+  }
+
+  // 3. ugcPosts
+  const body = mediaAsset
+    ? {
+        author,
+        lifecycleState: "PUBLISHED",
+        specificContent: {
+          "com.linkedin.ugc.ShareContent": {
+            shareCommentary: { text },
+            shareMediaCategory: "IMAGE",
+            media: [{ status: "READY", media: mediaAsset }],
+          },
+        },
+        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
+      }
+    : {
+        author,
+        lifecycleState: "PUBLISHED",
+        specificContent: {
+          "com.linkedin.ugc.ShareContent": {
+            shareCommentary: { text },
+            shareMediaCategory: "NONE",
+          },
+        },
+        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
+      };
+
+  const postRes = await callAsAppUser({
+    gatewayBaseUrl: GATEWAY_BASE_URL,
+    connectionId: connId,
+    connectorId: "linkedin",
+    path: "/v2/ugcPosts",
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Restli-Protocol-Version": "2.0.0" },
+      body: JSON.stringify(body),
     },
-    visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
-  };
-  const postRes = await fetch(`${LINKEDIN_GATEWAY}/v2/ugcPosts`, {
-    method: "POST",
-    headers: { ...headers, "X-Restli-Protocol-Version": "2.0.0" },
-    body: JSON.stringify(body),
   });
   if (!postRes.ok) throw new Error(`LinkedIn post failed (${postRes.status}): ${await postRes.text()}`);
   return postRes.json();
 }
 
-// ─── Owner bootstrap ────────────────────────────────────────────────
+// ── Owner role bootstrap ─────────────────────────────────────────────────
 export const ensureOwnerRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -98,7 +179,32 @@ export const ensureOwnerRole = createServerFn({ method: "POST" })
     return { isOwner: true };
   });
 
-// ─── Request submission (queues, never sends) ───────────────────────
+// ── Settings lookup helper ───────────────────────────────────────────────
+async function getAutoSend(userId: string) {
+  const { data } = await supabaseAdmin
+    .from("user_settings")
+    .select("auto_send_email, auto_send_linkedin")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    email: data?.auto_send_email ?? false,
+    linkedin: data?.auto_send_linkedin ?? false,
+  };
+}
+
+async function performSend(
+  userId: string,
+  kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin",
+  payload: Record<string, any>,
+) {
+  if (kind === "outbound_email" || kind === "outbound_reminder") {
+    await sendGmailAsUser(userId, payload.to, payload.subject, payload.body);
+  } else if (kind === "outbound_linkedin") {
+    await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
+  }
+}
+
+// ── Request flow ─────────────────────────────────────────────────────────
 const EmailReq = z.object({
   to: z.string().email().max(320),
   subject: z.string().min(1).max(255),
@@ -108,68 +214,98 @@ const ReminderReq = z.object({
   subject: z.string().min(1).max(255),
   body: z.string().min(1).max(20000),
 });
-const LinkedInReq = z.object({ text: z.string().min(1).max(3000) });
+const LinkedInReq = z.object({
+  text: z.string().min(1).max(3000),
+  imageBase64: z.string().max(8_000_000).optional().nullable(),
+});
+
+async function fileRequest(
+  userId: string,
+  userEmail: string | undefined,
+  kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin",
+  payload: Record<string, any>,
+) {
+  const auto = await getAutoSend(userId);
+  const canAutoSend =
+    (kind === "outbound_linkedin" && auto.linkedin) ||
+    ((kind === "outbound_email" || kind === "outbound_reminder") && auto.email);
+
+  if (canAutoSend) {
+    try {
+      await performSend(userId, kind, payload);
+      const { data: row } = await supabaseAdmin
+        .from("approvals")
+        .insert({
+          kind,
+          status: "sent",
+          requester_id: userId,
+          payload,
+          reviewer: userEmail ?? userId,
+          decided_at: new Date().toISOString(),
+          notes: "auto-sent (user self-approved)",
+        })
+        .select("id")
+        .single();
+      return { id: row?.id, status: "sent" as const };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Send failed";
+      const { data: row } = await supabaseAdmin
+        .from("approvals")
+        .insert({
+          kind,
+          status: "failed",
+          requester_id: userId,
+          payload,
+          reviewer: userEmail ?? userId,
+          decided_at: new Date().toISOString(),
+          notes: msg,
+        })
+        .select("id")
+        .single();
+      throw new Error(msg + ` (logged as ${row?.id})`);
+    }
+  }
+
+  const { data: row, error } = await supabaseAdmin
+    .from("approvals")
+    .insert({ kind, status: "pending", requester_id: userId, payload })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { id: row.id, status: "pending" as const };
+}
 
 export const requestEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => EmailReq.parse(i))
   .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
-    const { data: row, error } = await supabaseAdmin
-      .from("approvals")
-      .insert({
-        kind: "outbound_email",
-        status: "pending",
-        requester_id: userId,
-        payload: data,
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { id: row.id };
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    return fileRequest(userId, claims?.email, "outbound_email", data);
   });
 
 export const requestReminder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => ReminderReq.parse(i))
   .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
     const owner = process.env.OWNER_EMAIL;
     if (!owner) throw new Error("OWNER_EMAIL not configured");
-    const { data: row, error } = await supabaseAdmin
-      .from("approvals")
-      .insert({
-        kind: "outbound_reminder",
-        status: "pending",
-        requester_id: userId,
-        payload: { to: owner, subject: `[Reminder] ${data.subject}`, body: data.body },
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { id: row.id };
+    return fileRequest(userId, claims?.email, "outbound_reminder", {
+      to: owner,
+      subject: `[Reminder] ${data.subject}`,
+      body: data.body,
+    });
   });
 
 export const requestLinkedIn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => LinkedInReq.parse(i))
   .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
-    const { data: row, error } = await supabaseAdmin
-      .from("approvals")
-      .insert({
-        kind: "outbound_linkedin",
-        status: "pending",
-        requester_id: userId,
-        payload: data,
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { id: row.id };
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    return fileRequest(userId, claims?.email, "outbound_linkedin", data);
   });
 
-// ─── My requests (list) ─────────────────────────────────────────────
+// ── My requests list ─────────────────────────────────────────────────────
 export const listMyRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -182,10 +318,16 @@ export const listMyRequests = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw new Error(error.message);
-    return { rows: data ?? [] };
+    // strip heavy imageBase64 from list payloads
+    const rows = (data ?? []).map((r: any) => {
+      const p = { ...(r.payload ?? {}) };
+      if (p.imageBase64) p.imageBase64 = "[image]";
+      return { ...r, payload: p };
+    });
+    return { rows };
   });
 
-// ─── Owner: list pending + approve / reject ─────────────────────────
+// ── Owner queue ──────────────────────────────────────────────────────────
 async function assertOwner(userId: string) {
   const { data } = await supabaseAdmin
     .from("user_roles")
@@ -211,10 +353,7 @@ export const listPendingApprovals = createServerFn({ method: "GET" })
     return { rows: data ?? [] };
   });
 
-const DecisionInput = z.object({
-  id: z.string().uuid(),
-  notes: z.string().max(2000).optional(),
-});
+const DecisionInput = z.object({ id: z.string().uuid(), notes: z.string().max(2000).optional() });
 
 export const approveOutbound = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -224,21 +363,15 @@ export const approveOutbound = createServerFn({ method: "POST" })
     await assertOwner(userId);
     const { data: row, error } = await supabaseAdmin
       .from("approvals")
-      .select("id, kind, status, payload")
+      .select("id, kind, status, payload, requester_id")
       .eq("id", data.id)
       .maybeSingle();
     if (error || !row) throw new Error("Request not found");
     if (row.status !== "pending") throw new Error(`Already ${row.status}`);
+    if (!row.requester_id) throw new Error("Request has no requester");
 
     try {
-      const p = row.payload as Record<string, string>;
-      if (row.kind === "outbound_email" || row.kind === "outbound_reminder") {
-        await sendGmailRaw(p.to, p.subject, p.body);
-      } else if (row.kind === "outbound_linkedin") {
-        await postLinkedInRaw(p.text);
-      } else {
-        throw new Error(`Unknown kind: ${row.kind}`);
-      }
+      await performSend(row.requester_id, row.kind as any, (row.payload ?? {}) as any);
       await supabaseAdmin
         .from("approvals")
         .update({
@@ -283,3 +416,21 @@ export const rejectOutbound = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// Workspace-connector helper exported for the cron digest only
+export async function sendOwnerDigestEmail(to: string, subject: string, body: string) {
+  const lovableKey = process.env.LOVABLE_API_KEY;
+  const gmailKey = process.env.GOOGLE_MAIL_API_KEY;
+  if (!lovableKey || !gmailKey) throw new Error("Workspace Gmail connector not configured");
+  const res = await fetch(`${GMAIL_GATEWAY}/users/me/messages/send`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": gmailKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw: buildRawEmail(to, subject, body) }),
+  });
+  if (!res.ok) throw new Error(`digest gmail send failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}

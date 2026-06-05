@@ -375,34 +375,71 @@ export function Terminal() {
   return (
     <div className="bg-terminal text-foreground min-h-screen flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-rule">
-        <div className="flex items-center gap-4">
-          <div className="font-serif text-xl tracking-tight">
+      <header className="flex items-center justify-between px-3 md:px-5 py-2 md:py-3 border-b border-rule gap-2">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <button
+            onClick={() => setRosterOpen(true)}
+            className="md:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground"
+            aria-label="Open roster"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="font-serif text-lg md:text-xl tracking-tight truncate">
             <span className="text-primary">VDNX</span> Terminal
           </div>
-          <div className="smallcaps text-xs text-muted-foreground">
+          <div className="hidden md:block smallcaps text-xs text-muted-foreground">
             Authority · Auditability · Atomicity
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="font-mono text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 font-mono text-[11px] uppercase border border-rule px-2 py-1 hover:border-primary hover:text-primary text-muted-foreground"
+            title="Open CEO chat"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Chat</span>
+          </Link>
+          <div className="hidden md:block font-mono text-[11px] text-muted-foreground">
             <Clock />
           </div>
         </div>
       </header>
 
+      {/* Mobile roster backdrop */}
+      {rosterOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm md:hidden"
+          onClick={() => setRosterOpen(false)}
+        />
+      )}
+
       {/* Main */}
       <div className="flex flex-1 min-h-0">
         {/* Roster */}
-        <aside className="w-56 border-r border-rule bg-panel/60 flex flex-col">
-          <div className="px-4 py-3 smallcaps text-[10px] text-muted-foreground border-b border-rule">
-            Roster
+        <aside
+          className={`fixed md:static inset-y-0 left-0 z-40 w-64 md:w-56 max-w-[85vw] border-r border-rule bg-panel md:bg-panel/60 flex flex-col transition-transform duration-200 ${
+            rosterOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          }`}
+        >
+          <div className="px-4 py-3 smallcaps text-[10px] text-muted-foreground border-b border-rule flex items-center justify-between">
+            <span>Roster</span>
+            <button
+              onClick={() => setRosterOpen(false)}
+              className="md:hidden text-muted-foreground hover:text-foreground"
+              aria-label="Close roster"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-auto">
             {agents.map(a => (
               <button
                 key={a.slug}
-                onClick={() => openPanel({ kind: "thread", agentSlug: a.slug, threadId: null, title: a.role })}
+                onClick={() => {
+                  openPanel({ kind: "thread", agentSlug: a.slug, threadId: null, title: a.role });
+                  setRosterOpen(false);
+                }}
                 className="w-full text-left px-4 py-2.5 border-b border-rule/50 hover:bg-panel-2 transition-colors group"
               >
                 <div className="flex items-center gap-2">
@@ -414,14 +451,14 @@ export function Terminal() {
             ))}
           </div>
           <button
-            onClick={() => openPanel({ kind: "library" })}
+            onClick={() => { openPanel({ kind: "library" }); setRosterOpen(false); }}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left flex items-center justify-between"
           >
             <span>Command Library</span>
             <span className="font-mono text-[10px] text-muted-foreground">⌘K</span>
           </button>
           <button
-            onClick={() => openPanel({ kind: "manual" })}
+            onClick={() => { openPanel({ kind: "manual" }); setRosterOpen(false); }}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left"
           >
             Manual v3.1

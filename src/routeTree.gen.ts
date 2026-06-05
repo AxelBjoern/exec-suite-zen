@@ -14,12 +14,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
+import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
 import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
+import { Route as ApiPublicCronDailyReminderRouteImport } from './routes/api/public/cron/daily-reminder'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -43,6 +45,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
 const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
   id: '/terminal',
   path: '/terminal',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOutboundRoute = AuthenticatedOutboundRouteImport.update({
+  id: '/outbound',
+  path: '/outbound',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedForgeRoute = AuthenticatedForgeRouteImport.update({
@@ -77,6 +84,12 @@ const ApiPublicCronDailyReportsRoute =
     path: '/api/public/cron/daily-reports',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronDailyReminderRoute =
+  ApiPublicCronDailyReminderRouteImport.update({
+    id: '/api/public/cron/daily-reminder',
+    path: '/api/public/cron/daily-reminder',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -85,7 +98,9 @@ export interface FileRoutesByFullPath {
   '/budget': typeof AuthenticatedBudgetRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
+  '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
+  '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
@@ -96,8 +111,10 @@ export interface FileRoutesByTo {
   '/budget': typeof AuthenticatedBudgetRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
+  '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
   '/': typeof AuthenticatedIndexRoute
+  '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
@@ -110,8 +127,10 @@ export interface FileRoutesById {
   '/_authenticated/budget': typeof AuthenticatedBudgetRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
+  '/_authenticated/outbound': typeof AuthenticatedOutboundRoute
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
@@ -125,7 +144,9 @@ export interface FileRouteTypes {
     | '/budget'
     | '/chat'
     | '/forge'
+    | '/outbound'
     | '/terminal'
+    | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
@@ -136,8 +157,10 @@ export interface FileRouteTypes {
     | '/budget'
     | '/chat'
     | '/forge'
+    | '/outbound'
     | '/terminal'
     | '/'
+    | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
@@ -149,8 +172,10 @@ export interface FileRouteTypes {
     | '/_authenticated/budget'
     | '/_authenticated/chat'
     | '/_authenticated/forge'
+    | '/_authenticated/outbound'
     | '/_authenticated/terminal'
     | '/_authenticated/'
+    | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
@@ -160,6 +185,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiPublicCronDailyReminderRoute: typeof ApiPublicCronDailyReminderRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
@@ -200,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/terminal'
       fullPath: '/terminal'
       preLoaderRoute: typeof AuthenticatedTerminalRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/outbound': {
+      id: '/_authenticated/outbound'
+      path: '/outbound'
+      fullPath: '/outbound'
+      preLoaderRoute: typeof AuthenticatedOutboundRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/forge': {
@@ -244,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronDailyReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/daily-reminder': {
+      id: '/api/public/cron/daily-reminder'
+      path: '/api/public/cron/daily-reminder'
+      fullPath: '/api/public/cron/daily-reminder'
+      preLoaderRoute: typeof ApiPublicCronDailyReminderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -251,6 +291,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRoute
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
+  AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRoute
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -259,6 +300,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBudgetRoute: AuthenticatedBudgetRoute,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
+  AuthenticatedOutboundRoute: AuthenticatedOutboundRoute,
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
@@ -270,6 +312,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiPublicCronDailyReminderRoute: ApiPublicCronDailyReminderRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
@@ -277,13 +320,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -197,7 +197,7 @@ function OutboundPage() {
   async function sendNow(id: string) {
     setRowBusy(id);
     try {
-      await approveReq({ data: { id } });
+      await selfSend({ data: { id } });
       toast.success("Sent");
       qc.invalidateQueries({ queryKey: ["my-outbound"] });
     } catch (e) {

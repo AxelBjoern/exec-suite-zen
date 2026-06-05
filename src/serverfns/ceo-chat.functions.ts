@@ -1221,7 +1221,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           }
 
           const filed = await fileOutboundFromChat({ userId, userEmail, kind, payload });
-          const status = filed.status === "sent" ? "✅ Sent" : filed.status === "failed" ? "⚠️ Failed" : "📨 Filed as pending";
+          const status = filed.status === "sent" ? "✅ Sent" : "📨 Filed as pending";
           const imgNote =
             kind === "outbound_linkedin"
               ? payload.imageBase64

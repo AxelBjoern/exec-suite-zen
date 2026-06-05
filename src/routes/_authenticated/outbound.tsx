@@ -79,6 +79,7 @@ function OutboundPage() {
   const myList = useServerFn(listMyRequests);
   const claimOwner = useServerFn(ensureOwnerRole);
   const approveReq = useServerFn(approveOutbound);
+  const updateDraft = useServerFn(updateOutboundDraft);
   const tagline = useServerFn(composeLinkedInTagline);
 
   const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });

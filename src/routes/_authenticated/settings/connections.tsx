@@ -17,13 +17,21 @@ export const Route = createFileRoute("/_authenticated/settings/connections")({
   head: () => ({
     meta: [
       { title: "VDNX — Connections" },
-      { name: "description", content: "Connect your Gmail and LinkedIn so outbound sends from your own account." },
+      { name: "description", content: "Connect Gmail for personal sending and manage workspace-backed outbound connections." },
     ],
   }),
   component: ConnectionsPage,
 });
 
 type Provider = "gmail" | "linkedin";
+
+const PERSONAL_CONNECT_SUPPORT: Record<Provider, { supported: boolean; message?: string }> = {
+  gmail: { supported: true },
+  linkedin: {
+    supported: false,
+    message: "LinkedIn personal account connection isn't available here yet. Use the workspace LinkedIn connection for posting.",
+  },
+};
 
 function ConnectionsPage() {
   const qc = useQueryClient();
@@ -36,12 +44,24 @@ function ConnectionsPage() {
   const [busy, setBusy] = useState<Provider | null>(null);
 
   async function connect(provider: Provider) {
+    const support = PERSONAL_CONNECT_SUPPORT[provider];
+    if (!support.supported) {
+      toast.error(support.message ?? "This connection isn't available.");
+      return;
+    }
+
     setBusy(provider);
     try {
       const result = await connectAppUser({
         connectorId: provider === "gmail" ? "google" : "linkedin",
         gatewayBaseUrl: GATEWAY_BASE_URL,
-        start: async (targetOrigin) => start({ data: { provider, targetOrigin } }),
+        start: async (targetOrigin) => {
+          const res = await start({ data: { provider, targetOrigin } });
+          if (res.unsupported) {
+            throw new Error(res.message);
+          }
+          return { authorizationUrl: res.authorizationUrl };
+        },
       });
       if (!result.success || !result.connectionId) {
         toast.error(result.error ?? "Failed to connect");
@@ -123,15 +143,21 @@ function ConnectionsPage() {
         ) : (
           <>
             <p className="mt-3 text-sm text-muted-foreground">
-              Sign in with your {label} account so outbound sends from you, not a shared workspace connector.
+              {provider === "linkedin"
+                ? "LinkedIn currently posts through the shared workspace connection. Personal LinkedIn sign-in is not available on this screen yet."
+                : `Sign in with your ${label} account so outbound sends from you, not a shared workspace connector.`}
             </p>
             <button
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
               onClick={() => connect(provider)}
-              disabled={busy === provider}
+              disabled={busy === provider || !PERSONAL_CONNECT_SUPPORT[provider].supported}
             >
               <Plug className="h-3.5 w-3.5" />
-              {busy === provider ? "Opening…" : `Connect ${label}`}
+              {busy === provider
+                ? "Opening…"
+                : PERSONAL_CONNECT_SUPPORT[provider].supported
+                  ? `Connect ${label}`
+                  : "Not available"}
             </button>
           </>
         )}
@@ -144,7 +170,7 @@ function ConnectionsPage() {
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Settings · Connections</p>
       <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">Your accounts</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Outbound sends use your own Gmail and LinkedIn once connected.
+        Gmail can connect as your own account. LinkedIn currently uses the shared workspace connection.
       </p>
       <div className="mt-8 grid gap-4">
         <Card provider="gmail" icon={Mail} label="Gmail" row={gmail} />

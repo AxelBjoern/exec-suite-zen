@@ -981,18 +981,21 @@ export type Database = {
         Row: {
           auto_send_email: boolean
           auto_send_linkedin: boolean
+          design_rules: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          design_rules?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          design_rules?: string | null
           updated_at?: string
           user_id?: string
         }

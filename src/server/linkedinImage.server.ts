@@ -8,6 +8,7 @@ const ENDPOINT = "https://ai.gateway.lovable.dev/v1/images/generations";
 export async function generateLinkedInImageBase64(opts: {
   tagline: string;
   visualPrompt: string;
+  designRules?: string | null;
 }): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY not configured");
@@ -16,9 +17,14 @@ export async function generateLinkedInImageBase64(opts: {
   const visual = opts.visualPrompt.trim();
   if (!tagline || !visual) throw new Error("tagline and visualPrompt required");
 
+  const rulesBlock = opts.designRules?.trim()
+    ? `\n\nBrand/style rules (must follow):\n${opts.designRules.trim()}`
+    : "";
+
   const prompt =
     `${visual}. Bold sans-serif overlay text that reads exactly: "${tagline}". ` +
-    `Composition leaves negative space for the text. High contrast, social-share friendly, square 1:1, no watermarks, no logos.`;
+    `Composition leaves negative space for the text. High contrast, social-share friendly, square 1:1, no watermarks, no logos.` +
+    rulesBlock;
 
   const res = await fetch(ENDPOINT, {
     method: "POST",
@@ -49,3 +55,4 @@ export async function generateLinkedInImageBase64(opts: {
   }
   throw new Error("Image gateway returned no image data");
 }
+

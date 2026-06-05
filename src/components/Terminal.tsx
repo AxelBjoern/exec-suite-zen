@@ -708,17 +708,47 @@ function ThreadPanel({
   });
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 p-8 overflow-auto">
+    <div className="flex flex-col md:flex-row h-full">
+      <div className="flex-1 p-4 md:p-8 overflow-auto min-w-0">
         <div className="smallcaps text-[10px] text-muted-foreground">
           {boardroom ? "Boardroom" : "Solo briefing"} · {agent?.slug}
         </div>
-        <h1 className="font-serif text-3xl mt-1">{agent?.role}</h1>
+        <h1 className="font-serif text-2xl md:text-3xl mt-1">{agent?.role}</h1>
         <p className="text-muted-foreground text-sm mt-1">{agent?.mandate}</p>
-        <div className="hairline my-6" />
+        <div className="hairline my-4 md:my-6" />
+
+        {/* Mobile-only collapsible context */}
+        <details className="md:hidden mb-4 border border-rule bg-panel/40 rounded-sm">
+          <summary className="cursor-pointer px-3 py-2 smallcaps text-[10px] text-muted-foreground flex items-center justify-between">
+            <span>Mandate · Tone · Directives</span>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </summary>
+          <div className="px-3 pb-3 space-y-3">
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Tone</div>
+              <p className="text-sm mt-1 italic">{agent?.tone}</p>
+            </div>
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Consult-with</div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {agent?.consult_with.map(s => (
+                  <span key={s} className="font-mono text-[10px] uppercase border border-rule px-1.5 py-0.5 text-primary">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Pinned directives</div>
+              {dirsQ.data?.length
+                ? <ul className="mt-2 space-y-2">{dirsQ.data.map((d: any) => (
+                    <li key={d.id} className="text-[12px] border-l border-primary/60 pl-2">{d.body}</li>
+                  ))}</ul>
+                : <div className="mt-2 text-[12px] text-muted-foreground">none</div>}
+            </div>
+          </div>
+        </details>
 
         {!threadId && (
-          <div className="font-mono text-sm text-muted-foreground border border-dashed border-rule p-6">
+          <div className="font-mono text-xs md:text-sm text-muted-foreground border border-dashed border-rule p-4 md:p-6 break-words">
             No thread yet. From the command line below, try:
             <div className="text-primary mt-2">@{agentSlug} &lt;ask anything in plain language&gt;</div>
             <div className="text-primary">:{agentSlug} brief &lt;your topic&gt;</div>
@@ -763,7 +793,7 @@ function ThreadPanel({
         </div>
       </div>
 
-      <aside className="w-72 border-l border-rule bg-panel/40 p-5 overflow-auto">
+      <aside className="hidden md:block w-72 border-l border-rule bg-panel/40 p-5 overflow-auto">
         <div className="smallcaps text-[10px] text-muted-foreground">Mandate</div>
         <p className="text-sm mt-1">{agent?.mandate}</p>
 

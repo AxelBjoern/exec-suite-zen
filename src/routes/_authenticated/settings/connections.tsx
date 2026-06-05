@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/settings/connections")({
   head: () => ({
     meta: [
       { title: "VDNX — Connections" },
-      { name: "description", content: "Connect your Gmail and LinkedIn so outbound sends from your own account." },
+      { name: "description", content: "Connect Gmail for personal sending and manage workspace-backed outbound connections." },
     ],
   }),
   component: ConnectionsPage,
@@ -170,7 +170,7 @@ function ConnectionsPage() {
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Settings · Connections</p>
       <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">Your accounts</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Outbound sends use your own Gmail and LinkedIn once connected.
+        Gmail can connect as your own account. LinkedIn currently uses the shared workspace connection.
       </p>
       <div className="mt-8 grid gap-4">
         <Card provider="gmail" icon={Mail} label="Gmail" row={gmail} />

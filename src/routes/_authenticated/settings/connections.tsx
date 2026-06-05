@@ -36,6 +36,13 @@ function ConnectionsPage() {
   const [busy, setBusy] = useState<Provider | null>(null);
 
   async function connect(provider: Provider) {
+    // If we already know it is unsupported from the initial load, fail fast
+    // to avoid opening a popup that will immediately close.
+    if (data?.config && !data.config[provider]) {
+      toast.error(`${provider === "gmail" ? "Gmail" : "LinkedIn"} personal connect isn't configured in this environment.`);
+      return;
+    }
+
     setBusy(provider);
     try {
       const result = await connectAppUser({

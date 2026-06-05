@@ -136,7 +136,11 @@ export const listMyConnections = createServerFn({ method: "GET" })
       .select("provider, provider_email, provider_name, connected_at")
       .eq("user_id", userId);
     if (error) throw new Error(error.message);
-    return { rows: data ?? [] };
+    // Check if providers are configured in env
+    const gmailConfigured = !!process.env.GOOGLE_APP_USER_CONNECTOR_CLIENT_ID;
+    const linkedinConfigured = !!process.env.LINKEDIN_APP_USER_CONNECTOR_CLIENT_ID;
+
+    return { rows: data ?? [], config: { gmail: gmailConfigured, linkedin: linkedinConfigured } };
   });
 
 export const disconnectProvider = createServerFn({ method: "POST" })

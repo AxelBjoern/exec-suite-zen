@@ -202,7 +202,43 @@ function OutboundPage() {
     }
   }
 
-  return (
+  function openEdit(r: any) {
+    if (r.status !== "pending") return;
+    const p = (r.payload ?? {}) as Record<string, string>;
+    setEditing(r);
+    if (r.kind === "outbound_linkedin") {
+      setEditDraft({ text: p.text ?? "" });
+    } else {
+      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "" });
+    }
+  }
+
+  function closeEdit() {
+    setEditing(null);
+    setEditDraft({});
+    setEditBusy(null);
+  }
+
+  async function saveEdit(opts: { send: boolean }) {
+    if (!editing) return;
+    setEditBusy(opts.send ? "send" : "save");
+    try {
+      await updateDraft({ data: { id: editing.id, payload: editDraft } });
+      if (opts.send && owner.data?.isOwner) {
+        await approveReq({ data: { id: editing.id } });
+        toast.success("Sent");
+      } else {
+        toast.success("Saved");
+      }
+      qc.invalidateQueries({ queryKey: ["my-outbound"] });
+      closeEdit();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setEditBusy(null);
+    }
+  }
+
     <main className="mx-auto max-w-3xl px-4 py-10 md:py-16">
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Outbound</p>
       <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">Request to send</h1>

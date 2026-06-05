@@ -35,23 +35,36 @@ export const startConnect = createServerFn({ method: "POST" })
     const { userId } = context as { userId: string };
     const meta = PROVIDER_META[data.provider as Provider];
     const clientId = process.env[meta.clientIdEnv];
+    const providerLabel = data.provider === "gmail" ? "Gmail" : "LinkedIn";
     if (!clientId) {
       return {
         unsupported: true as const,
-        message: `${data.provider === "gmail" ? "Gmail" : "LinkedIn"} personal connect isn't configured. Sends use the shared workspace account.`,
+        message: `${providerLabel} personal connect isn't configured. Sends use the shared workspace account.`,
       };
     }
-    const { authorizationUrl } = await authorizeAppUserOAuth({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectorId: meta.connectorIdAuth,
-      appUserId: userId,
-      connectorClientId: clientId,
-      returnUrl: `${data.targetOrigin}/settings/connections`,
-      responseMode: "web_message",
-      webMessageTargetOrigin: data.targetOrigin,
-      credentialsConfiguration: { scopes: meta.scopes },
-    });
-    return { unsupported: false as const, authorizationUrl };
+
+    try {
+      const { authorizationUrl } = await authorizeAppUserOAuth({
+        gatewayBaseUrl: GATEWAY_BASE_URL,
+        connectorId: meta.connectorIdAuth,
+        appUserId: userId,
+        connectorClientId: clientId,
+        returnUrl: `${data.targetOrigin}/settings/connections`,
+        responseMode: "web_message",
+        webMessageTargetOrigin: data.targetOrigin,
+        credentialsConfiguration: { scopes: meta.scopes },
+      });
+      return { unsupported: false as const, authorizationUrl };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start personal connect";
+      if (message.includes("connector_not_found")) {
+        return {
+          unsupported: true as const,
+          message: `${providerLabel} personal connect isn't available for this workspace yet. Sends use the shared workspace account.`,
+        };
+      }
+      throw error;
+    }
   });
 
 const SaveInput = z.object({

@@ -567,6 +567,88 @@ export const aiEditDraft = createServerFn({ method: "POST" })
     };
   });
 
+// ── File a multi-item publishing plan from chat ──────────────────────────
+const FilePlanInput = z.object({
+  plan: z.string().min(20).max(40000),
+});
+
+export const filePlanFromChat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => FilePlanInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    const userEmail = claims?.email;
+
+    const sys =
+      "You extract outbound publishing items from a plan. Return ONLY JSON, no markdown fences:\n" +
+      '{"items":[{"kind":"linkedin"|"email"|"reminder","text"?:"...","to"?:"...","subject"?:"...","body"?:"...","scheduled_at"?:"YYYY-MM-DD HH:mm TZ","label"?:"short title"}]}.\n' +
+      "For LinkedIn posts: include the FULL post text (hook + body + hashtags) in `text`. If the plan references copy without quoting it, use the strongest available reconstruction from hooks/themes in the plan.\n" +
+      "For emails: require `to`, `subject`, `body`. For reminders: require `subject`, `body`.\n" +
+      "If items are scheduled, put the human-readable date/time in `scheduled_at`. Order items chronologically. Skip metadata sections (metrics, risks, action items).";
+
+    const json = await chatCompletion({
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: `Plan:\n\n${data.plan}` },
+      ],
+      model: "deepseek/deepseek-v4-flash",
+      temperature: 0.3,
+      max_tokens: 8000,
+    });
+    const content: string = json?.choices?.[0]?.message?.content ?? "";
+    const stripped = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    let parsed: { items?: any[] } = {};
+    try { parsed = JSON.parse(stripped); } catch { throw new Error("Could not parse plan into items"); }
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    if (items.length === 0) throw new Error("No publishable items found in plan");
+
+    const filed: Array<{ id?: string; status: string; label: string }> = [];
+    const errors: string[] = [];
+    for (const it of items) {
+      try {
+        let kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin";
+        let payload: Record<string, any>;
+        let label: string = it.label ?? "";
+        if (it.kind === "linkedin") {
+          if (!it.text) { errors.push(`${label || "linkedin item"}: missing text`); continue; }
+          kind = "outbound_linkedin";
+          payload = { text: String(it.text) };
+          if (it.scheduled_at) payload.scheduled_at = String(it.scheduled_at);
+          label = label || "LinkedIn post";
+        } else if (it.kind === "email") {
+          if (!it.to || !it.body) { errors.push(`${label || "email item"}: missing to/body`); continue; }
+          kind = "outbound_email";
+          payload = {
+            to: String(it.to),
+            subject: String(it.subject ?? "Message"),
+            body: String(it.body),
+          };
+          if (it.scheduled_at) payload.scheduled_at = String(it.scheduled_at);
+          label = label || `Email to ${it.to}`;
+        } else if (it.kind === "reminder") {
+          if (!it.body) { errors.push(`${label || "reminder item"}: missing body`); continue; }
+          kind = "outbound_reminder";
+          payload = {
+            subject: String(it.subject ?? "Reminder"),
+            body: String(it.body),
+          };
+          if (it.scheduled_at) payload.scheduled_at = String(it.scheduled_at);
+          label = label || "Reminder";
+        } else {
+          errors.push(`Unknown kind: ${it.kind}`);
+          continue;
+        }
+        const res = await fileOutboundFromChat({ userId, userEmail, kind, payload });
+        filed.push({ id: res.id, status: res.status, label });
+      } catch (e: any) {
+        errors.push(`${it.label ?? it.kind}: ${e?.message ?? "failed"}`);
+      }
+    }
+
+    return { filed, errors, total: items.length };
+  });
+
+
 export async function sendOwnerDigestEmail(to: string, subject: string, body: string) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const gmailKey = process.env.GOOGLE_MAIL_API_KEY;

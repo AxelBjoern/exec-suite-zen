@@ -526,22 +526,37 @@ export function Terminal() {
           </div>
 
           {/* Scrollback */}
-          <div ref={sbRef} className="border-t border-rule bg-panel/30 h-44 overflow-auto px-5 py-2 font-mono text-[12px] leading-relaxed">
-            {scrollback.map((s, i) => (
-              <div key={i} className={
-                s.kind === "in" ? "text-primary" :
-                s.kind === "err" ? "text-destructive" :
-                s.kind === "sys" ? "text-muted-foreground" : "text-foreground/90"
-              }>
-                {s.text.split("\n").map((ln, j) => <div key={j}>{ln}</div>)}
-              </div>
-            ))}
-            {busy && <div className="text-amber">…working</div>}
+          <div className="border-t border-rule bg-panel/30 relative">
+            <button
+              onClick={() => setScrollbackCollapsed(c => !c)}
+              className="absolute top-1 right-2 z-10 p-1 text-muted-foreground hover:text-primary"
+              aria-label={scrollbackCollapsed ? "Expand console" : "Collapse console"}
+              title={scrollbackCollapsed ? "Expand console" : "Collapse console"}
+            >
+              {scrollbackCollapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            <div
+              ref={sbRef}
+              className={`overflow-auto px-3 md:px-5 py-2 font-mono text-[11px] md:text-[12px] leading-relaxed transition-all ${
+                scrollbackCollapsed ? "h-8" : "h-28 md:h-44"
+              }`}
+            >
+              {scrollback.map((s, i) => (
+                <div key={i} className={
+                  s.kind === "in" ? "text-primary" :
+                  s.kind === "err" ? "text-destructive" :
+                  s.kind === "sys" ? "text-muted-foreground" : "text-foreground/90"
+                }>
+                  {s.text.split("\n").map((ln, j) => <div key={j}>{ln}</div>)}
+                </div>
+              ))}
+              {busy && <div className="text-amber">…working</div>}
+            </div>
           </div>
 
           {/* Inline suggestions */}
           {input.trim() && (input.startsWith(":") || input.startsWith("/")) && (
-            <div className="px-5">
+            <div className="px-3 md:px-5">
               <InlineSuggestions
                 input={input}
                 onPick={(c) => { setInput(c.template); inputRef.current?.focus(); }}
@@ -550,7 +565,7 @@ export function Terminal() {
           )}
 
           {/* Command line */}
-          <div className="border-t border-primary/40 bg-background px-5 py-3 flex items-center gap-3">
+          <div className="border-t border-primary/40 bg-background px-3 md:px-5 py-3 flex items-center gap-2 md:gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <span className="font-mono text-primary">:</span>
             <input
               ref={inputRef}
@@ -560,15 +575,24 @@ export function Terminal() {
               disabled={busy}
               spellCheck={false}
               autoComplete="off"
-              placeholder=":cfo brief FY26 burn scenarios   ·   ⌘K for palette   ·   /library"
-              className="flex-1 bg-transparent outline-none font-mono text-[13px] text-foreground placeholder:text-muted-foreground/60"
+              autoCapitalize="off"
+              autoCorrect="off"
+              inputMode="text"
+              placeholder=":cfo brief FY26 burn   ·   /library"
+              className="flex-1 min-w-0 bg-transparent outline-none font-mono text-[13px] md:text-[13px] text-foreground placeholder:text-muted-foreground/60"
             />
             <button
               onClick={() => setPaletteOpen(true)}
-              className="font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
+              className="hidden md:inline-block font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
               title="Open command palette"
             >⌘K</button>
-            <span className="font-mono text-primary caret">▍</span>
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="md:hidden font-mono text-[10px] text-muted-foreground border border-rule px-2 py-1 hover:text-primary hover:border-primary"
+              title="Open command palette"
+              aria-label="Open command palette"
+            >⌘</button>
+            <span className="hidden md:inline font-mono text-primary caret">▍</span>
           </div>
         </main>
       </div>
@@ -582,8 +606,8 @@ export function Terminal() {
         }}
       />
 
-      {/* Audit ticker */}
-      <div className="border-t border-rule bg-panel/80 overflow-hidden ticker-mask">
+      {/* Audit ticker — desktop only to save vertical space on phones */}
+      <div className="hidden md:block border-t border-rule bg-panel/80 overflow-hidden ticker-mask">
         <div className="flex gap-8 whitespace-nowrap py-1.5 animate-ticker font-mono text-[11px] text-muted-foreground">
           {[...tickerItems, ...tickerItems].map((row, i) => (
             <span key={i} className="flex items-center gap-2">
@@ -602,6 +626,7 @@ export function Terminal() {
     </div>
   );
 }
+
 
 function panelLabel(p: Panel, agents: Agent[]): string {
   if (p.kind === "agents") return "ROSTER";

@@ -25,30 +25,20 @@ type Provider = keyof typeof PROVIDER_META;
 
 type ProviderCapability = {
   personalAvailable: boolean;
-  workspaceAvailable: boolean;
   message: string;
 };
 
 function getProviderCapability(provider: Provider): ProviderCapability {
-  if (provider === "gmail") {
-    const personalAvailable = Boolean(process.env.GOOGLE_APP_USER_CONNECTOR_CLIENT_ID);
-    const workspaceAvailable = Boolean(process.env.GOOGLE_MAIL_API_KEY);
+  const meta = PROVIDER_META[provider];
+  const clientId = process.env[meta.clientIdEnv];
+  const label = provider === "gmail" ? "Gmail" : "LinkedIn";
+  if (!clientId) {
     return {
-      personalAvailable,
-      workspaceAvailable,
-      message: personalAvailable
-        ? "Connect your own Gmail account."
-        : "Gmail personal connect is not configured yet. Outbound email uses the shared workspace account.",
+      personalAvailable: false,
+      message: `${label} personal OAuth is not configured. Add ${meta.clientIdEnv} in Lovable secrets to enable personal connect.`,
     };
   }
-
-  const workspaceAvailable = Boolean(process.env.LINKEDIN_API_KEY);
-  return {
-    personalAvailable: false,
-    workspaceAvailable,
-    message:
-      "LinkedIn personal connect is not available in this workspace yet. Posts use the shared workspace account.",
-  };
+  return { personalAvailable: true, message: `Connect your own ${label} account.` };
 }
 
 const StartInput = z.object({
@@ -65,17 +55,8 @@ export const startConnect = createServerFn({ method: "POST" })
     const providerLabel = data.provider === "gmail" ? "Gmail" : "LinkedIn";
     const capability = getProviderCapability(data.provider as Provider);
     const clientId = process.env[meta.clientIdEnv];
-    if (!capability.personalAvailable) {
-      return {
-        unsupported: true as const,
-        message: capability.message,
-      };
-    }
-    if (!clientId) {
-      return {
-        unsupported: true as const,
-        message: capability.message,
-      };
+    if (!capability.personalAvailable || !clientId) {
+      return { unsupported: true as const, message: capability.message };
     }
 
     try {
@@ -95,7 +76,7 @@ export const startConnect = createServerFn({ method: "POST" })
       if (message.includes("connector_not_found")) {
         return {
           unsupported: true as const,
-          message: `${providerLabel} personal connect isn't available for this workspace yet. Sends use the shared workspace account.`,
+          message: `${providerLabel} app-user connector is not registered in this workspace. Ask the workspace owner to enable the ${meta.connectorIdAuth} App User connector.`,
         };
       }
       throw error;
@@ -108,6 +89,7 @@ export const getConnectionCapabilities = createServerFn({ method: "GET" })
     gmail: getProviderCapability("gmail"),
     linkedin: getProviderCapability("linkedin"),
   }));
+
 
 const SaveInput = z.object({
   provider: z.enum(["gmail", "linkedin"]),

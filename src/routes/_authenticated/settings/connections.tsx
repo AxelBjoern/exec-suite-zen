@@ -101,7 +101,6 @@ function ConnectionsPage() {
   }) {
     const capability = capabilities?.[provider];
     const canPersonalConnect = capability?.personalAvailable ?? false;
-    const hasWorkspaceFallback = capability?.workspaceAvailable ?? false;
     const capabilitiesLoaded = Boolean(capability);
     const helperText = capability?.message;
     return (
@@ -142,30 +141,24 @@ function ConnectionsPage() {
         ) : (
           <>
             <p className="mt-3 text-sm text-muted-foreground">
-              {!capabilitiesLoaded ? (
-                "Checking account connection options…"
-              ) : !canPersonalConnect ? (
-                <span className="font-medium italic text-amber-600 dark:text-amber-500">
-                  {helperText}
-                </span>
-              ) : provider === "linkedin"
-                ? "Sign in with your LinkedIn account so posts go from you, not the shared workspace connection."
-                : `Sign in with your ${label} account so outbound sends from you, not a shared workspace connector.`}
+              {!capabilitiesLoaded
+                ? "Checking account connection options…"
+                : !canPersonalConnect
+                ? (
+                  <span className="font-medium italic text-amber-600 dark:text-amber-500">
+                    {helperText}
+                  </span>
+                )
+                : `Sign in with your own ${label} account. Personal only — no shared workspace fallback.`}
             </p>
-            {canPersonalConnect ? (
-              <button
-                className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                onClick={() => connect(provider)} disabled={busy === provider}
-              >
-                <Plug className="h-3.5 w-3.5" />
-                {busy === provider ? "Opening…" : `Connect ${label}`}
-              </button>
-            ) : (
-              <div className="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <Plug className="h-3.5 w-3.5" />
-                {hasWorkspaceFallback ? "Using shared workspace account" : "Personal connect unavailable"}
-              </div>
-            )}
+            <button
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              onClick={() => connect(provider)}
+              disabled={busy === provider || !canPersonalConnect}
+            >
+              <Plug className="h-3.5 w-3.5" />
+              {busy === provider ? "Opening…" : `Connect ${label}`}
+            </button>
           </>
         )}
       </section>

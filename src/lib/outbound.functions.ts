@@ -549,6 +549,7 @@ export const aiEditDraft = createServerFn({ method: "POST" })
         { role: "system", content: sys },
         { role: "user", content: userMsg },
       ],
+      model: "deepseek/deepseek-v4-flash",
       temperature: 0.7,
       max_tokens: 2000,
     });

@@ -13,28 +13,28 @@ export const Route = createFileRoute("/_authenticated/")({
 
 const TILES = [
   {
-    to: "/_authenticated/chat",
+    to: "/chat",
     label: "Chat",
     desc: "Free-form conversation with the executive board.",
     icon: MessageSquare,
     badge: "Live",
   },
   {
-    to: "/_authenticated/terminal",
+    to: "/terminal",
     label: "Terminal",
     desc: "Command the executive agents with structured verbs.",
     icon: TerminalSquare,
     badge: "Live",
   },
   {
-    to: "/_authenticated/budget",
+    to: "/budget",
     label: "Budget",
     desc: "Scenario modelling, P&L, cash flow, sensitivity.",
     icon: LineChart,
     badge: "Module",
   },
   {
-    to: "/_authenticated/forge",
+    to: "/forge",
     label: "Forge",
     desc: "Train and deploy specialised agents on OpenRouter models.",
     icon: Cpu,

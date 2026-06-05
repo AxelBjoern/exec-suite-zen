@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { Menu, X, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import {
   dispatch,
   routePrompt,
@@ -88,6 +89,8 @@ export function Terminal() {
   const [histIdx, setHistIdx] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [scrollbackCollapsed, setScrollbackCollapsed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const sbRef = useRef<HTMLDivElement>(null);
 
@@ -372,34 +375,71 @@ export function Terminal() {
   return (
     <div className="bg-terminal text-foreground min-h-screen flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-rule">
-        <div className="flex items-center gap-4">
-          <div className="font-serif text-xl tracking-tight">
+      <header className="flex items-center justify-between px-3 md:px-5 py-2 md:py-3 border-b border-rule gap-2">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <button
+            onClick={() => setRosterOpen(true)}
+            className="md:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground"
+            aria-label="Open roster"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="font-serif text-lg md:text-xl tracking-tight truncate">
             <span className="text-primary">VDNX</span> Terminal
           </div>
-          <div className="smallcaps text-xs text-muted-foreground">
+          <div className="hidden md:block smallcaps text-xs text-muted-foreground">
             Authority · Auditability · Atomicity
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="font-mono text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 font-mono text-[11px] uppercase border border-rule px-2 py-1 hover:border-primary hover:text-primary text-muted-foreground"
+            title="Open CEO chat"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Chat</span>
+          </Link>
+          <div className="hidden md:block font-mono text-[11px] text-muted-foreground">
             <Clock />
           </div>
         </div>
       </header>
 
+      {/* Mobile roster backdrop */}
+      {rosterOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm md:hidden"
+          onClick={() => setRosterOpen(false)}
+        />
+      )}
+
       {/* Main */}
       <div className="flex flex-1 min-h-0">
         {/* Roster */}
-        <aside className="w-56 border-r border-rule bg-panel/60 flex flex-col">
-          <div className="px-4 py-3 smallcaps text-[10px] text-muted-foreground border-b border-rule">
-            Roster
+        <aside
+          className={`fixed md:static inset-y-0 left-0 z-40 w-64 md:w-56 max-w-[85vw] border-r border-rule bg-panel md:bg-panel/60 flex flex-col transition-transform duration-200 ${
+            rosterOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          }`}
+        >
+          <div className="px-4 py-3 smallcaps text-[10px] text-muted-foreground border-b border-rule flex items-center justify-between">
+            <span>Roster</span>
+            <button
+              onClick={() => setRosterOpen(false)}
+              className="md:hidden text-muted-foreground hover:text-foreground"
+              aria-label="Close roster"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-auto">
             {agents.map(a => (
               <button
                 key={a.slug}
-                onClick={() => openPanel({ kind: "thread", agentSlug: a.slug, threadId: null, title: a.role })}
+                onClick={() => {
+                  openPanel({ kind: "thread", agentSlug: a.slug, threadId: null, title: a.role });
+                  setRosterOpen(false);
+                }}
                 className="w-full text-left px-4 py-2.5 border-b border-rule/50 hover:bg-panel-2 transition-colors group"
               >
                 <div className="flex items-center gap-2">
@@ -411,14 +451,14 @@ export function Terminal() {
             ))}
           </div>
           <button
-            onClick={() => openPanel({ kind: "library" })}
+            onClick={() => { openPanel({ kind: "library" }); setRosterOpen(false); }}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left flex items-center justify-between"
           >
             <span>Command Library</span>
             <span className="font-mono text-[10px] text-muted-foreground">⌘K</span>
           </button>
           <button
-            onClick={() => openPanel({ kind: "manual" })}
+            onClick={() => { openPanel({ kind: "manual" }); setRosterOpen(false); }}
             className="px-4 py-2 text-[11px] smallcaps border-t border-rule hover:bg-panel-2 text-left"
           >
             Manual v3.1
@@ -428,12 +468,12 @@ export function Terminal() {
         {/* Active panel area */}
         <main className="flex-1 flex flex-col min-w-0">
           {/* Tabs */}
-          <div className="flex items-center border-b border-rule bg-panel/40 overflow-x-auto">
+          <div className="flex items-center border-b border-rule bg-panel/40 overflow-x-auto scrollbar-hide">
             {panels.map((p, i) => (
-              <div key={i} className={`flex items-center border-r border-rule ${i === active ? "bg-background" : ""}`}>
+              <div key={i} className={`flex items-center border-r border-rule shrink-0 ${i === active ? "bg-background" : ""}`}>
                 <button
                   onClick={() => setActive(i)}
-                  className={`px-4 py-2 text-[12px] font-mono ${i === active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-3 md:px-4 py-2.5 text-[11px] md:text-[12px] font-mono whitespace-nowrap ${i === active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {panelLabel(p, agents)}
                 </button>
@@ -486,22 +526,37 @@ export function Terminal() {
           </div>
 
           {/* Scrollback */}
-          <div ref={sbRef} className="border-t border-rule bg-panel/30 h-44 overflow-auto px-5 py-2 font-mono text-[12px] leading-relaxed">
-            {scrollback.map((s, i) => (
-              <div key={i} className={
-                s.kind === "in" ? "text-primary" :
-                s.kind === "err" ? "text-destructive" :
-                s.kind === "sys" ? "text-muted-foreground" : "text-foreground/90"
-              }>
-                {s.text.split("\n").map((ln, j) => <div key={j}>{ln}</div>)}
-              </div>
-            ))}
-            {busy && <div className="text-amber">…working</div>}
+          <div className="border-t border-rule bg-panel/30 relative">
+            <button
+              onClick={() => setScrollbackCollapsed(c => !c)}
+              className="absolute top-1 right-2 z-10 p-1 text-muted-foreground hover:text-primary"
+              aria-label={scrollbackCollapsed ? "Expand console" : "Collapse console"}
+              title={scrollbackCollapsed ? "Expand console" : "Collapse console"}
+            >
+              {scrollbackCollapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+            <div
+              ref={sbRef}
+              className={`overflow-auto px-3 md:px-5 py-2 font-mono text-[11px] md:text-[12px] leading-relaxed transition-all ${
+                scrollbackCollapsed ? "h-8" : "h-28 md:h-44"
+              }`}
+            >
+              {scrollback.map((s, i) => (
+                <div key={i} className={
+                  s.kind === "in" ? "text-primary" :
+                  s.kind === "err" ? "text-destructive" :
+                  s.kind === "sys" ? "text-muted-foreground" : "text-foreground/90"
+                }>
+                  {s.text.split("\n").map((ln, j) => <div key={j}>{ln}</div>)}
+                </div>
+              ))}
+              {busy && <div className="text-amber">…working</div>}
+            </div>
           </div>
 
           {/* Inline suggestions */}
           {input.trim() && (input.startsWith(":") || input.startsWith("/")) && (
-            <div className="px-5">
+            <div className="px-3 md:px-5">
               <InlineSuggestions
                 input={input}
                 onPick={(c) => { setInput(c.template); inputRef.current?.focus(); }}
@@ -510,7 +565,7 @@ export function Terminal() {
           )}
 
           {/* Command line */}
-          <div className="border-t border-primary/40 bg-background px-5 py-3 flex items-center gap-3">
+          <div className="border-t border-primary/40 bg-background px-3 md:px-5 py-3 flex items-center gap-2 md:gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <span className="font-mono text-primary">:</span>
             <input
               ref={inputRef}
@@ -520,15 +575,24 @@ export function Terminal() {
               disabled={busy}
               spellCheck={false}
               autoComplete="off"
-              placeholder=":cfo brief FY26 burn scenarios   ·   ⌘K for palette   ·   /library"
-              className="flex-1 bg-transparent outline-none font-mono text-[13px] text-foreground placeholder:text-muted-foreground/60"
+              autoCapitalize="off"
+              autoCorrect="off"
+              inputMode="text"
+              placeholder=":cfo brief FY26 burn   ·   /library"
+              className="flex-1 min-w-0 bg-transparent outline-none font-mono text-[13px] md:text-[13px] text-foreground placeholder:text-muted-foreground/60"
             />
             <button
               onClick={() => setPaletteOpen(true)}
-              className="font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
+              className="hidden md:inline-block font-mono text-[10px] text-muted-foreground border border-rule px-1.5 py-0.5 hover:text-primary hover:border-primary"
               title="Open command palette"
             >⌘K</button>
-            <span className="font-mono text-primary caret">▍</span>
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="md:hidden font-mono text-[10px] text-muted-foreground border border-rule px-2 py-1 hover:text-primary hover:border-primary"
+              title="Open command palette"
+              aria-label="Open command palette"
+            >⌘</button>
+            <span className="hidden md:inline font-mono text-primary caret">▍</span>
           </div>
         </main>
       </div>
@@ -542,8 +606,8 @@ export function Terminal() {
         }}
       />
 
-      {/* Audit ticker */}
-      <div className="border-t border-rule bg-panel/80 overflow-hidden ticker-mask">
+      {/* Audit ticker — desktop only to save vertical space on phones */}
+      <div className="hidden md:block border-t border-rule bg-panel/80 overflow-hidden ticker-mask">
         <div className="flex gap-8 whitespace-nowrap py-1.5 animate-ticker font-mono text-[11px] text-muted-foreground">
           {[...tickerItems, ...tickerItems].map((row, i) => (
             <span key={i} className="flex items-center gap-2">
@@ -562,6 +626,7 @@ export function Terminal() {
     </div>
   );
 }
+
 
 function panelLabel(p: Panel, agents: Agent[]): string {
   if (p.kind === "agents") return "ROSTER";
@@ -592,7 +657,7 @@ function Clock() {
 
 function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) => void }) {
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 md:p-8 max-w-6xl">
       <div className="flex items-center justify-between gap-4 mb-1">
         <h1 className="font-serif text-3xl">The Executive Team</h1>
         <Link
@@ -643,17 +708,47 @@ function ThreadPanel({
   });
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 p-8 overflow-auto">
+    <div className="flex flex-col md:flex-row h-full">
+      <div className="flex-1 p-4 md:p-8 overflow-auto min-w-0">
         <div className="smallcaps text-[10px] text-muted-foreground">
           {boardroom ? "Boardroom" : "Solo briefing"} · {agent?.slug}
         </div>
-        <h1 className="font-serif text-3xl mt-1">{agent?.role}</h1>
+        <h1 className="font-serif text-2xl md:text-3xl mt-1">{agent?.role}</h1>
         <p className="text-muted-foreground text-sm mt-1">{agent?.mandate}</p>
-        <div className="hairline my-6" />
+        <div className="hairline my-4 md:my-6" />
+
+        {/* Mobile-only collapsible context */}
+        <details className="md:hidden mb-4 border border-rule bg-panel/40 rounded-sm">
+          <summary className="cursor-pointer px-3 py-2 smallcaps text-[10px] text-muted-foreground flex items-center justify-between">
+            <span>Mandate · Tone · Directives</span>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </summary>
+          <div className="px-3 pb-3 space-y-3">
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Tone</div>
+              <p className="text-sm mt-1 italic">{agent?.tone}</p>
+            </div>
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Consult-with</div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {agent?.consult_with.map(s => (
+                  <span key={s} className="font-mono text-[10px] uppercase border border-rule px-1.5 py-0.5 text-primary">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="smallcaps text-[10px] text-muted-foreground">Pinned directives</div>
+              {dirsQ.data?.length
+                ? <ul className="mt-2 space-y-2">{dirsQ.data.map((d: any) => (
+                    <li key={d.id} className="text-[12px] border-l border-primary/60 pl-2">{d.body}</li>
+                  ))}</ul>
+                : <div className="mt-2 text-[12px] text-muted-foreground">none</div>}
+            </div>
+          </div>
+        </details>
 
         {!threadId && (
-          <div className="font-mono text-sm text-muted-foreground border border-dashed border-rule p-6">
+          <div className="font-mono text-xs md:text-sm text-muted-foreground border border-dashed border-rule p-4 md:p-6 break-words">
             No thread yet. From the command line below, try:
             <div className="text-primary mt-2">@{agentSlug} &lt;ask anything in plain language&gt;</div>
             <div className="text-primary">:{agentSlug} brief &lt;your topic&gt;</div>
@@ -698,7 +793,7 @@ function ThreadPanel({
         </div>
       </div>
 
-      <aside className="w-72 border-l border-rule bg-panel/40 p-5 overflow-auto">
+      <aside className="hidden md:block w-72 border-l border-rule bg-panel/40 p-5 overflow-auto">
         <div className="smallcaps text-[10px] text-muted-foreground">Mandate</div>
         <p className="text-sm mt-1">{agent?.mandate}</p>
 
@@ -732,30 +827,32 @@ function ThreadPanel({
 function TasksPanel() {
   const q = useQuery({ queryKey: ["tasks"], queryFn: () => listTasks(), refetchInterval: 5000 });
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-4">Task Inbox</h2>
-      <table className="w-full font-mono text-[12px]">
-        <thead className="text-muted-foreground">
-          <tr className="border-b border-rule"><th className="text-left py-2">When</th><th className="text-left">Agent</th><th className="text-left">Title</th><th className="text-left">Status</th></tr>
-        </thead>
-        <tbody>
-          {q.data?.map((t: any) => (
-            <tr key={t.id} className="border-b border-rule/40">
-              <td className="py-2 text-muted-foreground">{new Date(t.created_at).toLocaleString("en-GB", { hour12: false })}</td>
-              <td className="text-primary uppercase">{t.agents?.slug}</td>
-              <td>{t.title}</td>
-              <td>
-                <span className={
-                  t.status === "done" ? "text-success" :
-                  t.status === "blocked" ? "text-amber" :
-                  "text-muted-foreground"
-                }>{t.status}</span>
-                {t.requires_approval && <span className="ml-2 text-amber">[gate]</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+        <table className="w-full font-mono text-[11px] md:text-[12px] min-w-[500px]">
+          <thead className="text-muted-foreground">
+            <tr className="border-b border-rule"><th className="text-left py-2">When</th><th className="text-left">Agent</th><th className="text-left">Title</th><th className="text-left">Status</th></tr>
+          </thead>
+          <tbody>
+            {q.data?.map((t: any) => (
+              <tr key={t.id} className="border-b border-rule/40">
+                <td className="py-2 text-muted-foreground">{new Date(t.created_at).toLocaleString("en-GB", { hour12: false })}</td>
+                <td className="text-primary uppercase">{t.agents?.slug}</td>
+                <td>{t.title}</td>
+                <td>
+                  <span className={
+                    t.status === "done" ? "text-success" :
+                    t.status === "blocked" ? "text-amber" :
+                    "text-muted-foreground"
+                  }>{t.status}</span>
+                  {t.requires_approval && <span className="ml-2 text-amber">[gate]</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -764,7 +861,7 @@ function ApprovalsPanel({ onDecide }: { onDecide: (id: string, d: "approved" | "
   const q = useQuery({ queryKey: ["approvals"], queryFn: () => listApprovals(), refetchInterval: 5000 });
   const items = (q.data ?? []).filter((a: any) => a.status === "pending");
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Approvals Queue</h2>
       <p className="text-sm text-muted-foreground mb-6">Authority gate — every executive-facing artefact needs a human ✓.</p>
       {items.length === 0 && <div className="font-mono text-sm text-muted-foreground">queue clear.</div>}
@@ -791,13 +888,13 @@ function ApprovalsPanel({ onDecide }: { onDecide: (id: string, d: "approved" | "
 function AuditPanel() {
   const q = useQuery({ queryKey: ["audit"], queryFn: () => listAudit(), refetchInterval: 4000 });
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Audit Log</h2>
       <p className="text-sm text-muted-foreground mb-6">Append-only · SHA-256 hash-chained.</p>
       <div className="font-mono text-[12px] space-y-1">
         {q.data?.map((row: any) => (
-          <div key={row.id} className="grid grid-cols-[140px_70px_180px_1fr] gap-3 border-b border-rule/40 py-1">
-            <span className="text-muted-foreground">{new Date(row.created_at).toLocaleString("en-GB", { hour12: false })}</span>
+          <div key={row.id} className="flex flex-col md:grid md:grid-cols-[140px_70px_180px_1fr] gap-1 md:gap-3 border-b border-rule/40 py-2">
+            <span className="text-muted-foreground text-[11px] md:text-[12px]">{new Date(row.created_at).toLocaleString("en-GB", { hour12: false })}</span>
             <span className="text-primary uppercase">{row.agent_slug ?? "—"}</span>
             <span>{row.action}</span>
             <span className="text-muted-foreground truncate">#{row.hash_self.slice(0, 16)}…</span>
@@ -810,10 +907,10 @@ function AuditPanel() {
 
 function LeadsPanel() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Lead Generation</h2>
       <p className="text-sm text-muted-foreground mb-6">LinkedIn outreach pipeline · ICP → enrich → sequence → triage.</p>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {["new", "contacted", "replied", "booked", "closed"].map(stage => (
           <div key={stage} className="border border-rule bg-panel/60 min-h-[200px] p-3">
             <div className="smallcaps text-[10px] text-muted-foreground">{stage}</div>
@@ -830,7 +927,7 @@ function LeadsPanel() {
 
 function ManualPanel() {
   return (
-    <div className="p-10 max-w-3xl mx-auto font-serif text-[15px] leading-relaxed">
+    <div className="p-4 md:p-10 max-w-3xl mx-auto font-serif text-[15px] leading-relaxed">
       <div className="smallcaps text-[10px] text-muted-foreground">VDNX Agent Instruction Manual</div>
       <h1 className="text-4xl mt-1">Version 3.1</h1>
       <div className="hairline my-6" />

@@ -71,7 +71,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "VDNX Terminal — Authority · Auditability · Atomicity" },
       { name: "description", content: "VDNX Operations Terminal — institutional Company Operating System." },
       { name: "author", content: "VDNX" },

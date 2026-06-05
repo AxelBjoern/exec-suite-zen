@@ -618,7 +618,7 @@ function ChatPage() {
                     {formatRelative(c.updated_at)}
                   </div>
                 </button>
-                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -710,8 +710,16 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            <Link
+              to="/terminal"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
+              title="Open VDNX Terminal"
+            >
+              <Square className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Terminal</span>
+            </Link>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="h-8 w-[120px] md:w-[180px] text-xs">
+              <SelectTrigger className="h-8 w-[110px] md:w-[180px] text-xs">
                 <SelectValue>{hydrated ? activeModelLabel : CHAT_MODEL_OPTIONS[0].label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -792,7 +800,7 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-border/40 bg-card/40 backdrop-blur">
+        <div className="border-t border-border/40 bg-card/40 backdrop-blur pb-[env(safe-area-inset-bottom)]">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4">
             {(attachments.length > 0 || uploading) && (
               <div className="mb-2 flex flex-wrap gap-2">

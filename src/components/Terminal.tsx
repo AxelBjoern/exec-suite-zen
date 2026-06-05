@@ -657,7 +657,7 @@ function Clock() {
 
 function AgentsPanel({ agents, onOpen }: { agents: Agent[]; onOpen: (p: Panel) => void }) {
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 md:p-8 max-w-6xl">
       <div className="flex items-center justify-between gap-4 mb-1">
         <h1 className="font-serif text-3xl">The Executive Team</h1>
         <Link
@@ -827,7 +827,7 @@ function ThreadPanel({
 function TasksPanel() {
   const q = useQuery({ queryKey: ["tasks"], queryFn: () => listTasks(), refetchInterval: 5000 });
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-4">Task Inbox</h2>
       <table className="w-full font-mono text-[12px]">
         <thead className="text-muted-foreground">
@@ -859,7 +859,7 @@ function ApprovalsPanel({ onDecide }: { onDecide: (id: string, d: "approved" | "
   const q = useQuery({ queryKey: ["approvals"], queryFn: () => listApprovals(), refetchInterval: 5000 });
   const items = (q.data ?? []).filter((a: any) => a.status === "pending");
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Approvals Queue</h2>
       <p className="text-sm text-muted-foreground mb-6">Authority gate — every executive-facing artefact needs a human ✓.</p>
       {items.length === 0 && <div className="font-mono text-sm text-muted-foreground">queue clear.</div>}
@@ -886,7 +886,7 @@ function ApprovalsPanel({ onDecide }: { onDecide: (id: string, d: "approved" | "
 function AuditPanel() {
   const q = useQuery({ queryKey: ["audit"], queryFn: () => listAudit(), refetchInterval: 4000 });
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Audit Log</h2>
       <p className="text-sm text-muted-foreground mb-6">Append-only · SHA-256 hash-chained.</p>
       <div className="font-mono text-[12px] space-y-1">
@@ -905,7 +905,7 @@ function AuditPanel() {
 
 function LeadsPanel() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Lead Generation</h2>
       <p className="text-sm text-muted-foreground mb-6">LinkedIn outreach pipeline · ICP → enrich → sequence → triage.</p>
       <div className="grid grid-cols-5 gap-3">
@@ -925,7 +925,7 @@ function LeadsPanel() {
 
 function ManualPanel() {
   return (
-    <div className="p-10 max-w-3xl mx-auto font-serif text-[15px] leading-relaxed">
+    <div className="p-4 md:p-10 max-w-3xl mx-auto font-serif text-[15px] leading-relaxed">
       <div className="smallcaps text-[10px] text-muted-foreground">VDNX Agent Instruction Manual</div>
       <h1 className="text-4xl mt-1">Version 3.1</h1>
       <div className="hairline my-6" />

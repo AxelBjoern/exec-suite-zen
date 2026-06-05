@@ -908,7 +908,7 @@ function LeadsPanel() {
     <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-1">Lead Generation</h2>
       <p className="text-sm text-muted-foreground mb-6">LinkedIn outreach pipeline · ICP → enrich → sequence → triage.</p>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {["new", "contacted", "replied", "booked", "closed"].map(stage => (
           <div key={stage} className="border border-rule bg-panel/60 min-h-[200px] p-3">
             <div className="smallcaps text-[10px] text-muted-foreground">{stage}</div>

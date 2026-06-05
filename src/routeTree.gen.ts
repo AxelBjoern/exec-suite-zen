@@ -20,6 +20,7 @@ import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
@@ -80,6 +81,12 @@ const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicCronMondayBoardRoute =
   ApiPublicCronMondayBoardRouteImport.update({
     id: '/api/public/cron/monday-board',
@@ -115,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
@@ -131,6 +139,7 @@ export interface FileRoutesByTo {
   '/terminal': typeof AuthenticatedTerminalRoute
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/': typeof AuthenticatedIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
@@ -149,6 +158,7 @@ export interface FileRoutesById {
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/outbound'
     | '/terminal'
     | '/api/generate-linkedin-image'
+    | '/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/terminal'
     | '/api/generate-linkedin-image'
     | '/'
+    | '/settings'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
@@ -200,6 +212,7 @@ export interface FileRouteTypes {
     | '/_authenticated/terminal'
     | '/api/generate-linkedin-image'
     | '/_authenticated/'
+    | '/_authenticated/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/cron/monday-board': {
       id: '/api/public/cron/monday-board'
       path: '/api/public/cron/monday-board'
@@ -335,6 +355,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRoute
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -345,6 +366,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOutboundRoute: AuthenticatedOutboundRoute,
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

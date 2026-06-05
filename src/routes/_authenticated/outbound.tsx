@@ -424,7 +424,7 @@ function OutboundPage() {
                         <span className="text-[10px] text-primary">Click to edit</span>
                       )}
                     </div>
-                    <p className="mt-1 truncate text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
                     {r.notes && r.status !== "sent" && (
                       <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
                     )}

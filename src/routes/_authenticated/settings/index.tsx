@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette } from "lucide-react";
-import { getMySettings, updateMySettings, listMyConnections } from "@/lib/connections.functions";
+import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   head: () => ({

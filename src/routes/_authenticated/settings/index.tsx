@@ -130,6 +130,37 @@ function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <section className="mt-4 rounded-lg border border-border bg-panel p-5">
+        <div className="mb-2 flex items-center gap-2">
+          <Palette className="h-4 w-4 text-primary" />
+          <h2 className="font-serif text-lg font-semibold">LinkedIn image design rules</h2>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Brand/style guardrails injected into every LinkedIn image prompt (colors, typography, mood, things to avoid). Leave blank to use the model's defaults.
+          {defaultApplied && (
+            <span className="ml-1 italic text-primary">VDNX defaults pre-filled — edit and save to lock them in.</span>
+          )}
+        </p>
+        <textarea
+          className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs outline-none focus:border-primary"
+          rows={10}
+          placeholder={`e.g.\nColor palette: deep navy + a single warm gold accent.\nTypography: bold geometric sans-serif.\nMood: institutional, calm authority.\nAvoid: emoji, stock photo cliches, purple gradients.`}
+          value={designRules}
+          onChange={(e) => setDesignRules(e.target.value)}
+          maxLength={4000}
+        />
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">{designRules.length} / 4000</span>
+          <button
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </section>
     </main>
   );
 }

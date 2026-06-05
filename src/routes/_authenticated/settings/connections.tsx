@@ -9,6 +9,7 @@ import {
   saveConnection,
   listMyConnections,
   disconnectProvider,
+  getConnectionCapabilities,
   GATEWAY_BASE_URL,
 } from "@/lib/connections.functions";
 import { connectAppUser } from "@/integrations/lovable/appUserConnectorClient";
@@ -28,18 +29,19 @@ type Provider = "gmail" | "linkedin";
 function ConnectionsPage() {
   const qc = useQueryClient();
   const list = useServerFn(listMyConnections);
+  const capabilitiesFn = useServerFn(getConnectionCapabilities);
   const start = useServerFn(startConnect);
   const save = useServerFn(saveConnection);
   const disconnect = useServerFn(disconnectProvider);
 
   const { data } = useQuery({ queryKey: ["my-connections"], queryFn: () => list() });
+  const { data: capabilities } = useQuery({ queryKey: ["connection-capabilities"], queryFn: () => capabilitiesFn() });
   const [busy, setBusy] = useState<Provider | null>(null);
 
   async function connect(provider: Provider) {
-    // If we already know it is unsupported from the initial load, fail fast
-    // to avoid opening a popup that will immediately close.
-    if (data?.config && !data.config[provider]) {
-      toast.error(`${provider === "gmail" ? "Gmail" : "LinkedIn"} personal connect isn't configured in this environment.`);
+    const capability = capabilities?.[provider];
+    if (capability && !capability.personalAvailable) {
+      toast.error(capability.message);
       return;
     }
 
@@ -97,7 +99,9 @@ function ConnectionsPage() {
     label: string;
     row: any;
   }) {
-    const isConfigured = data?.config ? (data.config as any)[provider] : true;
+    const capability = capabilities?.[provider];
+    const isConfigured = capability ? capability.personalAvailable : true;
+    const helperText = capability?.message;
     return (
       <section className="rounded-lg border border-border bg-panel p-5">
         <div className="flex items-start justify-between">
@@ -137,8 +141,8 @@ function ConnectionsPage() {
           <>
             <p className="mt-3 text-sm text-muted-foreground">
               {!isConfigured ? (
-                <span className="text-amber-600 dark:text-amber-500 font-medium italic">
-                  {label} personal connect isn't configured for this workspace yet.
+                <span className="font-medium italic text-amber-600 dark:text-amber-500">
+                  {helperText}
                 </span>
               ) : provider === "linkedin"
                 ? "Sign in with your LinkedIn account so posts go from you, not the shared workspace connection."
@@ -162,7 +166,7 @@ function ConnectionsPage() {
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Settings · Connections</p>
       <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">Your accounts</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Connect Gmail and LinkedIn as your own accounts.
+        Connect your own accounts when available. Otherwise sends and posts continue through the shared workspace connections.
       </p>
       <div className="mt-8 grid gap-4">
         <Card provider="gmail" icon={Mail} label="Gmail" row={gmail} />

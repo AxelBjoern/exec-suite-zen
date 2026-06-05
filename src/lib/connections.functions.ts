@@ -23,6 +23,34 @@ const PROVIDER_META = {
 
 type Provider = keyof typeof PROVIDER_META;
 
+type ProviderCapability = {
+  personalAvailable: boolean;
+  workspaceAvailable: boolean;
+  message: string;
+};
+
+function getProviderCapability(provider: Provider): ProviderCapability {
+  if (provider === "gmail") {
+    const personalAvailable = Boolean(process.env.GOOGLE_APP_USER_CONNECTOR_CLIENT_ID);
+    const workspaceAvailable = Boolean(process.env.GOOGLE_MAIL_API_KEY);
+    return {
+      personalAvailable,
+      workspaceAvailable,
+      message: personalAvailable
+        ? "Connect your own Gmail account."
+        : "Gmail personal connect is not configured yet. Outbound email uses the shared workspace account.",
+    };
+  }
+
+  const workspaceAvailable = Boolean(process.env.LINKEDIN_API_KEY);
+  return {
+    personalAvailable: false,
+    workspaceAvailable,
+    message:
+      "LinkedIn personal connect is not available in this workspace yet. Posts use the shared workspace account.",
+  };
+}
+
 const StartInput = z.object({
   provider: z.enum(["gmail", "linkedin"]),
   targetOrigin: z.string().url(),
@@ -34,14 +62,15 @@ export const startConnect = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId } = context as { userId: string };
     const meta = PROVIDER_META[data.provider as Provider];
-    const clientId = process.env[meta.clientIdEnv];
     const providerLabel = data.provider === "gmail" ? "Gmail" : "LinkedIn";
-    if (!clientId) {
+    const capability = getProviderCapability(data.provider as Provider);
+    if (!capability.personalAvailable) {
       return {
         unsupported: true as const,
-        message: `${providerLabel} personal connect isn't configured. Sends use the shared workspace account.`,
+        message: capability.message,
       };
     }
+    const clientId = process.env[meta.clientIdEnv];
 
     try {
       const { authorizationUrl } = await authorizeAppUserOAuth({
@@ -66,6 +95,13 @@ export const startConnect = createServerFn({ method: "POST" })
       throw error;
     }
   });
+
+export const getConnectionCapabilities = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => ({
+    gmail: getProviderCapability("gmail"),
+    linkedin: getProviderCapability("linkedin"),
+  }));
 
 const SaveInput = z.object({
   provider: z.enum(["gmail", "linkedin"]),

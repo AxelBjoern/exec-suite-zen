@@ -357,6 +357,26 @@ export const listMyRequests = createServerFn({ method: "GET" })
     return { rows };
   });
 
+// ── Delete: requester deletes their own pending draft ────────────────────
+const DeleteInput = z.object({ id: z.string().uuid() });
+export const deleteOutbound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => DeleteInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const { data: row, error } = await supabaseAdmin
+      .from("approvals")
+      .select("id, status, requester_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    if (row.status !== "pending") throw new Error(`Cannot delete a ${row.status} request`);
+    const { error: delErr } = await supabaseAdmin.from("approvals").delete().eq("id", data.id);
+    if (delErr) throw new Error(delErr.message);
+    return { ok: true };
+  });
+
 // ── Owner queue ──────────────────────────────────────────────────────────
 async function assertOwner(userId: string) {
   const { data } = await supabaseAdmin

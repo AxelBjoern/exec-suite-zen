@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2,
+  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2,
 } from "lucide-react";
 import {
   requestEmail,
@@ -16,6 +16,7 @@ import {
   updateOutboundDraft,
   sendOwnOutbound,
   aiEditDraft,
+  deleteOutbound,
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
@@ -84,6 +85,7 @@ function OutboundPage() {
   const updateDraft = useServerFn(updateOutboundDraft);
   const selfSend = useServerFn(sendOwnOutbound);
   const aiEdit = useServerFn(aiEditDraft);
+  const deleteReq = useServerFn(deleteOutbound);
   const tagline = useServerFn(composeLinkedInTagline);
 
   const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });
@@ -202,6 +204,19 @@ function OutboundPage() {
       qc.invalidateQueries({ queryKey: ["my-outbound"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send");
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
+  async function deleteRow(id: string) {
+    setRowBusy(id);
+    try {
+      await deleteReq({ data: { id } });
+      toast.success("Deleted");
+      qc.invalidateQueries({ queryKey: ["my-outbound"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
     } finally {
       setRowBusy(null);
     }
@@ -418,16 +433,27 @@ function OutboundPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
                     </span>
-                    {r.status === "pending" && (
+                    <div className="flex items-center gap-2">
+                      {r.status === "pending" && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                          disabled={rowBusy === r.id}
+                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        >
+                          {rowBusy === r.id ? "Sending…" : "Send now"}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                         disabled={rowBusy === r.id}
-                        onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
+                        title="Delete"
                       >
-                        {rowBusy === r.id ? "Sending…" : "Send now"}
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </li>
               );

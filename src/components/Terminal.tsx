@@ -891,8 +891,8 @@ function AuditPanel() {
       <p className="text-sm text-muted-foreground mb-6">Append-only · SHA-256 hash-chained.</p>
       <div className="font-mono text-[12px] space-y-1">
         {q.data?.map((row: any) => (
-          <div key={row.id} className="grid grid-cols-[140px_70px_180px_1fr] gap-3 border-b border-rule/40 py-1">
-            <span className="text-muted-foreground">{new Date(row.created_at).toLocaleString("en-GB", { hour12: false })}</span>
+          <div key={row.id} className="flex flex-col md:grid md:grid-cols-[140px_70px_180px_1fr] gap-1 md:gap-3 border-b border-rule/40 py-2">
+            <span className="text-muted-foreground text-[11px] md:text-[12px]">{new Date(row.created_at).toLocaleString("en-GB", { hour12: false })}</span>
             <span className="text-primary uppercase">{row.agent_slug ?? "—"}</span>
             <span>{row.action}</span>
             <span className="text-muted-foreground truncate">#{row.hash_self.slice(0, 16)}…</span>

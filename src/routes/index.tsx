@@ -800,7 +800,7 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className="border-t border-border/40 bg-card/40 backdrop-blur">
+        <div className="border-t border-border/40 bg-card/40 backdrop-blur pb-[env(safe-area-inset-bottom)]">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4">
             {(attachments.length > 0 || uploading) && (
               <div className="mb-2 flex flex-wrap gap-2">

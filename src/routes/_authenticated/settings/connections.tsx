@@ -88,7 +88,6 @@ function ConnectionsPage() {
 
   function Card({
     provider,
-    const isConfigured = data?.config ? data.config[provider] : true;
     icon: Icon,
     label,
     row,
@@ -98,6 +97,7 @@ function ConnectionsPage() {
     label: string;
     row: any;
   }) {
+    const isConfigured = data?.config ? (data.config as any)[provider] : true;
     return (
       <section className="rounded-lg border border-border bg-panel p-5">
         <div className="flex items-start justify-between">

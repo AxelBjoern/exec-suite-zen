@@ -12,25 +12,25 @@ function ForgeShell() {
   const { data: types } = useQuery({
     queryKey: ["forge", "agent_types"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("agent_types")
         .select("id,name,industry,description")
         .eq("is_seed", true)
         .order("name");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{ id: string; name: string; industry: string; description: string }>;
     },
   });
 
   const { data: models } = useQuery({
     queryKey: ["forge", "base_models"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("base_models")
         .select("slug,name,provider,description")
         .order("name");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{ slug: string; name: string; provider: string; description: string }>;
     },
   });
 

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { Menu, X, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import {
   dispatch,
   routePrompt,

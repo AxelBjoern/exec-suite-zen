@@ -558,7 +558,7 @@ function OutboundPage() {
                       {new Date(r.created_at).toLocaleString()}
                     </span>
                     <div className="flex items-center gap-2">
-                      {r.status === "pending" && (
+                      {r.status === "pending" && !r.notes && (
                         <button
                           type="button"
                           className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
@@ -566,6 +566,21 @@ function OutboundPage() {
                           onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
                         >
                           {rowBusy === r.id ? "Sending…" : "Send now"}
+                        </button>
+                      )}
+                      {r.notes && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          disabled={rowBusy === r.id}
+                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        >
+                          {rowBusy === r.id ? (
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                          {rowBusy === r.id ? "Retrying…" : "Retry"}
                         </button>
                       )}
                       <button

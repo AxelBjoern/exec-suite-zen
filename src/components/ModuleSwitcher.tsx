@@ -1,7 +1,7 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { LogOut, LayoutGrid, MessageSquare, TerminalSquare, LineChart, Cpu } from "lucide-react";
+import { LogOut, LayoutGrid, MessageSquare, TerminalSquare, LineChart, Cpu, Send } from "lucide-react";
 
 const MODS = [
   { to: "/", label: "Hub", icon: LayoutGrid },
@@ -9,6 +9,7 @@ const MODS = [
   { to: "/terminal", label: "Terminal", icon: TerminalSquare },
   { to: "/budget", label: "Budget", icon: LineChart },
   { to: "/forge", label: "Forge", icon: Cpu },
+  { to: "/outbound", label: "Outbound", icon: Send },
 ] as const;
 
 export function ModuleSwitcher() {

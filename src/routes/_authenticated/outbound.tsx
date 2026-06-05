@@ -239,6 +239,7 @@ function OutboundPage() {
     }
   }
 
+  return (
     <main className="mx-auto max-w-3xl px-4 py-10 md:py-16">
       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Outbound</p>
       <h1 className="mt-2 font-serif text-3xl font-bold md:text-4xl">Request to send</h1>

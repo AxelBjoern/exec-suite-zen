@@ -29,7 +29,6 @@ export async function generateLinkedInImageBase64(opts: {
       quality: "low",
       size: "1024x1024",
       n: 1,
-      response_format: "b64_json",
     }),
   });
 

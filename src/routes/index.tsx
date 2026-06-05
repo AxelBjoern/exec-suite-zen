@@ -618,7 +618,7 @@ function ChatPage() {
                     {formatRelative(c.updated_at)}
                   </div>
                 </button>
-                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
                     onClick={(e) => {

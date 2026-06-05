@@ -237,6 +237,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     setEditImgFinal(false);
     setCarouselVariants([]);
+    setEditImgDescription("");
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "" });
     } else {
@@ -253,6 +254,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     setEditImgFinal(false);
     setCarouselVariants([]);
+    setEditImgDescription("");
   }
 
   async function saveEdit(opts: { send: boolean }) {

@@ -493,6 +493,32 @@ function OutboundPage() {
               )}
             </div>
 
+            <div className="mt-4 rounded-md border border-dashed border-border bg-background/40 p-3">
+              <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Wand2 className="h-3.5 w-3.5" />
+                Edit with AI
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className={inputCls}
+                  placeholder='e.g. "make it shorter and more casual"'
+                  value={aiInstr}
+                  onChange={(e) => setAiInstr(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && aiInstr.trim() && !editBusy) runAiEdit(); }}
+                  disabled={!!editBusy}
+                />
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                  onClick={runAiEdit}
+                  disabled={!!editBusy || !aiInstr.trim()}
+                >
+                  {editBusy === "ai" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {editBusy === "ai" ? "Thinking…" : "Apply"}
+                </button>
+              </div>
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
@@ -510,16 +536,14 @@ function OutboundPage() {
               >
                 {editBusy === "save" ? "Saving…" : "Save draft"}
               </button>
-              {owner.data?.isOwner && (
-                <button
-                  type="button"
-                  className={btnCls}
-                  onClick={() => saveEdit({ send: true })}
-                  disabled={!!editBusy}
-                >
-                  {editBusy === "send" ? "Sending…" : "Save & send"}
-                </button>
-              )}
+              <button
+                type="button"
+                className={btnCls}
+                onClick={() => saveEdit({ send: true })}
+                disabled={!!editBusy}
+              >
+                {editBusy === "send" ? "Sending…" : "Save & send"}
+              </button>
             </div>
           </div>
         </div>

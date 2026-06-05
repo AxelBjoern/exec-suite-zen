@@ -13,6 +13,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as ApiGenerateLinkedinImageRouteImport } from './routes/api/generate-linkedin-image'
 import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
 import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
 import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
@@ -43,6 +44,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiGenerateLinkedinImageRoute =
+  ApiGenerateLinkedinImageRouteImport.update({
+    id: '/api/generate-linkedin-image',
+    path: '/api/generate-linkedin-image',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
   id: '/terminal',
   path: '/terminal',
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
+  '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
+  '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -138,6 +147,7 @@ export interface FileRoutesById {
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
   '/_authenticated/outbound': typeof AuthenticatedOutboundRoute
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
+  '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/forge'
     | '/outbound'
     | '/terminal'
+    | '/api/generate-linkedin-image'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/forge'
     | '/outbound'
     | '/terminal'
+    | '/api/generate-linkedin-image'
     | '/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
     | '/_authenticated/forge'
     | '/_authenticated/outbound'
     | '/_authenticated/terminal'
+    | '/api/generate-linkedin-image'
     | '/_authenticated/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -197,6 +210,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiGenerateLinkedinImageRoute: typeof ApiGenerateLinkedinImageRoute
   ApiPublicCronDailyReminderRoute: typeof ApiPublicCronDailyReminderRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
@@ -232,6 +246,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/generate-linkedin-image': {
+      id: '/api/generate-linkedin-image'
+      path: '/api/generate-linkedin-image'
+      fullPath: '/api/generate-linkedin-image'
+      preLoaderRoute: typeof ApiGenerateLinkedinImageRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/terminal': {
       id: '/_authenticated/terminal'
@@ -333,6 +354,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiGenerateLinkedinImageRoute: ApiGenerateLinkedinImageRoute,
   ApiPublicCronDailyReminderRoute: ApiPublicCronDailyReminderRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
@@ -341,3 +363,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

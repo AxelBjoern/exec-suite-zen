@@ -185,3 +185,6 @@
 
 @keyframes blink { 50% { opacity: 0; } }
 .caret { animation: blink 1.1s steps(1) infinite; }
+
+.scrollbar-hide{scrollbar-width:none;-ms-overflow-style:none}
+.scrollbar-hide::-webkit-scrollbar{display:none}

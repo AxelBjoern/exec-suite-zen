@@ -418,7 +418,7 @@ function OutboundPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
                     </span>
-                    {owner.data?.isOwner && r.status === "pending" && (
+                    {r.status === "pending" && (
                       <button
                         type="button"
                         className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"

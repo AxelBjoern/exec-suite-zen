@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageSquare, TerminalSquare, LineChart, Cpu, ArrowRight } from "lucide-react";
+import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -39,6 +39,13 @@ const TILES = [
     desc: "Train and deploy specialised agents on OpenRouter models.",
     icon: Cpu,
     badge: "Module",
+  },
+  {
+    to: "/outbound",
+    label: "Outbound",
+    desc: "Send email, self-reminders, and LinkedIn posts from the board.",
+    icon: Send,
+    badge: "Live",
   },
 ] as const;
 

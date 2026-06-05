@@ -829,28 +829,30 @@ function TasksPanel() {
   return (
     <div className="p-4 md:p-8">
       <h2 className="font-serif text-2xl mb-4">Task Inbox</h2>
-      <table className="w-full font-mono text-[12px]">
-        <thead className="text-muted-foreground">
-          <tr className="border-b border-rule"><th className="text-left py-2">When</th><th className="text-left">Agent</th><th className="text-left">Title</th><th className="text-left">Status</th></tr>
-        </thead>
-        <tbody>
-          {q.data?.map((t: any) => (
-            <tr key={t.id} className="border-b border-rule/40">
-              <td className="py-2 text-muted-foreground">{new Date(t.created_at).toLocaleString("en-GB", { hour12: false })}</td>
-              <td className="text-primary uppercase">{t.agents?.slug}</td>
-              <td>{t.title}</td>
-              <td>
-                <span className={
-                  t.status === "done" ? "text-success" :
-                  t.status === "blocked" ? "text-amber" :
-                  "text-muted-foreground"
-                }>{t.status}</span>
-                {t.requires_approval && <span className="ml-2 text-amber">[gate]</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+        <table className="w-full font-mono text-[11px] md:text-[12px] min-w-[500px]">
+          <thead className="text-muted-foreground">
+            <tr className="border-b border-rule"><th className="text-left py-2">When</th><th className="text-left">Agent</th><th className="text-left">Title</th><th className="text-left">Status</th></tr>
+          </thead>
+          <tbody>
+            {q.data?.map((t: any) => (
+              <tr key={t.id} className="border-b border-rule/40">
+                <td className="py-2 text-muted-foreground">{new Date(t.created_at).toLocaleString("en-GB", { hour12: false })}</td>
+                <td className="text-primary uppercase">{t.agents?.slug}</td>
+                <td>{t.title}</td>
+                <td>
+                  <span className={
+                    t.status === "done" ? "text-success" :
+                    t.status === "blocked" ? "text-amber" :
+                    "text-muted-foreground"
+                  }>{t.status}</span>
+                  {t.requires_approval && <span className="ml-2 text-amber">[gate]</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

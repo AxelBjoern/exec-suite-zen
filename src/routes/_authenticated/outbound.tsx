@@ -110,6 +110,7 @@ function OutboundPage() {
   const [editImgUrl, setEditImgUrl] = useState<string | null>(null);
   const [editImgFinal, setEditImgFinal] = useState(false);
   const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
+  const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // LinkedIn image gen state
@@ -236,6 +237,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     setEditImgFinal(false);
     setCarouselVariants([]);
+    setEditImgDescription("");
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "" });
     } else {
@@ -252,6 +254,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     setEditImgFinal(false);
     setCarouselVariants([]);
+    setEditImgDescription("");
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -292,9 +295,10 @@ function OutboundPage() {
     setCarouselVariants([]);
     try {
       const t = await tagline({ data: { text: editDraft.text } });
+      const visual = editImgDescription.trim() || t.visual_prompt;
       await streamImage(
         "/api/generate-linkedin-image",
-        { tagline: t.tagline, visualPrompt: t.visual_prompt },
+        { tagline: t.tagline, visualPrompt: visual },
         (dataUrl, b64, isFinal) => {
           setEditImgUrl(dataUrl);
           if (isFinal) {
@@ -339,6 +343,7 @@ function OutboundPage() {
     setEditImgUrl(null);
     try {
       const t = await tagline({ data: { text: editDraft.text } });
+      const visual = editImgDescription.trim() || t.visual_prompt;
       // Run 3 generations in parallel; collect the final frames
       const results = await Promise.allSettled(
         [0, 1, 2].map(
@@ -346,7 +351,7 @@ function OutboundPage() {
             new Promise<string>((resolve, reject) => {
               streamImage(
                 "/api/generate-linkedin-image",
-                { tagline: t.tagline, visualPrompt: `${t.visual_prompt} (variant ${i + 1})` },
+                { tagline: t.tagline, visualPrompt: `${visual} (variant ${i + 1})` },
                 (_dataUrl, b64, isFinal) => {
                   if (isFinal) resolve(b64);
                 },
@@ -665,6 +670,13 @@ function OutboundPage() {
                         )}
                       </div>
                     </div>
+                    <textarea
+                      className={inputCls}
+                      rows={2}
+                      placeholder="Describe the image you want (optional — e.g. dark navy background with abstract geometric shapes and gold accents)"
+                      value={editImgDescription}
+                      onChange={(e) => setEditImgDescription(e.target.value)}
+                    />
                     <input
                       ref={editFileInputRef}
                       type="file"

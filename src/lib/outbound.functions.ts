@@ -464,7 +464,7 @@ export const approveOutbound = createServerFn({ method: "POST" })
           notes: data.notes ?? null,
         })
         .eq("id", data.id);
-      return { ok: true };
+      return { ok: true, status: "sent" as const };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Send failed";
       await supabaseAdmin
@@ -476,7 +476,7 @@ export const approveOutbound = createServerFn({ method: "POST" })
           notes: msg,
         })
         .eq("id", data.id);
-      throw new Error(msg);
+      return { ok: false, status: "failed" as const, error: msg };
     }
   });
 
@@ -526,7 +526,7 @@ export const sendOwnOutbound = createServerFn({ method: "POST" })
           notes: "self-sent by requester",
         })
         .eq("id", data.id);
-      return { ok: true };
+      return { ok: true, status: "sent" as const };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Send failed";
       await supabaseAdmin
@@ -538,7 +538,7 @@ export const sendOwnOutbound = createServerFn({ method: "POST" })
           notes: msg,
         })
         .eq("id", data.id);
-      throw new Error(msg);
+      return { ok: false, status: "failed" as const, error: msg };
     }
   });
 

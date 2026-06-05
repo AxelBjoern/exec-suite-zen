@@ -206,8 +206,12 @@ function OutboundPage() {
   async function sendNow(id: string) {
     setRowBusy(id);
     try {
-      await selfSend({ data: { id } });
-      toast.success("Sent");
+      const result = await selfSend({ data: { id } });
+      if (result?.status === "failed") {
+        toast.error(result.error ?? "Failed to send");
+      } else {
+        toast.success("Sent");
+      }
       qc.invalidateQueries({ queryKey: ["my-outbound"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send");
@@ -269,7 +273,13 @@ function OutboundPage() {
       }
       await updateDraft({ data: { id: editing.id, payload } });
       if (opts.send) {
-        await selfSend({ data: { id: editing.id } });
+        const result = await selfSend({ data: { id: editing.id } });
+        if (result?.status === "failed") {
+          toast.error(result.error ?? "Failed");
+          qc.invalidateQueries({ queryKey: ["my-outbound"] });
+          closeEdit();
+          return;
+        }
         toast.success("Sent");
       } else {
         toast.success("Saved");

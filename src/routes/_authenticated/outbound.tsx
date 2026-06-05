@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw,
+  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2,
 } from "lucide-react";
 import {
   requestEmail,
@@ -14,6 +14,8 @@ import {
   ensureOwnerRole,
   approveOutbound,
   updateOutboundDraft,
+  sendOwnOutbound,
+  aiEditDraft,
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
@@ -80,6 +82,8 @@ function OutboundPage() {
   const claimOwner = useServerFn(ensureOwnerRole);
   const approveReq = useServerFn(approveOutbound);
   const updateDraft = useServerFn(updateOutboundDraft);
+  const selfSend = useServerFn(sendOwnOutbound);
+  const aiEdit = useServerFn(aiEditDraft);
   const tagline = useServerFn(composeLinkedInTagline);
 
   const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });
@@ -97,7 +101,8 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | null>(null);
+  const [aiInstr, setAiInstr] = useState("");
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -192,7 +197,7 @@ function OutboundPage() {
   async function sendNow(id: string) {
     setRowBusy(id);
     try {
-      await approveReq({ data: { id } });
+      await selfSend({ data: { id } });
       toast.success("Sent");
       qc.invalidateQueries({ queryKey: ["my-outbound"] });
     } catch (e) {
@@ -217,6 +222,7 @@ function OutboundPage() {
     setEditing(null);
     setEditDraft({});
     setEditBusy(null);
+    setAiInstr("");
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -224,8 +230,8 @@ function OutboundPage() {
     setEditBusy(opts.send ? "send" : "save");
     try {
       await updateDraft({ data: { id: editing.id, payload: editDraft } });
-      if (opts.send && owner.data?.isOwner) {
-        await approveReq({ data: { id: editing.id } });
+      if (opts.send) {
+        await selfSend({ data: { id: editing.id } });
         toast.success("Sent");
       } else {
         toast.success("Saved");
@@ -234,6 +240,31 @@ function OutboundPage() {
       closeEdit();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setEditBusy(null);
+    }
+  }
+
+  async function runAiEdit() {
+    if (!editing || !aiInstr.trim()) return;
+    setEditBusy("ai");
+    try {
+      const out: any = await aiEdit({
+        data: { kind: editing.kind, instruction: aiInstr, draft: editDraft },
+      });
+      if (editing.kind === "outbound_linkedin") {
+        setEditDraft({ ...editDraft, text: out.text ?? editDraft.text });
+      } else {
+        setEditDraft({
+          ...editDraft,
+          subject: out.subject ?? editDraft.subject,
+          body: out.body ?? editDraft.body,
+        });
+      }
+      setAiInstr("");
+      toast.success("AI edit applied");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI edit failed");
     } finally {
       setEditBusy(null);
     }
@@ -387,7 +418,7 @@ function OutboundPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(r.created_at).toLocaleString()}
                     </span>
-                    {owner.data?.isOwner && r.status === "pending" && (
+                    {r.status === "pending" && (
                       <button
                         type="button"
                         className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
@@ -462,6 +493,32 @@ function OutboundPage() {
               )}
             </div>
 
+            <div className="mt-4 rounded-md border border-dashed border-border bg-background/40 p-3">
+              <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Wand2 className="h-3.5 w-3.5" />
+                Edit with AI
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className={inputCls}
+                  placeholder='e.g. "make it shorter and more casual"'
+                  value={aiInstr}
+                  onChange={(e) => setAiInstr(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && aiInstr.trim() && !editBusy) runAiEdit(); }}
+                  disabled={!!editBusy}
+                />
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                  onClick={runAiEdit}
+                  disabled={!!editBusy || !aiInstr.trim()}
+                >
+                  {editBusy === "ai" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {editBusy === "ai" ? "Thinking…" : "Apply"}
+                </button>
+              </div>
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
@@ -479,16 +536,14 @@ function OutboundPage() {
               >
                 {editBusy === "save" ? "Saving…" : "Save draft"}
               </button>
-              {owner.data?.isOwner && (
-                <button
-                  type="button"
-                  className={btnCls}
-                  onClick={() => saveEdit({ send: true })}
-                  disabled={!!editBusy}
-                >
-                  {editBusy === "send" ? "Sending…" : "Save & send"}
-                </button>
-              )}
+              <button
+                type="button"
+                className={btnCls}
+                onClick={() => saveEdit({ send: true })}
+                disabled={!!editBusy}
+              >
+                {editBusy === "send" ? "Sending…" : "Save & send"}
+              </button>
             </div>
           </div>
         </div>

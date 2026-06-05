@@ -79,7 +79,7 @@ function SettingsPage() {
           <li className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
-              Gmail — {gmail ? <strong>{gmail.provider_email ?? "connected"}</strong> : <span className="text-muted-foreground">not connected</span>}
+              Gmail — {gmailConnected ? <strong>workspace connector</strong> : <span className="text-muted-foreground">not connected</span>}
             </span>
             <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
               Manage →
@@ -88,7 +88,7 @@ function SettingsPage() {
           <li className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2">
               <Linkedin className="h-4 w-4" />
-              LinkedIn — {linkedin ? <strong>{linkedin.provider_name ?? linkedin.provider_email ?? "connected"}</strong> : <span className="text-muted-foreground">not connected</span>}
+              LinkedIn — {linkedinConnected ? <strong>workspace connector</strong> : <span className="text-muted-foreground">not connected</span>}
             </span>
             <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
               Manage →

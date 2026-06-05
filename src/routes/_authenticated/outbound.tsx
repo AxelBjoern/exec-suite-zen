@@ -605,12 +605,100 @@ function OutboundPage() {
 
             <div className="grid gap-2">
               {editing.kind === "outbound_linkedin" ? (
-                <textarea
-                  className={inputCls}
-                  rows={10}
-                  value={editDraft.text ?? ""}
-                  onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })}
-                />
+                <>
+                  <textarea
+                    className={inputCls}
+                    rows={10}
+                    value={editDraft.text ?? ""}
+                    onChange={(e) => setEditDraft({ ...editDraft, text: e.target.value })}
+                  />
+                  <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Image
+                        {editDraft.imageBase64 === "[image]" && !editImgUrl && (
+                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">attached</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={generateEditImage}
+                          disabled={!!editBusy}
+                        >
+                          {editBusy === "img" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Generate
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editFileInputRef.current?.click()}
+                          disabled={!!editBusy}
+                        >
+                          <Upload className="h-3 w-3" />
+                          Upload
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={generateCarousel}
+                          disabled={!!editBusy}
+                        >
+                          {editBusy === "carousel" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
+                          Carousel ×3
+                        </button>
+                        {(editImgUrl || editDraft.imageBase64 === "[image]") && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                            onClick={() => {
+                              clearEditImage();
+                              // Explicitly drop existing image bytes on save
+                              setEditDraft({ ...editDraft, imageBase64: "" });
+                            }}
+                            disabled={!!editBusy}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadEditImage(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    {editImgUrl && (
+                      <img
+                        src={editImgUrl}
+                        alt="LinkedIn share"
+                        className={`mx-auto h-auto w-full max-w-[240px] rounded-md transition-[filter] ${editImgFinal ? "blur-0" : "blur-md"}`}
+                      />
+                    )}
+                    {carouselVariants.length > 0 && (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {carouselVariants.map((b64, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="overflow-hidden rounded-md border border-border transition hover:border-primary"
+                            onClick={() => pickCarouselVariant(b64)}
+                          >
+                            <img src={`data:image/png;base64,${b64}`} alt={`Variant ${i + 1}`} className="h-auto w-full" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   {editing.kind === "outbound_email" && (

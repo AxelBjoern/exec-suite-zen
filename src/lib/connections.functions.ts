@@ -2,184 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { authorizeAppUserOAuth, callAsAppUser } from "@/integrations/lovable/appUserConnector";
 
-export const GATEWAY_BASE_URL = "https://connector-gateway.lovable.dev";
+// Shared workspace connectors: builders connect Gmail + LinkedIn once in
+// Lovable Connectors. The app reads the connector env vars to know whether
+// the connection is live — no per-user OAuth, no popups.
 
-const PROVIDER_META = {
-  gmail: {
-    connectorIdAuth: "google",
-    connectorIdCall: "google_mail",
-    clientIdEnv: "GOOGLE_APP_USER_CONNECTOR_CLIENT_ID",
-    scopes: ["https://www.googleapis.com/auth/gmail.send", "openid", "email", "profile"],
-  },
-  linkedin: {
-    connectorIdAuth: "linkedin",
-    connectorIdCall: "linkedin",
-    clientIdEnv: "LINKEDIN_APP_USER_CONNECTOR_CLIENT_ID",
-    scopes: ["w_member_social", "openid", "profile", "email"],
-  },
-} as const;
-
-type Provider = keyof typeof PROVIDER_META;
-
-type ProviderCapability = {
-  personalAvailable: boolean;
-  message: string;
-};
-
-function getProviderCapability(provider: Provider): ProviderCapability {
-  const meta = PROVIDER_META[provider];
-  const clientId = process.env[meta.clientIdEnv];
-  const label = provider === "gmail" ? "Gmail" : "LinkedIn";
-  if (!clientId) {
-    return {
-      personalAvailable: false,
-      message: `${label} personal OAuth is not configured. Add ${meta.clientIdEnv} in Lovable secrets to enable personal connect.`,
-    };
-  }
-  return { personalAvailable: true, message: `Connect your own ${label} account.` };
-}
-
-const StartInput = z.object({
-  provider: z.enum(["gmail", "linkedin"]),
-  targetOrigin: z.string().url(),
-});
-
-export const startConnect = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i) => StartInput.parse(i))
-  .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
-    const meta = PROVIDER_META[data.provider as Provider];
-    const providerLabel = data.provider === "gmail" ? "Gmail" : "LinkedIn";
-    const capability = getProviderCapability(data.provider as Provider);
-    const clientId = process.env[meta.clientIdEnv];
-    if (!capability.personalAvailable || !clientId) {
-      return { unsupported: true as const, message: capability.message };
-    }
-
-    try {
-      const { authorizationUrl } = await authorizeAppUserOAuth({
-        gatewayBaseUrl: GATEWAY_BASE_URL,
-        connectorId: meta.connectorIdAuth,
-        appUserId: userId,
-        connectorClientId: clientId,
-        returnUrl: `${data.targetOrigin}/settings/connections`,
-        responseMode: "web_message",
-        webMessageTargetOrigin: data.targetOrigin,
-        credentialsConfiguration: { scopes: meta.scopes },
-      });
-      return { unsupported: false as const, authorizationUrl };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to start personal connect";
-      if (message.includes("connector_not_found")) {
-        return {
-          unsupported: true as const,
-          message: `${providerLabel} app-user connector is not registered in this workspace. Ask the workspace owner to enable the ${meta.connectorIdAuth} App User connector.`,
-        };
-      }
-      throw error;
-    }
-  });
-
-export const getConnectionCapabilities = createServerFn({ method: "GET" })
+export const getConnectorStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => ({
-    gmail: getProviderCapability("gmail"),
-    linkedin: getProviderCapability("linkedin"),
+    gmail: Boolean(process.env.GOOGLE_MAIL_API_KEY && process.env.LOVABLE_API_KEY),
+    linkedin: Boolean(process.env.LINKEDIN_API_KEY && process.env.LOVABLE_API_KEY),
   }));
-
-
-const SaveInput = z.object({
-  provider: z.enum(["gmail", "linkedin"]),
-  connectionId: z.string().min(1),
-});
-
-export const saveConnection = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i) => SaveInput.parse(i))
-  .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
-    const meta = PROVIDER_META[data.provider as Provider];
-
-    // Fetch profile so we can show the connected account name
-    let providerEmail: string | null = null;
-    let providerName: string | null = null;
-    try {
-      if (data.provider === "gmail") {
-        const r = await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionId: data.connectionId,
-          connectorId: meta.connectorIdCall,
-          path: "/gmail/v1/users/me/profile",
-        });
-        if (r.ok) {
-          const p = (await r.json()) as { emailAddress?: string };
-          providerEmail = p.emailAddress ?? null;
-        }
-      } else {
-        const r = await callAsAppUser({
-          gatewayBaseUrl: GATEWAY_BASE_URL,
-          connectionId: data.connectionId,
-          connectorId: meta.connectorIdCall,
-          path: "/v2/userinfo",
-        });
-        if (r.ok) {
-          const p = (await r.json()) as { email?: string; name?: string };
-          providerEmail = p.email ?? null;
-          providerName = p.name ?? null;
-        }
-      }
-    } catch {
-      /* non-fatal */
-    }
-
-    const { error } = await supabaseAdmin
-      .from("user_connections")
-      .upsert(
-        {
-          user_id: userId,
-          provider: data.provider,
-          connection_id: data.connectionId,
-          provider_email: providerEmail,
-          provider_name: providerName,
-        },
-        { onConflict: "user_id,provider" },
-      );
-    if (error) throw new Error(error.message);
-    return { ok: true, providerEmail, providerName };
-  });
-
-export const listMyConnections = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { userId } = context as { userId: string };
-    const { data, error } = await supabaseAdmin
-      .from("user_connections")
-      .select("provider, provider_email, provider_name, connected_at")
-      .eq("user_id", userId);
-    if (error) throw new Error(error.message);
-    // Check if providers are configured in env
-    const gmailConfigured = !!process.env.GOOGLE_APP_USER_CONNECTOR_CLIENT_ID;
-    const linkedinConfigured = !!process.env.LINKEDIN_APP_USER_CONNECTOR_CLIENT_ID;
-
-    return { rows: data ?? [], config: { gmail: gmailConfigured, linkedin: linkedinConfigured } };
-  });
-
-export const disconnectProvider = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i) => z.object({ provider: z.enum(["gmail", "linkedin"]) }).parse(i))
-  .handler(async ({ data, context }) => {
-    const { userId } = context as { userId: string };
-    const { error } = await supabaseAdmin
-      .from("user_connections")
-      .delete()
-      .eq("user_id", userId)
-      .eq("provider", data.provider);
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
 
 // ─── Settings (auto-send toggles + design rules) ────────────────────────
 export const getMySettings = createServerFn({ method: "GET" })
@@ -191,7 +24,6 @@ export const getMySettings = createServerFn({ method: "GET" })
       .select("auto_send_email, auto_send_linkedin, design_rules")
       .eq("user_id", userId)
       .maybeSingle();
-    // Surface the VDNX default to axel so the textarea isn't empty.
     const { VDNX_DESIGN_RULES } = await import("@/server/designRules.server");
     const isVdnxOwner = (claims?.email ?? "").toLowerCase() === "axel@natax.co.uk";
     return {

@@ -1137,7 +1137,7 @@ function MessageRow({
         {artifact && onOpenArtifact && (
           <ArtifactPill artifact={artifact} onOpen={() => onOpenArtifact(artifact)} />
         )}
-        <div className="mt-2 flex items-center gap-1">
+        <div className="mt-2 flex items-center gap-1 flex-wrap">
           <button
             type="button"
             onClick={handleCopy}
@@ -1157,6 +1157,7 @@ function MessageRow({
               </>
             )}
           </button>
+          <SendPlanButton content={content} />
         </div>
       </div>
     </div>

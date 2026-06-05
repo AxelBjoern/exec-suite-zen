@@ -101,7 +101,8 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | null>(null);
+  const [aiInstr, setAiInstr] = useState("");
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);

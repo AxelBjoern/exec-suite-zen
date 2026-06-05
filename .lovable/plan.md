@@ -1,124 +1,91 @@
 
 ## Goal
 
-Turn this project into a multi-module workspace:
+Keep all current VDNX content (the VDNX board/scenario and the VDNX Forge agent types / base models) exactly as it is today, but make it **system-owned and invisible to regular users**. Signed-in users get an empty workspace where they can create **their own boards and their own models** from scratch.
 
-```text
-                ┌─ /chat       (current Veridian chat)
-   /auth ──►    ├─ /terminal   (current Veridian terminal)
-   (gate)       ├─ /budget/*   (from Budget Dashboard Buddy)
-                └─ /forge/*    (from AI Forge)
-                  ▲
-                  └─ /  =  neutral hub (4 module cards + user menu)
-```
-
-All modules share the dark/gold VDNX theme, one Supabase, one auth, one router.
+Also fix the navigation 404 (`/_authenticated/chat` → 404) at the same time.
 
 ---
 
-## 1. Auth + neutral start
+## 1. Ownership model
 
-- Add Supabase auth: email/password + Google (via `lovable.auth.signInWithOAuth("google")`, plus `configure_social_auth`).
-- New routes (top-level, public):
-  - `/auth` — sign-in / sign-up tabs, neutral VDNX-styled card.
-  - `/reset-password` — password recovery.
-- New pathless layout `src/routes/_authenticated/route.tsx` (`ssr: false`, `beforeLoad` → `supabase.auth.getUser()`, redirect to `/auth`).
-- Move existing app routes under the gate:
-  - `src/routes/index.tsx`     → `src/routes/_authenticated/chat.tsx`
-  - `src/routes/terminal.tsx`  → `src/routes/_authenticated/terminal.tsx`
-- New `src/routes/_authenticated/index.tsx` = **neutral hub** at `/`:
-  - VDNX dark + gold, app logo, user email, sign-out.
-  - Four big tiles → **Chat**, **Terminal**, **Budget**, **Forge** (each with one-line description + status pill).
-- Shared top bar `<ModuleSwitcher>` shown on every authenticated route (Chat · Terminal · Budget · Forge · Hub · avatar).
+Introduce a single notion of ownership on every user-creatable row:
 
----
+- `owner_id uuid` → `auth.users(id)` when the row belongs to a user.
+- `is_system boolean default false` → `true` for the seeded VDNX rows.
+- `owner_id` is `NULL` exactly when `is_system = true`.
 
-## 2. Budget module (full code + DB merge)
+Applies to:
 
-Copy from `Budget Dashboard Buddy` and re-skin to VDNX tokens.
+- `budget_scenarios` (boards)
+- `agent_types` (custom agent definitions)
+- `base_models` (custom model registrations)
+- `trainings`, `deployments` (already per-user; just confirm RLS)
 
-**Routes** (under `/_authenticated/budget/`):
-`index` (overview) · `board` · `budget` · `monthly` · `statements` · `compare` · `scenarios` · `sensitivity` · `financing` · `results` · `changelog`.
+Add a tiny admin concept so VDNX itself can still be managed:
 
-**Code**: copy `src/components/budget/*` and `src/lib/budget/*` (engine, financing, sensitivity, exports, format, seed, types). Budget's `Topbar` is replaced by the shared `<ModuleSwitcher>`.
+- `app_role` enum `('admin','user')`
+- `user_roles(user_id, role)` + `has_role(uid, role)` security-definer function (per project standard).
+- Mark one designated VDNX operator email as `admin` via a one-row insert.
 
-**DB migration** — Budget had zero migrations (zustand + localStorage). Persist properly per-user:
+### Visibility rules (RLS)
 
-```sql
-create table public.budget_scenarios (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name text not null,
-  assumptions jsonb not null,
-  actuals jsonb not null default '{"rows":[]}'::jsonb,
-  contract_start_date date,
-  is_base boolean not null default false,
-  is_locked boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create table public.budget_audit (
-  id bigserial primary key,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  scenario_id uuid references public.budget_scenarios(id) on delete set null,
-  field text, summary text,
-  created_at timestamptz not null default now()
-);
--- + grants + RLS scoped to auth.uid()
-```
+For each of the three tables (`budget_scenarios`, `agent_types`, `base_models`):
 
-Server fns in `src/serverfns/budget.functions.ts`: `listScenarios`, `upsertScenario`, `deleteScenario`, `setBase`, `toggleLock`, `setActual`, `clearActuals`, `appendAudit`. Zustand store keeps client cache; persistence layer swapped to React Query + server fns (seed scenario auto-created on first visit).
+- **SELECT**: `owner_id = auth.uid() OR (is_system AND has_role(auth.uid(),'admin'))`
+- **INSERT**: `owner_id = auth.uid() AND is_system = false`
+- **UPDATE/DELETE**: `owner_id = auth.uid()` (admins can additionally manage system rows)
+
+Net effect:
+- Regular user signs in → sees **only their own** boards and models. No VDNX rows leak.
+- Admin signs in → sees their own rows **plus** the VDNX system rows.
+- Nobody can mutate system rows except admins.
+
+### Backfill
+
+- Seeded VDNX `agent_types` / `base_models` → set `is_system = true`, `owner_id = null`.
+- Any existing scenario rows considered "the VDNX board" → same treatment (or leave none if there are none yet).
 
 ---
 
-## 3. AI Forge merge (full feature parity)
+## 2. Blank-start UX
 
-Copy from `AI Forge` and re-skin.
+Per your choice, new users do **not** get a clone of VDNX. They get:
 
-**Routes** (under `/_authenticated/forge/`):
-`dashboard` · `agent-types` · `base-models` · `models` · `deployments` · `training.new` · `settings`.
+- **Budget**: empty list + a primary "New board" button → creates an empty `budget_scenarios` row owned by them, opens the editor.
+- **Forge**: empty Agent Types + Base Models lists, each with a "New …" form. Submission inserts a row with `owner_id = auth.uid()`.
 
-**Components**: `app-sidebar.tsx`, `top-bar.tsx` (kept as forge-internal sub-nav inside the module).
-
-**DB migration**: port AI Forge's tables verbatim — `profiles`, `agent_types`, `base_models`, `trainings`, `deployments`, `user_secrets` — including the `handle_new_user` trigger, all RLS, and the 20 seed agent types + 6 seed base models. (`profiles` is reused for the whole app.)
-
-**Storage**: create `colab-notebooks` bucket (public read, per-user folder write).
-
-**Server fns**: copy `agent-types.functions.ts`, `trainings.functions.ts`, `training-ai.functions.ts`, `colab.functions.ts`, `secrets.functions.ts`. Rewrite any LLM/model selection to go through `src/server/llm.server.ts` (OpenRouter) — only the 8 allowed models. Drop Fireworks-specific endpoints; replace with OpenRouter-backed deploy stub that records `endpoint_url = OpenRouter model id`. `user_secrets.fireworks_api_key` repurposed as generic `provider_api_key` (column rename in migration).
+The Hub tiles stay the same; counts ("0 boards", "0 models") reflect the user's own data only.
 
 ---
 
-## 4. Theme + shell unification
+## 3. Fix the `/_authenticated/chat` 404
 
-- All copied components stripped of project-specific colors, switched to VDNX tokens (`bg-background`, `text-foreground`, `text-primary` gold, etc.) from `src/styles.css`.
-- Each module's internal nav uses VDNX pill style already established in Terminal/Chat headers.
-- `<ModuleSwitcher>` component lives in `src/components/ModuleSwitcher.tsx`, rendered by `_authenticated/route.tsx`.
+Root cause: `ModuleSwitcher` links to `/_authenticated/chat`, `/_authenticated/terminal`, etc. Those are TanStack **route IDs**, not URLs — the real URLs are `/chat`, `/terminal`, `/budget`, `/forge`.
 
----
-
-## 5. Out of scope
-
-- No data migration of existing `agents/threads/messages/...` tables — they remain as the Chat/Terminal backend.
-- No multi-tenant org model — single user owns their budget scenarios and forge trainings.
-- No Fireworks training pipeline; Forge's "Train" button creates a `trainings` row + Colab notebook only, deploy uses OpenRouter.
-- Existing email/cron/research server fns untouched.
+Fix: in `src/components/ModuleSwitcher.tsx`, change every `to: "/_authenticated/<x>"` to `to: "/<x>"`, and update the `path.startsWith(...)` active-state checks accordingly. No route files change.
 
 ---
 
-## Technical notes
+## 4. Files touched
 
-- Migration order (single migration): profiles + trigger → agent_types → base_models → trainings → deployments → user_secrets → budget_scenarios → budget_audit → storage bucket + policies → seeds.
-- `configure_social_auth(["google"])` called in same turn as Google button.
-- Existing `index.tsx` / `terminal.tsx` moved (not duplicated) to avoid double `/` route conflict.
-- `attachSupabaseAuth` already wired in `src/start.ts` — verify after edits.
-- Existing serverfns that currently run unauthenticated (`dispatch`, `routePrompt`, etc.) gain `requireSupabaseAuth` middleware so chat/terminal data becomes per-user (acceptable since you're now behind auth). If you'd rather keep them shared/global for now, say so and I'll skip this part.
+- **Migration** (one file): add `app_role`, `user_roles`, `has_role`; add `owner_id` + `is_system` columns on `budget_scenarios`, `agent_types`, `base_models`; backfill seeds to system; replace existing RLS policies on those three tables with the visibility rules above; insert one admin row for the VDNX operator email (you'll confirm the email on approval).
+- **Edit** `src/components/ModuleSwitcher.tsx` — fix the 4 link targets + active checks.
+- **Edit** `src/routes/_authenticated/forge.tsx` — drop `.eq("is_seed", true)`; query by RLS visibility (the policy already filters). Add minimal "New agent type" and "New base model" forms.
+- **Edit** `src/routes/_authenticated/budget.tsx` — render the user's own scenarios list + "New board" button (still a thin shell; the full engine port stays as the previously-planned Wave 2).
+- No changes to chat/terminal data or VDNX content.
 
 ---
 
-## Files (high level)
+## 5. Out of scope (this wave)
 
-- new: `src/routes/auth.tsx`, `reset-password.tsx`, `_authenticated/route.tsx`, `_authenticated/index.tsx`, `_authenticated/chat.tsx`, `_authenticated/terminal.tsx`, `_authenticated/budget/*` (11 files), `_authenticated/forge/*` (7 files)
-- new: `src/components/ModuleSwitcher.tsx`, `src/components/budget/*` (6 files copied + reskinned), `src/components/forge/{app-sidebar,top-bar}.tsx`
-- new: `src/lib/budget/*` (8 files), `src/serverfns/budget.functions.ts`, `src/serverfns/forge/*.ts` (5 files)
-- migration: one big SQL file (Forge schema + Budget schema + seeds + storage)
-- delete: `src/routes/index.tsx`, `src/routes/terminal.tsx` (replaced by moved versions)
+- Full Budget engine port and full Forge training UI — still queued for Wave 2.
+- Multi-org / team sharing.
+- Admin UI to manage VDNX system rows (admins use SQL / Supabase Studio for now).
+- Cloning a system row into a user-owned row (can add later as a one-click "Start from VDNX" button if you want it).
+
+---
+
+## What I need from you on approval
+
+1. The **email address** that should be granted the `admin` role (so admins can still see/manage VDNX). Reply with it on approval, or say "skip — I'll grant it manually later" and I'll leave the `user_roles` table empty.

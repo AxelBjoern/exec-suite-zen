@@ -1164,6 +1164,54 @@ function MessageRow({
   );
 }
 
+function SendPlanButton({ content }: { content: string }) {
+  const filePlan = useServerFn(filePlanFromChat);
+  const [busy, setBusy] = useState(false);
+  // Heuristic: show only when content looks like an outbound/publishing plan.
+  const looksLikePlan = /\b(linkedin|outbound|post\s*\d|publishing plan|email\s+sequence|reminder)\b/i.test(content) && content.length > 200;
+  if (!looksLikePlan) return null;
+
+  async function handleClick() {
+    if (busy) return;
+    setBusy(true);
+    const t = toast.loading("Filing plan to Outbound…");
+    try {
+      const res: any = await filePlan({ data: { plan: content } });
+      const count = res?.filed?.length ?? 0;
+      const errCount = res?.errors?.length ?? 0;
+      toast.dismiss(t);
+      if (count > 0) {
+        toast.success(`${count} draft${count === 1 ? "" : "s"} filed to Outbound${errCount ? ` (${errCount} skipped)` : ""}`, {
+          action: {
+            label: "Review",
+            onClick: () => { window.location.href = "/outbound"; },
+          },
+        });
+      } else {
+        toast.error(res?.errors?.[0] ?? "Nothing was filed");
+      }
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e?.message ?? "Failed to file plan");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
+      title="Parse this plan and file every post/email as a pending draft in Outbound"
+    >
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <SendIcon className="h-3 w-3" />}
+      {busy ? "Filing…" : "Send plan to Outbound"}
+    </button>
+  );
+}
+
 function VideoWithNarration({
   videoUrl,
   narrationUrl,

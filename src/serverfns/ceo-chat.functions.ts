@@ -1149,10 +1149,8 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           }
 
           const { fileOutboundFromChat } = await import("@/lib/outbound.functions");
-          const ctx = (await import("@tanstack/react-start/server")).getRequest;
-          // userId/email from middleware context attached above
-          const userId = (handlerContext as any)?.userId as string | undefined;
-          const userEmail = (handlerContext as any)?.claims?.email as string | undefined;
+          const userId = handlerContext.userId;
+          const userEmail = handlerContext.claims?.email;
           if (!userId) throw new Error("Not authenticated");
 
           let payload: Record<string, any>;

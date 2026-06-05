@@ -1117,16 +1117,8 @@ function MessageRow({
     );
   }
 
-  async function handleCopyAssistant() {
-    const ok = await copyToClipboard(content);
-    if (ok) {
-      setCopied(true);
-      toast.success("Copied to clipboard");
-      setTimeout(() => setCopied(false), 1500);
-    } else {
-      toast.error("Copy failed");
-    }
-  }
+
+
 
   return (
     <div className="flex gap-3 group">

@@ -127,7 +127,7 @@ function ConnectionsPage() {
               <button
                 className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-destructive hover:bg-muted disabled:opacity-50"
                 onClick={() => unlink(provider)}
-                disabled={busy === provider || !isConfigured}
+                disabled={busy === provider}
               >
                 Disconnect
               </button>
@@ -136,7 +136,11 @@ function ConnectionsPage() {
         ) : (
           <>
             <p className="mt-3 text-sm text-muted-foreground">
-              {provider === "linkedin"
+              {!isConfigured ? (
+                <span className="text-amber-600 dark:text-amber-500 font-medium italic">
+                  {label} personal connect isn't configured for this workspace yet.
+                </span>
+              ) : provider === "linkedin"
                 ? "Sign in with your LinkedIn account so posts go from you, not the shared workspace connection."
                 : `Sign in with your ${label} account so outbound sends from you, not a shared workspace connector.`}
             </p>

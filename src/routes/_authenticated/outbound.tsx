@@ -496,4 +496,3 @@ function OutboundPage() {
     </main>
   );
 }
-}

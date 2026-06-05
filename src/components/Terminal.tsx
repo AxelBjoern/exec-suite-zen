@@ -468,12 +468,12 @@ export function Terminal() {
         {/* Active panel area */}
         <main className="flex-1 flex flex-col min-w-0">
           {/* Tabs */}
-          <div className="flex items-center border-b border-rule bg-panel/40 overflow-x-auto">
+          <div className="flex items-center border-b border-rule bg-panel/40 overflow-x-auto scrollbar-hide">
             {panels.map((p, i) => (
-              <div key={i} className={`flex items-center border-r border-rule ${i === active ? "bg-background" : ""}`}>
+              <div key={i} className={`flex items-center border-r border-rule shrink-0 ${i === active ? "bg-background" : ""}`}>
                 <button
                   onClick={() => setActive(i)}
-                  className={`px-4 py-2 text-[12px] font-mono ${i === active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-3 md:px-4 py-2.5 text-[11px] md:text-[12px] font-mono whitespace-nowrap ${i === active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {panelLabel(p, agents)}
                 </button>

@@ -8,6 +8,85 @@ import { chatCompletion } from "@/server/llm.server";
 
 // ── Workspace connector (owner-only fallback for cron digest) ────────────
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
+const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
+
+async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null) {
+  const lovableKey = process.env.LOVABLE_API_KEY;
+  const liKey = process.env.LINKEDIN_API_KEY;
+  if (!lovableKey || !liKey) throw new Error("Workspace LinkedIn connector not configured");
+  const wsHeaders = {
+    Authorization: `Bearer ${lovableKey}`,
+    "X-Connection-Api-Key": liKey,
+  };
+
+  const meRes = await fetch(`${LINKEDIN_GATEWAY}/v2/userinfo`, { headers: wsHeaders });
+  if (!meRes.ok) throw new Error(`LinkedIn userinfo failed (${meRes.status}): ${await meRes.text()}`);
+  const { sub } = (await meRes.json()) as { sub?: string };
+  if (!sub) throw new Error("LinkedIn userinfo missing sub");
+  const author = `urn:li:person:${sub}`;
+
+  let mediaAsset: string | null = null;
+  if (imageBase64) {
+    const regRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
+      method: "POST",
+      headers: { ...wsHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+          owner: author,
+          serviceRelationships: [
+            { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
+          ],
+        },
+      }),
+    });
+    if (!regRes.ok) throw new Error(`LinkedIn registerUpload failed (${regRes.status}): ${await regRes.text()}`);
+    const reg = (await regRes.json()) as any;
+    const uploadUrl: string | undefined =
+      reg?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
+    mediaAsset = reg?.value?.asset ?? null;
+    if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
+    const upload = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: Buffer.from(imageBase64, "base64"),
+    });
+    if (!upload.ok) throw new Error(`LinkedIn image upload failed (${upload.status}): ${await upload.text()}`);
+  }
+
+  const body = mediaAsset
+    ? {
+        author,
+        lifecycleState: "PUBLISHED",
+        specificContent: {
+          "com.linkedin.ugc.ShareContent": {
+            shareCommentary: { text },
+            shareMediaCategory: "IMAGE",
+            media: [{ status: "READY", media: mediaAsset }],
+          },
+        },
+        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
+      }
+    : {
+        author,
+        lifecycleState: "PUBLISHED",
+        specificContent: {
+          "com.linkedin.ugc.ShareContent": {
+            shareCommentary: { text },
+            shareMediaCategory: "NONE",
+          },
+        },
+        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
+      };
+
+  const postRes = await fetch(`${LINKEDIN_GATEWAY}/v2/ugcPosts`, {
+    method: "POST",
+    headers: { ...wsHeaders, "Content-Type": "application/json", "X-Restli-Protocol-Version": "2.0.0" },
+    body: JSON.stringify(body),
+  });
+  if (!postRes.ok) throw new Error(`LinkedIn post failed (${postRes.status}): ${await postRes.text()}`);
+  return postRes.json();
+}
 
 function base64url(input: string | Buffer) {
   const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
@@ -208,8 +287,12 @@ async function performSend(
       await sendOwnerDigestEmail(payload.to, payload.subject, payload.body);
     }
   } else if (kind === "outbound_linkedin") {
-    // LinkedIn currently requires per-user OAuth (no workspace fallback).
-    await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
+    const conn = await getUserConnection(userId, "linkedin");
+    if (conn) {
+      await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
+    } else {
+      await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
+    }
   }
 }
 

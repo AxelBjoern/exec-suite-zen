@@ -53,6 +53,28 @@ const TILES = [
 ] as const;
 
 function Hub() {
+  const ensureFn = useServerFn(ensureOwnerRole);
+  const owner = useQuery({
+    queryKey: ["ensure-owner"],
+    queryFn: () => ensureFn({ data: undefined as never }),
+    staleTime: Infinity,
+  });
+
+  const tiles = [
+    ...TILES,
+    ...(owner.data?.isOwner
+      ? [
+          {
+            to: "/approvals",
+            label: "Approvals",
+            desc: "Review and approve outbound mail and LinkedIn posts.",
+            icon: ShieldCheck,
+            badge: "Owner",
+          } as const,
+        ]
+      : []),
+  ];
+
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-12 md:py-20">
       <div className="mb-10 md:mb-14">
@@ -68,7 +90,7 @@ function Hub() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {TILES.map(({ to, label, desc, icon: Icon, badge }) => (
+        {tiles.map(({ to, label, desc, icon: Icon, badge }) => (
           <Link
             key={to}
             to={to as any}

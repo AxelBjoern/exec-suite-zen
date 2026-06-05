@@ -103,8 +103,14 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | null>(null);
   const [aiInstr, setAiInstr] = useState("");
+  // edit-modal image state (LinkedIn only)
+  const [editImgB64, setEditImgB64] = useState<string | null>(null);
+  const [editImgUrl, setEditImgUrl] = useState<string | null>(null);
+  const [editImgFinal, setEditImgFinal] = useState(false);
+  const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);

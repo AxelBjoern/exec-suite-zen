@@ -198,8 +198,16 @@ async function performSend(
   payload: Record<string, any>,
 ) {
   if (kind === "outbound_email" || kind === "outbound_reminder") {
-    await sendGmailAsUser(userId, payload.to, payload.subject, payload.body);
+    // Hybrid: prefer the user's own Gmail if connected; otherwise fall back
+    // to the workspace Gmail connector (owner-only credentials).
+    const conn = await getUserConnection(userId, "gmail");
+    if (conn) {
+      await sendGmailAsUser(userId, payload.to, payload.subject, payload.body);
+    } else {
+      await sendOwnerDigestEmail(payload.to, payload.subject, payload.body);
+    }
   } else if (kind === "outbound_linkedin") {
+    // LinkedIn currently requires per-user OAuth (no workspace fallback).
     await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
   }
 }

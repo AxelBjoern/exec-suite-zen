@@ -480,7 +480,92 @@ export const rejectOutbound = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Workspace-connector helper exported for the cron digest only
+// ── Self-send: requester sends their own pending draft ───────────────────
+const SelfSendInput = z.object({ id: z.string().uuid() });
+export const sendOwnOutbound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => SelfSendInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    const { data: row, error } = await supabaseAdmin
+      .from("approvals")
+      .select("id, kind, status, payload, requester_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    if (row.status !== "pending") throw new Error(`Already ${row.status}`);
+    try {
+      await performSend(userId, row.kind as any, (row.payload ?? {}) as any);
+      await supabaseAdmin
+        .from("approvals")
+        .update({
+          status: "sent",
+          decided_at: new Date().toISOString(),
+          reviewer: claims?.email ?? userId,
+          notes: "self-sent by requester",
+        })
+        .eq("id", data.id);
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Send failed";
+      await supabaseAdmin
+        .from("approvals")
+        .update({
+          status: "failed",
+          decided_at: new Date().toISOString(),
+          reviewer: claims?.email ?? userId,
+          notes: msg,
+        })
+        .eq("id", data.id);
+      throw new Error(msg);
+    }
+  });
+
+// ── AI edit: rewrite a draft using a natural-language instruction ────────
+const AiEditInput = z.object({
+  kind: z.enum(["outbound_email", "outbound_reminder", "outbound_linkedin"]),
+  instruction: z.string().min(1).max(2000),
+  draft: z.object({
+    to: z.string().max(320).optional(),
+    subject: z.string().max(255).optional(),
+    body: z.string().max(20000).optional(),
+    text: z.string().max(3000).optional(),
+  }),
+});
+export const aiEditDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => AiEditInput.parse(i))
+  .handler(async ({ data }) => {
+    const isLi = data.kind === "outbound_linkedin";
+    const sys = isLi
+      ? "You rewrite LinkedIn posts. Return ONLY JSON: {\"text\": \"...\"}. Keep under 3000 chars. No markdown fences."
+      : "You rewrite emails. Return ONLY JSON: {\"subject\": \"...\", \"body\": \"...\"}. Preserve any reminder prefix in the subject. No markdown fences.";
+    const userMsg = isLi
+      ? `Current post:\n${data.draft.text ?? ""}\n\nInstruction:\n${data.instruction}`
+      : `Current subject: ${data.draft.subject ?? ""}\n\nCurrent body:\n${data.draft.body ?? ""}\n\nInstruction:\n${data.instruction}`;
+    const json = await chatCompletion({
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: userMsg },
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
+    const content: string = json?.choices?.[0]?.message?.content ?? "";
+    const stripped = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    let parsed: any = {};
+    try { parsed = JSON.parse(stripped); } catch {
+      // fall back: treat content as the body/text
+      parsed = isLi ? { text: stripped } : { body: stripped };
+    }
+    if (isLi) return { text: String(parsed.text ?? data.draft.text ?? "") };
+    return {
+      subject: String(parsed.subject ?? data.draft.subject ?? ""),
+      body: String(parsed.body ?? data.draft.body ?? ""),
+    };
+  });
+
 export async function sendOwnerDigestEmail(to: string, subject: string, body: string) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const gmailKey = process.env.GOOGLE_MAIL_API_KEY;

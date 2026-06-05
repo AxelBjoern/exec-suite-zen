@@ -209,6 +209,19 @@ function OutboundPage() {
     }
   }
 
+  async function deleteRow(id: string) {
+    setRowBusy(id);
+    try {
+      await deleteReq({ data: { id } });
+      toast.success("Deleted");
+      qc.invalidateQueries({ queryKey: ["my-outbound"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
   function openEdit(r: any) {
     if (r.status !== "pending") return;
     const p = (r.payload ?? {}) as Record<string, string>;

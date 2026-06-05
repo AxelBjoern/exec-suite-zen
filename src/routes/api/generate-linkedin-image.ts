@@ -2,8 +2,18 @@
 // Image pixels go through AI Gateway (the only image endpoint Lovable exposes);
 // LLM calls remain on OpenRouter per project memory.
 import { createFileRoute } from "@tanstack/react-router";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getDesignRulesForUser } from "@/server/designRules.server";
 
 const ENDPOINT = "https://ai.gateway.lovable.dev/v1/images/generations";
+
+async function resolveUserFromAuth(request: Request) {
+  const auth = request.headers.get("authorization") ?? request.headers.get("Authorization");
+  if (!auth?.startsWith("Bearer ")) return null;
+  const token = auth.slice(7);
+  const { data } = await supabaseAdmin.auth.getUser(token);
+  return data?.user ?? null;
+}
 
 export const Route = createFileRoute("/api/generate-linkedin-image")({
   server: {
@@ -20,9 +30,21 @@ export const Route = createFileRoute("/api/generate-linkedin-image")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
+        // Pull per-user design rules (VDNX defaults for axel@natax.co.uk)
+        let designRules: string | null = null;
+        try {
+          const user = await resolveUserFromAuth(request);
+          if (user) {
+            designRules = await getDesignRulesForUser({ userId: user.id, email: user.email });
+          }
+        } catch { /* non-fatal */ }
+
+        const rulesBlock = designRules ? `\n\nBrand/style rules (must follow):\n${designRules}` : "";
+
         const prompt =
           `${visual}. Bold sans-serif overlay text that reads exactly: "${tagline}". ` +
-          `Composition leaves negative space for the text. High contrast, social-share friendly, square 1:1, no watermarks, no logos.`;
+          `Composition leaves negative space for the text. High contrast, social-share friendly, square 1:1, no watermarks, no logos.` +
+          rulesBlock;
 
         const upstream = await fetch(ENDPOINT, {
           method: "POST",

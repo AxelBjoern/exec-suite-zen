@@ -104,195 +104,38 @@ function buildRawEmail(to: string, subject: string, body: string) {
   );
 }
 
-// ── Per-user send helpers ────────────────────────────────────────────────
-async function getUserConnection(userId: string, provider: "gmail" | "linkedin") {
-  const { data } = await supabaseAdmin
-    .from("user_connections")
-    .select("connection_id, provider_email")
-    .eq("user_id", userId)
-    .eq("provider", provider)
-    .maybeSingle();
-  return data;
-}
-
-async function sendGmailAsUser(userId: string, to: string, subject: string, body: string) {
-  const conn = await getUserConnection(userId, "gmail");
-  if (!conn) throw new Error("Connect your Gmail in Settings first.");
-  const res = await callAsAppUser({
-    gatewayBaseUrl: GATEWAY_BASE_URL,
-    connectionId: conn.connection_id,
-    connectorId: "google_mail",
-    path: "/gmail/v1/users/me/messages/send",
-    init: {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw: buildRawEmail(to, subject, body) }),
+// ── Workspace senders (shared connectors only) ───────────────────────────
+async function sendGmailWorkspace(to: string, subject: string, body: string) {
+  const lovableKey = process.env.LOVABLE_API_KEY;
+  const gmailKey = process.env.GOOGLE_MAIL_API_KEY;
+  if (!lovableKey || !gmailKey) {
+    throw new Error("Workspace Gmail connector not connected. Connect Gmail in Lovable Connectors.");
+  }
+  const res = await fetch(`${GMAIL_GATEWAY}/users/me/messages/send`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": gmailKey,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ raw: buildRawEmail(to, subject, body) }),
   });
   if (!res.ok) throw new Error(`Gmail send failed (${res.status}): ${await res.text()}`);
   return res.json();
 }
 
-async function postLinkedInAsUser(
-  userId: string,
-  text: string,
-  imageBase64?: string | null,
-) {
-  const conn = await getUserConnection(userId, "linkedin");
-  if (!conn) throw new Error("Connect your LinkedIn in Settings first.");
-  const connId = conn.connection_id;
-
-  // Resolve author URN
-  const me = await callAsAppUser({
-    gatewayBaseUrl: GATEWAY_BASE_URL,
-    connectionId: connId,
-    connectorId: "linkedin",
-    path: "/v2/userinfo",
-  });
-  if (!me.ok) throw new Error(`LinkedIn userinfo failed (${me.status}): ${await me.text()}`);
-  const { sub } = (await me.json()) as { sub?: string };
-  if (!sub) throw new Error("LinkedIn userinfo missing sub");
-  const author = `urn:li:person:${sub}`;
-
-  let mediaAsset: string | null = null;
-  if (imageBase64) {
-    // 1. Register upload
-    const regRes = await callAsAppUser({
-      gatewayBaseUrl: GATEWAY_BASE_URL,
-      connectionId: connId,
-      connectorId: "linkedin",
-      path: "/v2/assets?action=registerUpload",
-      init: {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          registerUploadRequest: {
-            recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
-            owner: author,
-            serviceRelationships: [
-              { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
-            ],
-          },
-        }),
-      },
-    });
-    if (!regRes.ok) throw new Error(`LinkedIn registerUpload failed (${regRes.status}): ${await regRes.text()}`);
-    const reg = (await regRes.json()) as any;
-    const uploadUrl: string | undefined =
-      reg?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
-    mediaAsset = reg?.value?.asset ?? null;
-    if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
-
-    // 2. PUT image bytes
-    const bytes = Buffer.from(imageBase64, "base64");
-    const upload = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": "image/png" },
-      body: bytes,
-    });
-    if (!upload.ok) throw new Error(`LinkedIn image upload failed (${upload.status}): ${await upload.text()}`);
-  }
-
-  // 3. ugcPosts
-  const body = mediaAsset
-    ? {
-        author,
-        lifecycleState: "PUBLISHED",
-        specificContent: {
-          "com.linkedin.ugc.ShareContent": {
-            shareCommentary: { text },
-            shareMediaCategory: "IMAGE",
-            media: [{ status: "READY", media: mediaAsset }],
-          },
-        },
-        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
-      }
-    : {
-        author,
-        lifecycleState: "PUBLISHED",
-        specificContent: {
-          "com.linkedin.ugc.ShareContent": {
-            shareCommentary: { text },
-            shareMediaCategory: "NONE",
-          },
-        },
-        visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
-      };
-
-  const postRes = await callAsAppUser({
-    gatewayBaseUrl: GATEWAY_BASE_URL,
-    connectionId: connId,
-    connectorId: "linkedin",
-    path: "/v2/ugcPosts",
-    init: {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Restli-Protocol-Version": "2.0.0" },
-      body: JSON.stringify(body),
-    },
-  });
-  if (!postRes.ok) throw new Error(`LinkedIn post failed (${postRes.status}): ${await postRes.text()}`);
-  return postRes.json();
-}
-
-// ── Owner role bootstrap ─────────────────────────────────────────────────
-export const ensureOwnerRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { userId, claims } = context as { userId: string; claims: { email?: string } };
-    const owner = process.env.OWNER_EMAIL?.toLowerCase();
-    if (!owner) return { isOwner: false };
-    const email = (claims?.email ?? "").toLowerCase();
-    if (email !== owner) {
-      const { data } = await supabaseAdmin
-        .from("user_roles")
-        .select("user_id")
-        .eq("user_id", userId)
-        .eq("role", "owner")
-        .maybeSingle();
-      return { isOwner: !!data };
-    }
-    await supabaseAdmin
-      .from("user_roles")
-      .upsert({ user_id: userId, role: "owner" }, { onConflict: "user_id,role" });
-    return { isOwner: true };
-  });
-
-// ── Settings lookup helper ───────────────────────────────────────────────
-async function getAutoSend(userId: string) {
-  const { data } = await supabaseAdmin
-    .from("user_settings")
-    .select("auto_send_email, auto_send_linkedin")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return {
-    email: data?.auto_send_email ?? false,
-    linkedin: data?.auto_send_linkedin ?? false,
-  };
-}
-
 async function performSend(
-  userId: string,
+  _userId: string,
   kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin",
   payload: Record<string, any>,
 ) {
   if (kind === "outbound_email" || kind === "outbound_reminder") {
-    // Hybrid: prefer the user's own Gmail if connected; otherwise fall back
-    // to the workspace Gmail connector (owner-only credentials).
-    const conn = await getUserConnection(userId, "gmail");
-    if (conn) {
-      await sendGmailAsUser(userId, payload.to, payload.subject, payload.body);
-    } else {
-      await sendOwnerDigestEmail(payload.to, payload.subject, payload.body);
-    }
+    await sendGmailWorkspace(payload.to, payload.subject, payload.body);
   } else if (kind === "outbound_linkedin") {
-    const conn = await getUserConnection(userId, "linkedin");
-    if (conn) {
-      await postLinkedInAsUser(userId, payload.text, payload.imageBase64 ?? null);
-    } else {
-      await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
-    }
+    await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
   }
 }
+
 
 // ── Request flow ─────────────────────────────────────────────────────────
 const EmailReq = z.object({

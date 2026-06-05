@@ -1129,12 +1129,12 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
-    // ── Outbound intent: if user asked to send mail / post / set reminder,
-    //    short-circuit with a draft link to /outbound. No silent inserts.
+    // ── Outbound intent: auto-file as a pending row in /outbound. The
+    //    requester is the authenticated chat user; auto-send respects their
+    //    personal toggle in user_settings.
     if (!imageParts.length) {
       try {
         const { parseOutboundIntent } = await import("@/server/chat-intent.server");
-        const { encodeDraft } = await import("@/lib/draftLink");
         const intent = await parseOutboundIntent(
           data.content,
           (history ?? []).slice(-6).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
@@ -1146,27 +1146,100 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               `📨 I can ${intent.kind === "linkedin" ? "draft this LinkedIn post" : intent.kind === "reminder" ? "draft this reminder" : "draft this email"} — but I still need: **${ask}**. What should I use?`,
             );
           }
-          let draft: any;
+
+          const { fileOutboundFromChat } = await import("@/lib/outbound.functions");
+          const ctx = (await import("@tanstack/react-start/server")).getRequest;
+          // userId/email from middleware context attached above
+          const userId = (handlerContext as any)?.userId as string | undefined;
+          const userEmail = (handlerContext as any)?.claims?.email as string | undefined;
+          if (!userId) throw new Error("Not authenticated");
+
+          let payload: Record<string, any>;
+          let kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin";
           let label: string;
+
           if (intent.kind === "email") {
-            draft = { kind: "email", to: intent.to, subject: intent.subject, body: intent.body };
+            kind = "outbound_email";
+            payload = {
+              to: intent.to!,
+              subject: intent.subject || `Message from ${userEmail ?? "chat"}`,
+              body: intent.body!,
+            };
             label = `email to **${intent.to}**`;
           } else if (intent.kind === "reminder") {
-            draft = { kind: "reminder", subject: intent.subject, body: intent.body };
-            label = `reminder for the owner`;
+            kind = "outbound_reminder";
+            payload = {
+              subject: intent.subject || "Reminder",
+              body: intent.body!,
+            };
+            label = `reminder`;
           } else {
-            draft = { kind: "linkedin", text: intent.text };
+            // linkedin — generate tagline + image, attach to payload
+            kind = "outbound_linkedin";
+            payload = { text: intent.text! };
             label = `LinkedIn post`;
+            try {
+              const { callTool } = await import("@/server/llm.server");
+              const { result: tag } = await callTool<{ tagline: string; visual_prompt: string }>({
+                system:
+                  "You are a senior brand designer. Given a LinkedIn post, return a bold 4-8 word tagline (sentence case, no period) and a short visual concept (subject, mood, style, colors). No emojis, no hashtags.",
+                user: `Post text:\n"""${intent.text}"""`,
+                tool: {
+                  type: "function" as const,
+                  function: {
+                    name: "compose_tagline",
+                    description: "Tagline + visual prompt for a LinkedIn share image.",
+                    parameters: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["tagline", "visual_prompt"],
+                      properties: {
+                        tagline: { type: "string" },
+                        visual_prompt: { type: "string" },
+                      },
+                    },
+                  },
+                },
+                toolChoice: { name: "compose_tagline" },
+                model: "x-ai/grok-4.3",
+              });
+              payload.tagline = tag.tagline;
+              payload.visualPrompt = tag.visual_prompt;
+              try {
+                const { generateLinkedInImageBase64 } = await import("@/server/linkedinImage.server");
+                payload.imageBase64 = await generateLinkedInImageBase64({
+                  tagline: tag.tagline,
+                  visualPrompt: tag.visual_prompt,
+                });
+              } catch (imgErr: any) {
+                payload.imageError = imgErr?.message ?? "image generation failed";
+              }
+            } catch (tagErr: any) {
+              payload.imageError = tagErr?.message ?? "tagline generation failed";
+            }
           }
-          const link = `/outbound?draft=${encodeDraft(draft)}`;
+
+          const filed = await fileOutboundFromChat({ userId, userEmail, kind, payload });
+          const status = filed.status === "sent" ? "✅ Sent" : filed.status === "failed" ? "⚠️ Failed" : "📨 Filed as pending";
+          const imgNote =
+            kind === "outbound_linkedin"
+              ? payload.imageBase64
+                ? "\n\n_Image generated and attached._"
+                : payload.imageError
+                  ? `\n\n_Image skipped: ${payload.imageError}_`
+                  : ""
+              : "";
           return await saveAssistant(
-            `📨 Drafted ${label}. **[Open in Outbound →](${link})** to review and submit. Nothing is sent until you approve it.`,
+            `${status} ${label} in Outbound (\`${filed.id?.slice(0, 8) ?? "?"}\`). **[Review →](/outbound?filed=${filed.id})**${imgNote}`,
           );
         }
-      } catch {
-        // intent detection is best-effort; fall through to normal reply
+      } catch (e: any) {
+        // intent detection / filing failure — fall through to normal reply but
+        // surface the error so the user knows why nothing was filed.
+        console.error("[outbound auto-file]", e);
       }
     }
+
 
     // ── Normal CEO conversational reply ───────────────────────────────────
     const messages: ChatMessage[] = [

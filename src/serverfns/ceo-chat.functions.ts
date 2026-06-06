@@ -7,7 +7,7 @@ import {
   resolveTextChatModel,
   type ChatMessage,
 } from "@/server/llm.server";
-import { DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
+import { DEFAULT_COMPANY_CONTEXT, getCompanyContextForEmail } from "@/lib/agent-prompts";
 import { dispatch, routePrompt } from "@/serverfns/terminal.functions";
 import {
   renderDocx,
@@ -17,14 +17,22 @@ import {
 import { generateCeoVideo } from "@/serverfns/video.functions";
 import { webSearch, webFetch, extractUrls } from "@/server/web.server";
 import { listRepoDir, readRepoFile, searchRepoCode, parseRepoTarget } from "@/server/github.server";
+import { isVdnxOwner } from "@/server/designRules.server";
+import { assertModelAllowedForUser } from "@/lib/models.functions";
 
 const VALID_DISPATCH_SLUGS = [
   "ceo", "cfo", "coo", "cto", "cmo", "cco", "sales", "linkedin", "social", "seo",
 ] as const;
 
-const CEO_SYSTEM = `${DEFAULT_COMPANY_CONTEXT}
+function buildCeoSystem(email: string | null | undefined): string {
+  const ctx = getCompanyContextForEmail(email);
+  const owner = isVdnxOwner(email);
+  const dispatchLine = owner
+    ? `- You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.`
+    : `- Specialist-agent dispatch (@cfo, @board, etc.) is restricted to the workspace owner and unavailable on this account.`;
+  return `${ctx}
 
-You are the VDNX CEO Agent in conversational chat mode with the operator.
+You are the ${owner ? "VDNX " : ""}CEO Agent in conversational chat mode with the operator.
 
 Rules:
 - Talk like a sharp, decisive chief executive. Direct, founder-grade, no filler, active voice.
@@ -32,11 +40,15 @@ Rules:
 - Never invent metrics or commitments. If you don't know, say so and propose how to find out.
 - This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
 - **NEVER fabricate file links, download URLs, or storage paths.** Documents are produced ONLY by the /pdf and /docx slash commands; you have no ability to upload files. If the operator wants a file, instruct them to type \`/pdf <topic>\` or \`/docx <topic>\` — do not write a Markdown download link yourself.
-- You CAN dispatch specialist agents directly from this chat. Tell the operator they can prefix a message with @cfo, @coo, @cto, @cmo, @cco, @sales, @linkedin, @social, @seo to dispatch that specialist, or @board to convene a cross-functional boardroom. The dispatched artifact will appear inline.
+${dispatchLine}
 - The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std), optionally with narration via \`/video <visual> | <narration text>\` (ElevenLabs, voice: Sarah). Mention these when relevant.
 - You have live internet access: \`/search <query>\` runs a web search and \`/fetch <url>\` reads a page. You can also paste a URL into a normal message and the page contents will be fetched automatically and provided to you — cite sources inline as \`[domain](url)\` when you use them.
 - You can read GitHub repos (read-only): \`/repo <owner/repo>\` for an overview, \`/repo ls <owner/repo>[/path]\`, \`/repo cat <owner/repo>/<file>\`, \`/repo search <owner/repo> <query>\`. Full GitHub URLs are also accepted.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
+}
+
+// Legacy export retained for callers (doc builder etc.) that don't have per-user email handy.
+const CEO_SYSTEM = buildCeoSystem(null);
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────
 

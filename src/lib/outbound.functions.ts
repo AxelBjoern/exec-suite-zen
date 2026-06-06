@@ -173,19 +173,31 @@ async function getAutoSend(userId: string) {
 }
 
 
+// Optional ISO timestamp ("YYYY-MM-DDTHH:mm" from <input type=datetime-local> OK)
+const ScheduledAt = z.string().min(10).max(40).optional().nullable();
+
 const EmailReq = z.object({
   to: z.string().email().max(320),
   subject: z.string().min(1).max(255),
   body: z.string().min(1).max(20000),
+  scheduled_at: ScheduledAt,
 });
 const ReminderReq = z.object({
   subject: z.string().min(1).max(255),
   body: z.string().min(1).max(20000),
+  scheduled_at: ScheduledAt,
 });
 const LinkedInReq = z.object({
   text: z.string().min(1).max(3000),
   imageBase64: z.string().max(8_000_000).optional().nullable(),
+  scheduled_at: ScheduledAt,
 });
+
+function isFutureSchedule(s?: string | null) {
+  if (!s) return false;
+  const t = Date.parse(s);
+  return Number.isFinite(t) && t > Date.now() + 30_000; // >30s in future
+}
 
 async function fileRequest(
   userId: string,

@@ -206,9 +206,12 @@ async function fileRequest(
   payload: Record<string, any>,
 ) {
   const auto = await getAutoSend(userId);
+  const scheduled = isFutureSchedule(payload?.scheduled_at);
   const canAutoSend =
-    (kind === "outbound_linkedin" && auto.linkedin) ||
-    ((kind === "outbound_email" || kind === "outbound_reminder") && auto.email);
+    !scheduled && (
+      (kind === "outbound_linkedin" && auto.linkedin) ||
+      ((kind === "outbound_email" || kind === "outbound_reminder") && auto.email)
+    );
 
   if (canAutoSend) {
     try {

@@ -2,7 +2,11 @@
 // brand defaults; everyone else uses what they save in /settings (or no rules).
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const VDNX_OWNER_EMAIL = "axel@natax.co.uk";
+export const VDNX_OWNER_EMAIL = "axel@natax.co.uk";
+
+export function isVdnxOwner(email: string | null | undefined): boolean {
+  return (email ?? "").toLowerCase() === VDNX_OWNER_EMAIL;
+}
 
 export const VDNX_DESIGN_RULES = `VDNX brand visual rules:
 - Institutional, editorial, premium fintech aesthetic. No gimmicks, no emoji, no stock-photo cliches.

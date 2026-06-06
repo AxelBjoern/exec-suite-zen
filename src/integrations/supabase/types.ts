@@ -981,6 +981,7 @@ export type Database = {
         Row: {
           auto_send_email: boolean
           auto_send_linkedin: boolean
+          chat_model_allowlist: string[] | null
           design_rules: string | null
           updated_at: string
           user_id: string
@@ -988,6 +989,7 @@ export type Database = {
         Insert: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          chat_model_allowlist?: string[] | null
           design_rules?: string | null
           updated_at?: string
           user_id: string
@@ -995,6 +997,7 @@ export type Database = {
         Update: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          chat_model_allowlist?: string[] | null
           design_rules?: string | null
           updated_at?: string
           user_id?: string

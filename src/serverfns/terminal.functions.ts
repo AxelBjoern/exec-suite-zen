@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createHash } from "crypto";
 import {
   ARTIFACT_TOOL,
@@ -13,11 +14,22 @@ import {
   shouldGate,
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
-import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
+import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT, NEUTRAL_COMPANY_CONTEXT } from "@/lib/agent-prompts";
 import { callTool, resolveTextChatModel } from "@/server/llm.server";
 import { gatherVdnxContext } from "@/server/code-context.server";
+import { isVdnxOwner } from "@/server/designRules.server";
+import { assertModelAllowedForUser } from "@/lib/models.functions";
 
 const CODE_AWARE_AGENTS = new Set(["cto", "ceo"]);
+
+function assertVdnxOwner(context: unknown): { userId: string; email: string } {
+  const c = context as { userId?: string; claims?: { email?: string } };
+  const email = c.claims?.email ?? "";
+  if (!isVdnxOwner(email)) {
+    throw new Error("Forbidden: VDNX terminal is restricted to the workspace owner.");
+  }
+  return { userId: c.userId ?? "", email };
+}
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");
@@ -242,6 +254,7 @@ function consultToMarkdown(c: Consult, agentRole: string): string {
 // ─────────────────────────────────────────────────────────────────────────
 
 export const dispatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     raw: string;
     agent_slug: string;
@@ -254,7 +267,9 @@ export const dispatch = createServerFn({ method: "POST" })
     freeform?: boolean;
     model?: string;
   }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId, email } = assertVdnxOwner(context);
+    await assertModelAllowedForUser({ userId, modelId: data.model ?? null });
     const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);
@@ -297,7 +312,7 @@ export const dispatch = createServerFn({ method: "POST" })
     // Phase 2: load company context + recent decisions
     const { data: ctxRow } = await supabaseAdmin
       .from("company_context").select("*").limit(1).maybeSingle();
-    const companyContext = renderCompanyContext(ctxRow);
+    const companyContext = renderCompanyContext(ctxRow, { email });
     const { data: recentDecisions } = await supabaseAdmin
       .from("decision_log")
       .select("title, decision, created_at")
@@ -531,14 +546,17 @@ export const dispatch = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────
 
 export const routePrompt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { prompt: string; force_boardroom?: boolean; model?: string }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId, email } = assertVdnxOwner(context);
+    await assertModelAllowedForUser({ userId, modelId: data.model ?? null });
     const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin
       .from("agents").select("slug,role,mandate").order("sort_order");
     const { data: ctxRow } = await supabaseAdmin
       .from("company_context").select("*").limit(1).maybeSingle();
-    const companyContext = renderCompanyContext(ctxRow) || DEFAULT_COMPANY_CONTEXT;
+    const companyContext = renderCompanyContext(ctxRow, { email }) || NEUTRAL_COMPANY_CONTEXT;
 
     const system = buildRouterPrompt({
       agents: (agents ?? []) as any,

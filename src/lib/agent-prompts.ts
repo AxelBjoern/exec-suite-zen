@@ -71,15 +71,38 @@ Operating principles (unchanged): Authority — AI drafts, humans approve. Audit
 
 export const DEFAULT_COMPANY_CONTEXT = VDNX_UNICORN_DIRECTIVE;
 
-export function renderCompanyContext(ctx: {
-  mission?: string;
-  principles?: string;
-  icp?: string;
-  positioning?: string;
-  current_priorities?: string;
-  notes?: string;
-} | null | undefined): string {
-  if (!ctx) return DEFAULT_COMPANY_CONTEXT;
+export const NEUTRAL_COMPANY_CONTEXT = `
+COMPANY CONTEXT
+You are a helpful executive assistant. Give clear, concise, decision-grade answers.
+No special company directive applies to this account.
+`.trim();
+
+const VDNX_OWNER_EMAIL = "axel@natax.co.uk";
+
+/** Returns the VDNX directive only for the VDNX owner; neutral context for other end-users.
+ *  If `email` is undefined (e.g. cron/system context), defaults to the VDNX directive. */
+export function getCompanyContextForEmail(email: string | null | undefined): string {
+  if (email === undefined) return VDNX_UNICORN_DIRECTIVE;
+  return (email ?? "").toLowerCase() === VDNX_OWNER_EMAIL
+    ? VDNX_UNICORN_DIRECTIVE
+    : NEUTRAL_COMPANY_CONTEXT;
+}
+
+export function renderCompanyContext(
+  ctx: {
+    mission?: string;
+    principles?: string;
+    icp?: string;
+    positioning?: string;
+    current_priorities?: string;
+    notes?: string;
+  } | null | undefined,
+  opts?: { email?: string | null },
+): string {
+  const base = opts && "email" in opts
+    ? getCompanyContextForEmail(opts.email)
+    : VDNX_UNICORN_DIRECTIVE;
+  if (!ctx) return base;
   const lines = ["COMPANY CONTEXT — VDNX"];
   if (ctx.mission) lines.push(`Mission: ${ctx.mission}`);
   if (ctx.principles) lines.push(`Principles: ${ctx.principles}`);
@@ -88,7 +111,7 @@ export function renderCompanyContext(ctx: {
   if (ctx.current_priorities) lines.push(`Current priorities: ${ctx.current_priorities}`);
   if (ctx.notes) lines.push(`Notes: ${ctx.notes}`);
   lines.push("");
-  lines.push(VDNX_UNICORN_DIRECTIVE);
+  lines.push(base);
   return lines.join("\n");
 }
 

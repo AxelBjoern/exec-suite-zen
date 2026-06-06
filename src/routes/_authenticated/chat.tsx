@@ -17,6 +17,9 @@ import {
 } from "@/serverfns/ceo-chat.functions";
 import { filePlanFromChat } from "@/lib/outbound.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { getMyModelAllowlist } from "@/lib/models.functions";
+import { isVdnxOwnerEmail } from "@/lib/vdnx";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArtifactDrawer,
   ArtifactPill,
@@ -216,6 +219,33 @@ function ChatPage() {
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
+
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setUserEmail(data.user?.email ?? null);
+    });
+    return () => { active = false; };
+  }, []);
+  const isOwner = isVdnxOwnerEmail(userEmail);
+
+  const allowlistFn = useServerFn(getMyModelAllowlist);
+  const { data: allowlist } = useQuery({
+    queryKey: ["my-model-allowlist"],
+    queryFn: () => allowlistFn(),
+  });
+  const allowedModels = useMemo(() => {
+    const allowed = new Set(allowlist?.allowed ?? CHAT_MODEL_OPTIONS.map((m) => m.id));
+    return CHAT_MODEL_OPTIONS.filter((m) => allowed.has(m.id));
+  }, [allowlist]);
+
+  useEffect(() => {
+    if (!allowedModels.length) return;
+    if (!allowedModels.some((m) => m.id === model)) {
+      setModel(allowedModels[0].id);
+    }
+  }, [allowedModels, model]);
 
   const pendingKey = activeId ?? PENDING_NONE_KEY;
   const pendingUser = pendingByConvo[pendingKey] ?? null;
@@ -573,13 +603,23 @@ function ChatPage() {
         }`}
       >
         <div className="px-4 py-4 border-b border-border/40 flex items-center gap-2">
-          <Link
-            to="/terminal"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            title="Back to terminal"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          {isOwner ? (
+            <Link
+              to="/terminal"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Back to terminal"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          ) : (
+            <Link
+              to="/"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Back to hub"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
           <div className="flex-1">
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               VDNX
@@ -733,20 +773,22 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <Link
-              to="/terminal"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
-              title="Open VDNX Terminal"
-            >
-              <Square className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Terminal</span>
-            </Link>
+            {isOwner && (
+              <Link
+                to="/terminal"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
+                title="Open VDNX Terminal"
+              >
+                <Square className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Terminal</span>
+              </Link>
+            )}
             <Select value={model} onValueChange={setModel}>
               <SelectTrigger className="h-8 w-[110px] md:w-[180px] text-xs">
-                <SelectValue>{hydrated ? activeModelLabel : CHAT_MODEL_OPTIONS[0].label}</SelectValue>
+                <SelectValue>{hydrated ? activeModelLabel : (allowedModels[0]?.label ?? CHAT_MODEL_OPTIONS[0].label)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {CHAT_MODEL_OPTIONS.map((m) => (
+                {allowedModels.map((m) => (
                   <SelectItem key={m.id} value={m.id} className="text-xs">
                     {m.label}
                   </SelectItem>

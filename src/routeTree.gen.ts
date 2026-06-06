@@ -21,6 +21,7 @@ import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/c
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
@@ -88,6 +89,12 @@ const AuthenticatedSettingsIndexRoute =
     path: '/settings/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSettingsModelsRoute =
+  AuthenticatedSettingsModelsRouteImport.update({
+    id: '/settings/models',
+    path: '/settings/models',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsConnectionsRoute =
   AuthenticatedSettingsConnectionsRouteImport.update({
     id: '/settings/connections',
@@ -130,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/terminal': typeof AuthenticatedTerminalRoute
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -148,6 +156,7 @@ export interface FileRoutesByTo {
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/': typeof AuthenticatedIndexRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -168,6 +177,7 @@ export interface FileRoutesById {
   '/api/generate-linkedin-image': typeof ApiGenerateLinkedinImageRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
+  '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/terminal'
     | '/api/generate-linkedin-image'
     | '/settings/connections'
+    | '/settings/models'
     | '/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/api/generate-linkedin-image'
     | '/'
     | '/settings/connections'
+    | '/settings/models'
     | '/settings'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -225,6 +237,7 @@ export interface FileRouteTypes {
     | '/api/generate-linkedin-image'
     | '/_authenticated/'
     | '/_authenticated/settings/connections'
+    | '/_authenticated/settings/models'
     | '/_authenticated/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -329,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/models': {
+      id: '/_authenticated/settings/models'
+      path: '/settings/models'
+      fullPath: '/settings/models'
+      preLoaderRoute: typeof AuthenticatedSettingsModelsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings/connections': {
       id: '/_authenticated/settings/connections'
       path: '/settings/connections'
@@ -376,6 +396,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedSettingsConnectionsRoute: typeof AuthenticatedSettingsConnectionsRoute
+  AuthenticatedSettingsModelsRoute: typeof AuthenticatedSettingsModelsRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
@@ -388,6 +409,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedSettingsConnectionsRoute: AuthenticatedSettingsConnectionsRoute,
+  AuthenticatedSettingsModelsRoute: AuthenticatedSettingsModelsRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
@@ -407,13 +429,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

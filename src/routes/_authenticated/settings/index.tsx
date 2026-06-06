@@ -98,6 +98,22 @@ function SettingsPage() {
       </section>
 
       <section className="mt-4 rounded-lg border border-border bg-panel p-5">
+        <div className="mb-2 flex items-center gap-2">
+          <Cpu className="h-4 w-4 text-primary" />
+          <h2 className="font-serif text-lg font-semibold">Chat models</h2>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Enable or disable which models show up in your chat picker.
+        </p>
+        <Link
+          to="/settings/models"
+          className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary hover:bg-primary/10"
+        >
+          Manage models →
+        </Link>
+      </section>
+
+      <section className="mt-4 rounded-lg border border-border bg-panel p-5">
         <h2 className="mb-1 font-serif text-lg font-semibold">Guardrail</h2>
         <p className="mb-4 text-xs text-muted-foreground">
           When OFF (default), every outbound request is queued for owner approval. When ON, your own requests send immediately via your connected account — no owner approval needed.

@@ -587,7 +587,7 @@ function ChatPage() {
     !uploading;
 
   return (
-    <div className="h-screen bg-background text-foreground flex">
+    <div className="h-[calc(100vh-3.25rem)] bg-background text-foreground flex">
       {/* ── Mobile backdrop ─────────────────────────────────────────────── */}
       {sidebarOpen && (
         <div

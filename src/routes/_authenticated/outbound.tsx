@@ -134,7 +134,7 @@ function OutboundPage() {
       setEmail({ to: d.to ?? "", subject: d.subject ?? "", body: d.body ?? "", scheduled_at: "" });
       setTimeout(() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } else if (d.kind === "reminder") {
-      setReminder({ subject: d.subject ?? "", body: d.body ?? "" });
+      setReminder({ subject: d.subject ?? "", body: d.body ?? "", scheduled_at: "" });
       setTimeout(() => reminderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } else if (d.kind === "linkedin") {
       setPost(d.text ?? "");

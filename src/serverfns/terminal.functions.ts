@@ -312,7 +312,7 @@ export const dispatch = createServerFn({ method: "POST" })
     // Phase 2: load company context + recent decisions
     const { data: ctxRow } = await supabaseAdmin
       .from("company_context").select("*").limit(1).maybeSingle();
-    const companyContext = renderCompanyContext(ctxRow);
+    const companyContext = renderCompanyContext(ctxRow, { email });
     const { data: recentDecisions } = await supabaseAdmin
       .from("decision_log")
       .select("title, decision, created_at")
@@ -546,14 +546,17 @@ export const dispatch = createServerFn({ method: "POST" })
 // ─────────────────────────────────────────────────────────────────────────
 
 export const routePrompt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { prompt: string; force_boardroom?: boolean; model?: string }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId, email } = assertVdnxOwner(context);
+    await assertModelAllowedForUser({ userId, modelId: data.model ?? null });
     const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin
       .from("agents").select("slug,role,mandate").order("sort_order");
     const { data: ctxRow } = await supabaseAdmin
       .from("company_context").select("*").limit(1).maybeSingle();
-    const companyContext = renderCompanyContext(ctxRow) || DEFAULT_COMPANY_CONTEXT;
+    const companyContext = renderCompanyContext(ctxRow, { email }) || NEUTRAL_COMPANY_CONTEXT;
 
     const system = buildRouterPrompt({
       agents: (agents ?? []) as any,

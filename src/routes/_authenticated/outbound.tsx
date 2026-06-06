@@ -21,6 +21,13 @@ import {
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
 import { streamImage } from "@/lib/streamImage";
+import { supabase } from "@/integrations/supabase/client";
+
+async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const t = data.session?.access_token;
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
 
 export const Route = createFileRoute("/_authenticated/outbound")({
   validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),

@@ -96,9 +96,10 @@ function OutboundPage() {
     refetchInterval: 10000,
   });
 
-  const [email, setEmail] = useState({ to: "", subject: "", body: "" });
-  const [reminder, setReminder] = useState({ subject: "", body: "" });
+  const [email, setEmail] = useState({ to: "", subject: "", body: "", scheduled_at: "" });
+  const [reminder, setReminder] = useState({ subject: "", body: "", scheduled_at: "" });
   const [post, setPost] = useState("");
+  const [postSchedule, setPostSchedule] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);

@@ -10,10 +10,11 @@ export async function streamImage(
   body: Record<string, unknown>,
   onFrame: (dataUrl: string, b64: string, isFinal: boolean) => void,
   signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
 ): Promise<void> {
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(extraHeaders ?? {}) },
     body: JSON.stringify(body),
     signal,
   });

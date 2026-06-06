@@ -21,6 +21,13 @@ import {
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
 import { streamImage } from "@/lib/streamImage";
+import { supabase } from "@/integrations/supabase/client";
+
+async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const t = data.session?.access_token;
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
 
 export const Route = createFileRoute("/_authenticated/outbound")({
   validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),
@@ -179,7 +186,7 @@ function OutboundPage() {
       }
       // 2. stream image
       await streamImage(
-        "/api/generate-linkedin-image",
+        "/api/public/generate-linkedin-image",
         { tagline: tagLocal, visualPrompt: visLocal },
         (dataUrl, b64, isFinal) => {
           setImgUrl(dataUrl);
@@ -188,6 +195,8 @@ function OutboundPage() {
             setImgFinal(true);
           }
         },
+        undefined,
+        await authHeader(),
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Image generation failed");
@@ -308,7 +317,7 @@ function OutboundPage() {
       const t = await tagline({ data: { text: editDraft.text } });
       const visual = editImgDescription.trim() || t.visual_prompt;
       await streamImage(
-        "/api/generate-linkedin-image",
+        "/api/public/generate-linkedin-image",
         { tagline: t.tagline, visualPrompt: visual },
         (dataUrl, b64, isFinal) => {
           setEditImgUrl(dataUrl);
@@ -317,6 +326,8 @@ function OutboundPage() {
             setEditImgFinal(true);
           }
         },
+        undefined,
+        await authHeader(),
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Image generation failed");
@@ -356,16 +367,19 @@ function OutboundPage() {
       const t = await tagline({ data: { text: editDraft.text } });
       const visual = editImgDescription.trim() || t.visual_prompt;
       // Run 3 generations in parallel; collect the final frames
+      const hdr = await authHeader();
       const results = await Promise.allSettled(
         [0, 1, 2].map(
           (i) =>
             new Promise<string>((resolve, reject) => {
               streamImage(
-                "/api/generate-linkedin-image",
+                "/api/public/generate-linkedin-image",
                 { tagline: t.tagline, visualPrompt: `${visual} (variant ${i + 1})` },
                 (_dataUrl, b64, isFinal) => {
                   if (isFinal) resolve(b64);
                 },
+                undefined,
+                hdr,
               ).catch(reject);
             }),
         ),

@@ -1,6 +1,7 @@
-// Streaming LinkedIn image generation through Lovable AI Gateway.
-// Image pixels go through AI Gateway (the only image endpoint Lovable exposes);
-// LLM calls remain on OpenRouter per project memory.
+// Public (auth-bypassed at edge) streaming LinkedIn image generation route.
+// We re-implement auth in the handler by reading the Supabase Bearer token
+// from the Authorization header. Lives under /api/public/* so Lovable's
+// preview/published auth proxy doesn't 302-redirect the POST.
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getDesignRulesForUser } from "@/server/designRules.server";
@@ -15,10 +16,13 @@ async function resolveUserFromAuth(request: Request) {
   return data?.user ?? null;
 }
 
-export const Route = createFileRoute("/api/generate-linkedin-image")({
+export const Route = createFileRoute("/api/public/generate-linkedin-image")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const user = await resolveUserFromAuth(request);
+        if (!user) return new Response("Unauthorized", { status: 401 });
+
         const body = (await request.json().catch(() => ({}))) as {
           tagline?: string;
           visualPrompt?: string;
@@ -30,15 +34,10 @@ export const Route = createFileRoute("/api/generate-linkedin-image")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
-        // Pull per-user design rules (VDNX defaults for axel@natax.co.uk)
         let designRules: string | null = null;
         try {
-          const user = await resolveUserFromAuth(request);
-          if (user) {
-            designRules = await getDesignRulesForUser({ userId: user.id, email: user.email });
-          }
+          designRules = await getDesignRulesForUser({ userId: user.id, email: user.email });
         } catch { /* non-fatal */ }
-
         const rulesBlock = designRules ? `\n\nBrand/style rules (must follow):\n${designRules}` : "";
 
         const prompt =

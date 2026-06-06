@@ -36,7 +36,7 @@ No emojis. No hashtags.`;
 
 export const composeLinkedInTagline = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i) => z.object({ text: z.string().min(1).max(3000) }).parse(i))
+  .inputValidator((i) => z.object({ text: z.string().min(1).max(20000) }).parse(i))
   .handler(async ({ data }) => {
     const { result } = await callTool<{ tagline: string; visual_prompt: string }>({
       system: SYSTEM,

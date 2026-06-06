@@ -131,7 +131,7 @@ function OutboundPage() {
     const d = decodeDraft(search.draft);
     if (!d) return;
     if (d.kind === "email") {
-      setEmail({ to: d.to ?? "", subject: d.subject ?? "", body: d.body ?? "" });
+      setEmail({ to: d.to ?? "", subject: d.subject ?? "", body: d.body ?? "", scheduled_at: "" });
       setTimeout(() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } else if (d.kind === "reminder") {
       setReminder({ subject: d.subject ?? "", body: d.body ?? "" });
@@ -439,7 +439,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "email" || !email.to || !email.subject || !email.body}
               onClick={() =>
-                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "" }), {
+                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })
@@ -458,7 +458,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "reminder" || !reminder.subject || !reminder.body}
               onClick={() =>
-                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "" }), {
+                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })

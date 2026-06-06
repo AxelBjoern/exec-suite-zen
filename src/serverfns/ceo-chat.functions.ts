@@ -1281,13 +1281,11 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }),
     ];
 
-    const json = await chatCompletion({
+    const reply = await runChatWithWebTools({
       messages,
-      temperature: 0.6,
       model: resolvedModel,
+      temperature: 0.6,
     });
-    const reply: string =
-      json?.choices?.[0]?.message?.content?.trim() || "(no reply)";
 
     return await saveAssistant(reply);
   });

@@ -576,6 +576,11 @@ function OutboundPage() {
                       )}
                     </div>
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
+                    {p.scheduled_at && (
+                      <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
+                        <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
+                      </p>
+                    )}
                     {r.notes && r.status !== "sent" && (
                       <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
                     )}

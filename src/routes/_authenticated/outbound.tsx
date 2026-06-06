@@ -435,6 +435,11 @@ function OutboundPage() {
             <input className={inputCls} placeholder="to@example.com" value={email.to} onChange={(e) => setEmail({ ...email, to: e.target.value })} />
             <input className={inputCls} placeholder="Subject" value={email.subject} onChange={(e) => setEmail({ ...email, subject: e.target.value })} />
             <textarea className={inputCls} rows={5} placeholder="Body" value={email.body} onChange={(e) => setEmail({ ...email, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={email.scheduled_at}
+                onChange={(e) => setEmail({ ...email, scheduled_at: e.target.value })} />
+            </label>
             <button
               className={btnCls}
               disabled={busy === "email" || !email.to || !email.subject || !email.body}

@@ -603,13 +603,23 @@ function ChatPage() {
         }`}
       >
         <div className="px-4 py-4 border-b border-border/40 flex items-center gap-2">
-          <Link
-            to="/terminal"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            title="Back to terminal"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          {isOwner ? (
+            <Link
+              to="/terminal"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Back to terminal"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          ) : (
+            <Link
+              to="/"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Back to hub"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
           <div className="flex-1">
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               VDNX
@@ -763,20 +773,22 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <Link
-              to="/terminal"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
-              title="Open VDNX Terminal"
-            >
-              <Square className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Terminal</span>
-            </Link>
+            {isOwner && (
+              <Link
+                to="/terminal"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/60 transition-colors"
+                title="Open VDNX Terminal"
+              >
+                <Square className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Terminal</span>
+              </Link>
+            )}
             <Select value={model} onValueChange={setModel}>
               <SelectTrigger className="h-8 w-[110px] md:w-[180px] text-xs">
-                <SelectValue>{hydrated ? activeModelLabel : CHAT_MODEL_OPTIONS[0].label}</SelectValue>
+                <SelectValue>{hydrated ? activeModelLabel : (allowedModels[0]?.label ?? CHAT_MODEL_OPTIONS[0].label)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {CHAT_MODEL_OPTIONS.map((m) => (
+                {allowedModels.map((m) => (
                   <SelectItem key={m.id} value={m.id} className="text-xs">
                     {m.label}
                   </SelectItem>

@@ -459,6 +459,11 @@ function OutboundPage() {
           <div className="grid gap-2">
             <input className={inputCls} placeholder="Subject" value={reminder.subject} onChange={(e) => setReminder({ ...reminder, subject: e.target.value })} />
             <textarea className={inputCls} rows={4} placeholder="What should the owner be reminded about?" value={reminder.body} onChange={(e) => setReminder({ ...reminder, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={reminder.scheduled_at}
+                onChange={(e) => setReminder({ ...reminder, scheduled_at: e.target.value })} />
+            </label>
             <button
               className={btnCls}
               disabled={busy === "reminder" || !reminder.subject || !reminder.body}

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createHash } from "crypto";
 import {
   ARTIFACT_TOOL,
@@ -13,11 +14,22 @@ import {
   shouldGate,
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
-import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT } from "@/lib/agent-prompts";
+import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT, NEUTRAL_COMPANY_CONTEXT } from "@/lib/agent-prompts";
 import { callTool, resolveTextChatModel } from "@/server/llm.server";
 import { gatherVdnxContext } from "@/server/code-context.server";
+import { isVdnxOwner } from "@/server/designRules.server";
+import { assertModelAllowedForUser } from "@/lib/models.functions";
 
 const CODE_AWARE_AGENTS = new Set(["cto", "ceo"]);
+
+function assertVdnxOwner(context: unknown): { userId: string; email: string } {
+  const c = context as { userId?: string; claims?: { email?: string } };
+  const email = c.claims?.email ?? "";
+  if (!isVdnxOwner(email)) {
+    throw new Error("Forbidden: VDNX terminal is restricted to the workspace owner.");
+  }
+  return { userId: c.userId ?? "", email };
+}
 
 function sha(input: string) {
   return createHash("sha256").update(input).digest("hex");

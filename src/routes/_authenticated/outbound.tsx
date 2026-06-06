@@ -537,9 +537,10 @@ function OutboundPage() {
               onClick={() =>
                 run(
                   "post",
-                  () => reqLi({ data: { text: post, imageBase64: imgFinal ? imgB64 : null } }),
+                  () => reqLi({ data: { text: post, imageBase64: imgFinal ? imgB64 : null, scheduled_at: postSchedule || null } }),
                   () => {
                     setPost("");
+                    setPostSchedule("");
                     clearImage();
                   },
                   { sent: "Posted", pending: "Queued for owner approval" },

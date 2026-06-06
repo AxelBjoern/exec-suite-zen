@@ -1,21 +1,40 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isVdnxOwnerEmail } from "@/lib/vdnx";
 import { LogOut, LayoutGrid, MessageSquare, TerminalSquare, LineChart, Cpu, Send } from "lucide-react";
 
 const MODS = [
-  { to: "/", label: "Hub", icon: LayoutGrid },
-  { to: "/chat", label: "Chat", icon: MessageSquare },
-  { to: "/terminal", label: "Terminal", icon: TerminalSquare },
-  { to: "/budget", label: "Budget", icon: LineChart },
-  { to: "/forge", label: "Forge", icon: Cpu },
-  { to: "/outbound", label: "Outbound", icon: Send },
+  { to: "/", label: "Hub", icon: LayoutGrid, ownerOnly: false },
+  { to: "/chat", label: "Chat", icon: MessageSquare, ownerOnly: false },
+  { to: "/terminal", label: "Terminal", icon: TerminalSquare, ownerOnly: true },
+  { to: "/budget", label: "Budget", icon: LineChart, ownerOnly: false },
+  { to: "/forge", label: "Forge", icon: Cpu, ownerOnly: false },
+  { to: "/outbound", label: "Outbound", icon: Send, ownerOnly: false },
 ] as const;
 
 export function ModuleSwitcher() {
   const router = useRouter();
   const qc = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setEmail(data.user?.email ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setEmail(session?.user?.email ?? null);
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const isOwner = isVdnxOwnerEmail(email);
 
   async function signOut() {
     await qc.cancelQueries();
@@ -31,7 +50,7 @@ export function ModuleSwitcher() {
           VDNX
         </Link>
         <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
-          {MODS.map(({ to, label, icon: Icon }) => {
+          {MODS.filter((m) => !m.ownerOnly || isOwner).map(({ to, label, icon: Icon }) => {
             const active = to === "/" ? path === "/" : path.startsWith(to);
             return (
               <Link

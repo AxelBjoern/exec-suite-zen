@@ -740,6 +740,12 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const handlerContext = context as { userId?: string; claims?: { email?: string } };
+    const callerEmail = handlerContext.claims?.email ?? null;
+    const callerIsOwner = isVdnxOwner(callerEmail);
+    const ceoSystem = buildCeoSystem(callerEmail);
+    if (handlerContext.userId) {
+      await assertModelAllowedForUser({ userId: handlerContext.userId, modelId: data.model ?? null });
+    }
     // /video <prompt> → Kling v3.0 Std via Replicate
     const videoSlash = data.content.match(/^\/video\b[\s:@-]*([\s\S]*)$/i);
     if (videoSlash && data.attachmentIds.length === 0) {

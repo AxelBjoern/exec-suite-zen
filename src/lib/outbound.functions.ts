@@ -586,7 +586,7 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
         { role: "system", content: sys },
         { role: "user", content: `Plan:\n\n${data.plan}` },
       ],
-      model: "deepseek/deepseek-v4-flash",
+      model: "x-ai/grok-4.3",
       temperature: 0.3,
       max_tokens: 8000,
     });

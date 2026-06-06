@@ -244,9 +244,9 @@ function OutboundPage() {
     setCarouselVariants([]);
     setEditImgDescription("");
     if (r.kind === "outbound_linkedin") {
-      setEditDraft({ text: p.text ?? "" });
+      setEditDraft({ text: p.text ?? "", scheduled_at: p.scheduled_at ?? "" });
     } else {
-      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "" });
+      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: p.scheduled_at ?? "" });
     }
   }
 

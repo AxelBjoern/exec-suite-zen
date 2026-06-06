@@ -38,11 +38,11 @@ Rules:
 - Talk like a sharp, decisive chief executive. Direct, founder-grade, no filler, active voice.
 - Markdown is welcome (headings, bullets, tables) but keep replies tight unless asked for depth.
 - Never invent metrics or commitments. If you don't know, say so and propose how to find out.
-- This is conversational — do NOT emit JSON, tool calls, or "Artifact" sections unless the operator explicitly asks for a deliverable.
+- This is conversational — do NOT emit JSON or "Artifact" sections unless the operator explicitly asks for a deliverable. (You MAY silently call the web tools below; their results are turned into your final markdown answer.)
 - **NEVER fabricate file links, download URLs, or storage paths.** Documents are produced ONLY by the /pdf and /docx slash commands; you have no ability to upload files. If the operator wants a file, instruct them to type \`/pdf <topic>\` or \`/docx <topic>\` — do not write a Markdown download link yourself.
 ${dispatchLine}
 - The operator can also generate downloadable documents: \`/pdf <topic>\` produces a PDF and \`/docx <topic>\` produces a Word document. They can also generate a 5-second video clip with \`/video <prompt>\` (Kling v3.0 Std), optionally with narration via \`/video <visual> | <narration text>\` (ElevenLabs, voice: Sarah). Mention these when relevant.
-- You have live internet access: \`/search <query>\` runs a web search and \`/fetch <url>\` reads a page. You can also paste a URL into a normal message and the page contents will be fetched automatically and provided to you — cite sources inline as \`[domain](url)\` when you use them.
+- You have **live internet access via two tools** (Firecrawl-backed): \`web_search(query, limit?)\` for live web search and \`web_fetch(url)\` to read a specific page. Call them yourself whenever you need fresh facts, benchmarks, prices, or to verify a claim — do NOT tell the operator you lack web access, and do NOT ask them to run \`/search\` manually. The slash commands \`/search <q>\` and \`/fetch <url>\` are also available as shortcuts they can type. Cite sources inline as \`[domain](url)\`.
 - You can read GitHub repos (read-only): \`/repo <owner/repo>\` for an overview, \`/repo ls <owner/repo>[/path]\`, \`/repo cat <owner/repo>/<file>\`, \`/repo search <owner/repo> <query>\`. Full GitHub URLs are also accepted.
 - When the operator attaches documents, read the content provided under "Attached documents" and ground your reply in it.`;
 }
@@ -50,7 +50,119 @@ ${dispatchLine}
 // Legacy export retained for callers (doc builder etc.) that don't have per-user email handy.
 const CEO_SYSTEM = buildCeoSystem(null);
 
+// ── Web tools (Firecrawl) exposed as native tool-calls to the model ─────────
+
+const WEB_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Live web search via Firecrawl. Use whenever you need fresh facts, benchmarks, prices, or to verify a claim.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query." },
+          limit: { type: "integer", minimum: 1, maximum: 8, description: "Max results (default 6)." },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_fetch",
+      description: "Fetch and read a specific web page (markdown) via Firecrawl.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Absolute URL of the page to fetch." },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+  },
+] as const;
+
+async function runWebTool(name: string, args: any): Promise<unknown> {
+  try {
+    if (name === "web_search") {
+      const q = String(args?.query ?? "").trim();
+      if (!q) return { error: "query is required" };
+      const limit = Math.min(8, Math.max(1, Number(args?.limit) || 6));
+      const results = await webSearch(q, limit);
+      return {
+        results: results.map((r) => ({
+          url: r.url,
+          title: r.title,
+          description: r.description,
+        })),
+      };
+    }
+    if (name === "web_fetch") {
+      const u = String(args?.url ?? "").trim();
+      if (!u) return { error: "url is required" };
+      const page = await webFetch(u);
+      return {
+        url: page.url,
+        title: page.title,
+        description: page.description,
+        markdown: (page.markdown ?? "").slice(0, 6000),
+      };
+    }
+    return { error: `unknown tool: ${name}` };
+  } catch (e: any) {
+    return { error: e?.message ?? "tool failed" };
+  }
+}
+
+async function runChatWithWebTools(opts: {
+  messages: ChatMessage[];
+  model: string;
+  temperature?: number;
+}): Promise<string> {
+  const msgs: any[] = [...opts.messages];
+  const MAX_ITERS = 4;
+  for (let i = 0; i < MAX_ITERS; i++) {
+    const json = await chatCompletion({
+      messages: msgs,
+      tools: WEB_TOOLS as any,
+      tool_choice: "auto",
+      temperature: opts.temperature,
+      model: opts.model,
+    });
+    const msg = json?.choices?.[0]?.message;
+    const toolCalls = msg?.tool_calls;
+    if (!toolCalls?.length) {
+      return (msg?.content ?? "").trim() || "(no reply)";
+    }
+    msgs.push({ role: "assistant", content: msg.content ?? "", tool_calls: toolCalls });
+    for (const tc of toolCalls) {
+      let args: any = {};
+      try { args = JSON.parse(tc.function?.arguments ?? "{}"); } catch { args = {}; }
+      const result = await runWebTool(tc.function?.name ?? "", args);
+      msgs.push({
+        role: "tool",
+        tool_call_id: tc.id,
+        name: tc.function?.name,
+        content: JSON.stringify(result).slice(0, 12000),
+      });
+    }
+  }
+  // Final pass without tools to force a textual answer.
+  const json = await chatCompletion({
+    messages: msgs,
+    temperature: opts.temperature,
+    model: opts.model,
+  });
+  return (json?.choices?.[0]?.message?.content ?? "").trim() || "(no reply)";
+}
+
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────
+
 
 const DOC_AUTHOR = "VDNX CEO Agent";
 
@@ -1281,13 +1393,11 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }),
     ];
 
-    const json = await chatCompletion({
+    const reply = await runChatWithWebTools({
       messages,
-      temperature: 0.6,
       model: resolvedModel,
+      temperature: 0.6,
     });
-    const reply: string =
-      json?.choices?.[0]?.message?.content?.trim() || "(no reply)";
 
     return await saveAssistant(reply);
   });

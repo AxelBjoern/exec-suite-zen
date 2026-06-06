@@ -254,6 +254,7 @@ function consultToMarkdown(c: Consult, agentRole: string): string {
 // ─────────────────────────────────────────────────────────────────────────
 
 export const dispatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     raw: string;
     agent_slug: string;
@@ -266,7 +267,9 @@ export const dispatch = createServerFn({ method: "POST" })
     freeform?: boolean;
     model?: string;
   }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId, email } = assertVdnxOwner(context);
+    await assertModelAllowedForUser({ userId, modelId: data.model ?? null });
     const chosenModel = resolveTextChatModel(data.model);
     const { data: agents } = await supabaseAdmin.from("agents").select("*");
     const primary = agents!.find(a => a.slug === data.agent_slug);

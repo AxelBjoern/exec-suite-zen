@@ -139,7 +139,8 @@ async function runChatWithWebTools(opts: {
     } catch (e: any) {
       // Model has no tool-capable endpoint (e.g. Claude Opus 4.7 on OpenRouter).
       // Retry the same model without tools rather than swapping models.
-      if (!toolsDisabled && /no tool-capable endpoint/i.test(e?.message ?? "")) {
+      const emsg = e?.message ?? "";
+      if (!toolsDisabled && (/no tool-capable endpoint/i.test(emsg) || /No endpoints found that can handle the requested parameters/i.test(emsg) || /\b404\b/.test(emsg))) {
         toolsDisabled = true;
         i--;
         continue;

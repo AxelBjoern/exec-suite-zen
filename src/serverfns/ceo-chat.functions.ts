@@ -126,14 +126,26 @@ async function runChatWithWebTools(opts: {
 }): Promise<string> {
   const msgs: any[] = [...opts.messages];
   const MAX_ITERS = 4;
+  let toolsDisabled = false;
   for (let i = 0; i < MAX_ITERS; i++) {
-    const json = await chatCompletion({
-      messages: msgs,
-      tools: WEB_TOOLS as any,
-      tool_choice: "auto",
-      temperature: opts.temperature,
-      model: opts.model,
-    });
+    let json: any;
+    try {
+      json = await chatCompletion({
+        messages: msgs,
+        ...(toolsDisabled ? {} : { tools: WEB_TOOLS as any, tool_choice: "auto" as const }),
+        temperature: opts.temperature,
+        model: opts.model,
+      });
+    } catch (e: any) {
+      // Model has no tool-capable endpoint (e.g. Claude Opus 4.7 on OpenRouter).
+      // Retry the same model without tools rather than swapping models.
+      if (!toolsDisabled && /no tool-capable endpoint/i.test(e?.message ?? "")) {
+        toolsDisabled = true;
+        i--;
+        continue;
+      }
+      throw e;
+    }
     const msg = json?.choices?.[0]?.message;
     const toolCalls = msg?.tool_calls;
     if (!toolCalls?.length) {

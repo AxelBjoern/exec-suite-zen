@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette } from "lucide-react";
+import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu } from "lucide-react";
 import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/")({

@@ -79,8 +79,10 @@ No special company directive applies to this account.
 
 const VDNX_OWNER_EMAIL = "axel@natax.co.uk";
 
-/** Returns the VDNX directive only for the VDNX owner; neutral context otherwise. */
+/** Returns the VDNX directive only for the VDNX owner; neutral context for other end-users.
+ *  If `email` is undefined (e.g. cron/system context), defaults to the VDNX directive. */
 export function getCompanyContextForEmail(email: string | null | undefined): string {
+  if (email === undefined) return VDNX_UNICORN_DIRECTIVE;
   return (email ?? "").toLowerCase() === VDNX_OWNER_EMAIL
     ? VDNX_UNICORN_DIRECTIVE
     : NEUTRAL_COMPANY_CONTEXT;
@@ -97,7 +99,9 @@ export function renderCompanyContext(
   } | null | undefined,
   opts?: { email?: string | null },
 ): string {
-  const base = getCompanyContextForEmail(opts?.email);
+  const base = opts && "email" in opts
+    ? getCompanyContextForEmail(opts.email)
+    : VDNX_UNICORN_DIRECTIVE;
   if (!ctx) return base;
   const lines = ["COMPANY CONTEXT — VDNX"];
   if (ctx.mission) lines.push(`Mission: ${ctx.mission}`);

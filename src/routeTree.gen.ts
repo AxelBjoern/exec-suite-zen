@@ -23,6 +23,7 @@ import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
+import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
@@ -101,6 +102,12 @@ const AuthenticatedSettingsConnectionsRoute =
     path: '/settings/connections',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicCronScheduledOutboundRoute =
+  ApiPublicCronScheduledOutboundRouteImport.update({
+    id: '/api/public/cron/scheduled-outbound',
+    path: '/api/public/cron/scheduled-outbound',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronMondayBoardRoute =
   ApiPublicCronMondayBoardRouteImport.update({
     id: '/api/public/cron/monday-board',
@@ -143,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -162,6 +170,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/scheduled-outbound'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/scheduled-outbound'
   id:
     | '__root__'
     | '/_authenticated'
@@ -243,6 +255,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/scheduled-outbound'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -254,6 +267,7 @@ export interface RootRouteChildren {
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
+  ApiPublicCronScheduledOutboundRoute: typeof ApiPublicCronScheduledOutboundRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -356,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/cron/scheduled-outbound': {
+      id: '/api/public/cron/scheduled-outbound'
+      path: '/api/public/cron/scheduled-outbound'
+      fullPath: '/api/public/cron/scheduled-outbound'
+      preLoaderRoute: typeof ApiPublicCronScheduledOutboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/monday-board': {
       id: '/api/public/cron/monday-board'
       path: '/api/public/cron/monday-board'
@@ -425,6 +446,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
+  ApiPublicCronScheduledOutboundRoute: ApiPublicCronScheduledOutboundRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

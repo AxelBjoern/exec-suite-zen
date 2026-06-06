@@ -96,9 +96,10 @@ function OutboundPage() {
     refetchInterval: 10000,
   });
 
-  const [email, setEmail] = useState({ to: "", subject: "", body: "" });
-  const [reminder, setReminder] = useState({ subject: "", body: "" });
+  const [email, setEmail] = useState({ to: "", subject: "", body: "", scheduled_at: "" });
+  const [reminder, setReminder] = useState({ subject: "", body: "", scheduled_at: "" });
   const [post, setPost] = useState("");
+  const [postSchedule, setPostSchedule] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
@@ -130,10 +131,10 @@ function OutboundPage() {
     const d = decodeDraft(search.draft);
     if (!d) return;
     if (d.kind === "email") {
-      setEmail({ to: d.to ?? "", subject: d.subject ?? "", body: d.body ?? "" });
+      setEmail({ to: d.to ?? "", subject: d.subject ?? "", body: d.body ?? "", scheduled_at: "" });
       setTimeout(() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } else if (d.kind === "reminder") {
-      setReminder({ subject: d.subject ?? "", body: d.body ?? "" });
+      setReminder({ subject: d.subject ?? "", body: d.body ?? "", scheduled_at: "" });
       setTimeout(() => reminderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } else if (d.kind === "linkedin") {
       setPost(d.text ?? "");
@@ -243,9 +244,9 @@ function OutboundPage() {
     setCarouselVariants([]);
     setEditImgDescription("");
     if (r.kind === "outbound_linkedin") {
-      setEditDraft({ text: p.text ?? "" });
+      setEditDraft({ text: p.text ?? "", scheduled_at: p.scheduled_at ?? "" });
     } else {
-      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "" });
+      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: p.scheduled_at ?? "" });
     }
   }
 
@@ -434,11 +435,16 @@ function OutboundPage() {
             <input className={inputCls} placeholder="to@example.com" value={email.to} onChange={(e) => setEmail({ ...email, to: e.target.value })} />
             <input className={inputCls} placeholder="Subject" value={email.subject} onChange={(e) => setEmail({ ...email, subject: e.target.value })} />
             <textarea className={inputCls} rows={5} placeholder="Body" value={email.body} onChange={(e) => setEmail({ ...email, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={email.scheduled_at}
+                onChange={(e) => setEmail({ ...email, scheduled_at: e.target.value })} />
+            </label>
             <button
               className={btnCls}
               disabled={busy === "email" || !email.to || !email.subject || !email.body}
               onClick={() =>
-                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "" }), {
+                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })
@@ -453,11 +459,16 @@ function OutboundPage() {
           <div className="grid gap-2">
             <input className={inputCls} placeholder="Subject" value={reminder.subject} onChange={(e) => setReminder({ ...reminder, subject: e.target.value })} />
             <textarea className={inputCls} rows={4} placeholder="What should the owner be reminded about?" value={reminder.body} onChange={(e) => setReminder({ ...reminder, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={reminder.scheduled_at}
+                onChange={(e) => setReminder({ ...reminder, scheduled_at: e.target.value })} />
+            </label>
             <button
               className={btnCls}
               disabled={busy === "reminder" || !reminder.subject || !reminder.body}
               onClick={() =>
-                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "" }), {
+                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })
@@ -471,6 +482,11 @@ function OutboundPage() {
         <Card title="LinkedIn post" icon={Linkedin} refEl={liRef}>
           <div className="grid gap-3">
             <textarea className={inputCls} rows={5} placeholder="What do you want to share?" value={post} onChange={(e) => setPost(e.target.value)} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Post at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={postSchedule}
+                onChange={(e) => setPostSchedule(e.target.value)} />
+            </label>
 
             <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -521,9 +537,10 @@ function OutboundPage() {
               onClick={() =>
                 run(
                   "post",
-                  () => reqLi({ data: { text: post, imageBase64: imgFinal ? imgB64 : null } }),
+                  () => reqLi({ data: { text: post, imageBase64: imgFinal ? imgB64 : null, scheduled_at: postSchedule || null } }),
                   () => {
                     setPost("");
+                    setPostSchedule("");
                     clearImage();
                   },
                   { sent: "Posted", pending: "Queued for owner approval" },
@@ -559,6 +576,11 @@ function OutboundPage() {
                       )}
                     </div>
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
+                    {p.scheduled_at && (
+                      <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
+                        <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
+                      </p>
+                    )}
                     {r.notes && r.status !== "sent" && (
                       <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
                     )}
@@ -762,6 +784,17 @@ function OutboundPage() {
                 </>
               )}
             </div>
+
+            <label className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input
+                type="datetime-local"
+                className={inputCls + " flex-1"}
+                value={editDraft.scheduled_at ?? ""}
+                onChange={(e) => setEditDraft({ ...editDraft, scheduled_at: e.target.value })}
+              />
+            </label>
+
 
             <div className="mt-4 rounded-md border border-dashed border-border bg-background/40 p-3">
               <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">

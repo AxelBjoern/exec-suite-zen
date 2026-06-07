@@ -913,72 +913,148 @@ async function synthesizeNarration(text: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-export const generateKlingClipForOutbound = createServerFn({ method: "POST" })
+// Start a Kling job and (optionally) synthesize narration in parallel.
+// Returns { jobId } immediately so the client can poll.
+export const startKlingJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => KlingInput.parse(i))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
     const token = process.env.OPENROUTER_API_KEY;
     if (!token) throw new Error("OPENROUTER_API_KEY missing");
 
+    const startRes = await fetch(OPENROUTER_VIDEO_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://lovable.app",
+        "X-Title": "VDNX Outbound",
+      },
+      body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt }),
+    });
+    const startText = await startRes.text();
+    if (!startRes.ok) throw new Error(`Kling start failed (${startRes.status}): ${startText.slice(0, 300)}`);
+    const job = JSON.parse(startText) as { id: string; polling_url?: string };
+    if (!job.id) throw new Error("Kling returned no job id");
+
+    // Synthesize narration in parallel (best-effort). If it fails, ignore — caller can retry.
+    let audioPath: string | null = null;
+    let audioMime: string | null = null;
     const narrationText = (data.narration ?? "").trim();
-
-    const klingPromise = (async () => {
-      const startRes = await fetch(OPENROUTER_VIDEO_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://lovable.app",
-          "X-Title": "VDNX Outbound",
-        },
-        body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt }),
-      });
-      const startText = await startRes.text();
-      if (!startRes.ok) throw new Error(`Kling start failed (${startRes.status}): ${startText.slice(0, 300)}`);
-      const job = JSON.parse(startText) as { id: string; polling_url?: string };
-      if (!job.id) throw new Error("Kling returned no job id");
-
-      const pollUrl = job.polling_url ?? `${OPENROUTER_VIDEO_URL}/${job.id}`;
-      const deadline = Date.now() + 240_000;
-      let videoUrl: string | null = null;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const pRes = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
-        if (!pRes.ok) continue;
-        const st = (await pRes.json()) as any;
-        if (st.status === "completed") {
-          videoUrl = st.unsigned_urls?.[0] ?? st.signed_urls?.[0] ?? st.urls?.[0] ?? null;
-          break;
+    if (narrationText) {
+      try {
+        const audio = await synthesizeNarration(narrationText);
+        const key = `outbound-media/${userId}/${job.id}.mp3`;
+        const { error } = await supabaseAdmin.storage
+          .from(OUTBOUND_BUCKET)
+          .upload(key, audio, { contentType: "audio/mpeg", upsert: true });
+        if (!error) {
+          audioPath = key;
+          audioMime = "audio/mpeg";
         }
-        if (st.status === "failed") {
-          const detail = typeof st.error === "string" ? st.error : st.error?.message ?? "no detail";
-          throw new Error(`Kling failed: ${detail}`);
-        }
+      } catch {
+        // non-fatal
       }
-      if (!videoUrl) throw new Error("Kling timed out (>4 min)");
-
-      const dl = await fetch(videoUrl);
-      if (!dl.ok) throw new Error(`Video download failed (${dl.status})`);
-      const buf = Buffer.from(await dl.arrayBuffer());
-      if (buf.byteLength > 20_000_000) {
-        throw new Error(`Generated video too large (${(buf.byteLength / 1_000_000).toFixed(1)} MB)`);
-      }
-      return buf;
-    })();
-
-    const narrationPromise: Promise<Uint8Array | null> = narrationText
-      ? synthesizeNarration(narrationText)
-      : Promise.resolve(null);
-
-    const [videoBuf, audioBuf] = await Promise.all([klingPromise, narrationPromise]);
+    }
 
     return {
-      base64: videoBuf.toString("base64"),
-      mime: "video/mp4",
-      filename: `kling-${Date.now()}.mp4`,
-      audioBase64: audioBuf ? Buffer.from(audioBuf).toString("base64") : null,
-      audioMime: audioBuf ? "audio/mpeg" : null,
-      audioFilename: audioBuf ? `narration-${Date.now()}.mp3` : null,
+      jobId: job.id,
+      pollingUrl: job.polling_url ?? null,
+      audioPath,
+      audioMime,
     };
   });
+
+// Poll a Kling job. Returns processing/completed/failed.
+// On completed, downloads the MP4 and uploads to Storage, returns a signed URL.
+const PollKlingInput = z.object({
+  jobId: z.string().min(1).max(200),
+  pollingUrl: z.string().url().optional().nullable(),
+});
+export const pollKlingJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => PollKlingInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const token = process.env.OPENROUTER_API_KEY;
+    if (!token) throw new Error("OPENROUTER_API_KEY missing");
+
+    const pollUrl = data.pollingUrl ?? `${OPENROUTER_VIDEO_URL}/${data.jobId}`;
+    const pRes = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
+    if (!pRes.ok) {
+      return { status: "processing" as const };
+    }
+    const st = (await pRes.json()) as any;
+
+    if (st.status === "failed") {
+      const detail = typeof st.error === "string" ? st.error : st.error?.message ?? "no detail";
+      return { status: "failed" as const, error: `Kling failed: ${detail}` };
+    }
+
+    if (st.status !== "completed") {
+      return { status: "processing" as const };
+    }
+
+    const videoUrl: string | null =
+      st.unsigned_urls?.[0] ?? st.signed_urls?.[0] ?? st.urls?.[0] ?? null;
+    if (!videoUrl) return { status: "failed" as const, error: "Kling completed but returned no URL" };
+
+    const dl = await fetch(videoUrl);
+    if (!dl.ok) return { status: "failed" as const, error: `Video download failed (${dl.status})` };
+    const bytes = new Uint8Array(await dl.arrayBuffer());
+    if (bytes.byteLength > 50_000_000) {
+      return { status: "failed" as const, error: `Generated video too large (${(bytes.byteLength / 1_000_000).toFixed(1)} MB)` };
+    }
+
+    const key = `outbound-media/${userId}/${data.jobId}.mp4`;
+    const { error: upErr } = await supabaseAdmin.storage
+      .from(OUTBOUND_BUCKET)
+      .upload(key, bytes, { contentType: "video/mp4", upsert: true });
+    if (upErr) return { status: "failed" as const, error: `Storage upload failed: ${upErr.message}` };
+
+    const { data: signed, error: sErr } = await supabaseAdmin.storage
+      .from(OUTBOUND_BUCKET)
+      .createSignedUrl(key, 60 * 60 * 6); // 6h
+    if (sErr || !signed?.signedUrl) return { status: "failed" as const, error: `Signed URL failed: ${sErr?.message ?? "unknown"}` };
+
+    return {
+      status: "completed" as const,
+      videoPath: key,
+      videoUrl: signed.signedUrl,
+      videoMime: "video/mp4",
+      videoFilename: `kling-${data.jobId}.mp4`,
+      videoBytes: bytes.byteLength,
+    };
+  });
+
+// Get a fresh signed URL for a stored outbound media path (caller must own the row).
+const GetMediaUrlInput = z.object({ id: z.string().uuid() });
+export const getOutboundMediaUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => GetMediaUrlInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const { data: row, error } = await supabaseAdmin
+      .from("approvals")
+      .select("requester_id, payload")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    const p = (row.payload ?? {}) as Record<string, any>;
+    const path = p.mediaPath as string | undefined;
+    if (!path) return { url: null, kind: null, mime: null, filename: null };
+    const { data: signed, error: sErr } = await supabaseAdmin.storage
+      .from(OUTBOUND_BUCKET)
+      .createSignedUrl(path, 60 * 60 * 6);
+    if (sErr || !signed?.signedUrl) throw new Error(`Signed URL failed: ${sErr?.message ?? "unknown"}`);
+    return {
+      url: signed.signedUrl,
+      kind: (p.mediaKind ?? null) as "image" | "pdf" | "video" | null,
+      mime: (p.mediaMime ?? null) as string | null,
+      filename: (p.mediaFilename ?? null) as string | null,
+    };
+  });
+
 

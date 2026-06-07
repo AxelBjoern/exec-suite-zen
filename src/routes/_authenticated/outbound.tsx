@@ -324,7 +324,9 @@ function OutboundPage() {
   // LinkedIn pdf/video media (main card)
   const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
+  const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
+  const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop

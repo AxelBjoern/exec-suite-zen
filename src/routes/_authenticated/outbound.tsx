@@ -17,7 +17,9 @@ import {
   sendOwnOutbound,
   aiEditDraft,
   deleteOutbound,
-  generateKlingClipForOutbound,
+  startKlingJob,
+  pollKlingJob,
+  getOutboundMediaUrl,
   getOutboundFull,
   setOutboundArchived,
 

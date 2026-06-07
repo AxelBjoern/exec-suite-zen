@@ -18,6 +18,8 @@ import {
   aiEditDraft,
   deleteOutbound,
   generateKlingClipForOutbound,
+  getOutboundFull,
+
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
@@ -234,6 +236,8 @@ function OutboundPage() {
   const selfSend = useServerFn(sendOwnOutbound);
   const aiEdit = useServerFn(aiEditDraft);
   const deleteReq = useServerFn(deleteOutbound);
+  const fetchFull = useServerFn(getOutboundFull);
+
   const tagline = useServerFn(composeLinkedInTagline);
 
   const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });
@@ -400,9 +404,10 @@ function OutboundPage() {
     }
   }
 
-  function openEdit(r: any) {
+  async function openEdit(r: any) {
     if (r.status !== "pending") return;
-    const p = (r.payload ?? {}) as Record<string, string>;
+    // Hydrate the full payload — list view strips media blobs to sentinels like "[pdf]"
+    let p = (r.payload ?? {}) as Record<string, any>;
     setEditing(r);
     setEditImgB64(null);
     setEditImgUrl(null);
@@ -411,17 +416,33 @@ function OutboundPage() {
     setEditImgDescription("");
     setEditMedia(null);
     setEditKlingPrompt("");
+    try {
+      const full = await fetchFull({ data: { id: r.id } });
+      if (full?.payload) p = full.payload;
+    } catch {
+      // fall back to stripped payload silently
+    }
     const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
       // restore existing media into drop-zone state
-      if (p.mediaBase64 && !p.mediaBase64.startsWith("[") && p.mediaKind) {
-        setEditMedia({ kind: p.mediaKind as "image" | "pdf" | "video", base64: p.mediaBase64, mime: p.mediaMime || "", filename: p.mediaFilename || "" });
+      if (p.mediaBase64 && !String(p.mediaBase64).startsWith("[") && p.mediaKind) {
+        setEditMedia({
+          kind: p.mediaKind as "image" | "pdf" | "video",
+          base64: p.mediaBase64,
+          mime: p.mediaMime || (p.mediaKind === "pdf" ? "application/pdf" : p.mediaKind === "video" ? "video/mp4" : "image/png"),
+          filename: p.mediaFilename || "",
+        });
+      } else if (p.imageBase64 && !String(p.imageBase64).startsWith("[")) {
+        setEditImgB64(p.imageBase64);
+        setEditImgUrl(`data:image/png;base64,${p.imageBase64}`);
+        setEditImgFinal(true);
       }
     } else {
       setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: localSched });
     }
   }
+
 
   function closeEdit() {
     setEditing(null);

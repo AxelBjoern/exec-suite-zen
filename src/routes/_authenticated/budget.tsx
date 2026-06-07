@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_authenticated/budget")({
 function BudgetLayout() {
   const subscribeRealtime = useBudgetStore((s) => s.subscribeRealtime);
   useEffect(() => subscribeRealtime(), [subscribeRealtime]);
+  return (
     <div className="min-h-screen bg-background">
       <Toaster theme="dark" position="top-right" />
       <div className="border-b border-border bg-panel">

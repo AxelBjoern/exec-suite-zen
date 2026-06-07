@@ -57,6 +57,20 @@ async function fileToBase64(f: File): Promise<string> {
   return btoa(bin);
 }
 
+const ACCEPT_MIME = {
+  image: "image/png,image/jpeg,image/webp,image/jpg",
+  pdf: "application/pdf",
+  video: "video/mp4,video/quicktime,video/mov",
+};
+const MAX_SIZE = { image: 6_000_000, pdf: 12_000_000, video: 20_000_000 };
+
+function mimeKind(mime: string): "image" | "pdf" | "video" | null {
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("video/")) return "video";
+  return null;
+}
+
 export const Route = createFileRoute("/_authenticated/outbound")({
   validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),
   head: () => ({

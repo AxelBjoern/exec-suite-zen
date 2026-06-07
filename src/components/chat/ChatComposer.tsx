@@ -21,8 +21,8 @@ type Props = {
   uploading: boolean;
   pending: boolean;
   canSend: boolean;
-  inputRef: RefObject<HTMLTextAreaElement>;
-  fileInputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   onSubmit: () => void;
   onStop: () => void;
   onFiles: (files: FileList | null) => void;

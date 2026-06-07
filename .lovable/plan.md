@@ -1,38 +1,34 @@
-# Budget Wave B — Editor routes + components
+## What's actually failing
 
-Replace the 10 placeholder budget sub-routes with real editors ported from "Budget Dashboard Buddy", and add the supporting components.
+The failed approval in the DB confirms it: yes, **only the PDF carousel post is failing**. A text-only LinkedIn post in the same batch went through fine.
 
-## Components to add (`src/components/budget/`)
-- `ScenarioMenu.tsx` — dropdown with create / duplicate / rename / delete / lock / set-base, wired to `useBudgetStore`. Mount inside existing `Topbar.tsx`.
-- `KpiCard.tsx` — small KPI tile used across editors.
-- `SectionHeader.tsx` — consistent section title + description.
-- `BridgeCharts.tsx` — recharts EBITDA / revenue waterfall (client-only).
-- `AssumptionsDrawer.tsx` — slide-over with per-year assumption editing, used by Assumptions + Monthly routes.
+The failure note on `approvals.id = 09b8983a…`:
 
-## Routes to implement (replace placeholders)
-All under `_authenticated/budget.*`, all `ssr: false`, all read from `useActiveScenario()` + `compute(assumptions)`:
+```
+LinkedIn document init failed (426):
+{"status":426,"code":"NONEXISTENT_VERSION","message":"Requested version 20250501 is not active"}
+```
 
-1. `budget.assumptions.tsx` — per-year tabbed editor: channels, pricing, salaries, streams, opening balance, financing. Writes via `store.updateAssumptions(scenarioId, draft)`.
-2. `budget.monthly.tsx` — month-by-month table of `MonthlyRow` with sticky header, year switcher.
-3. `budget.statements.tsx` — P&L / Cash Flow / Balance Sheet tabs from `engine.statements()`.
-4. `budget.financing.tsx` — financing portfolio table + KPIs from `financing.ts`.
-5. `budget.sensitivity.tsx` — tornado chart from `sensitivity.ts` (recharts horizontal bar).
-6. `budget.scenarios.tsx` — full scenarios grid (vs. menu): clone, lock, set base, delete, rename inline.
-7. `budget.compare.tsx` — pick N scenarios from `compareScenarios` UI state, side-by-side yearly KPIs + small multiples.
-8. `budget.results.tsx` — executive summary: KPIs, BridgeCharts, revenue mix donut.
-9. `budget.board.tsx` — print-friendly one-pager (used by Wave C exports).
-10. `budget.changelog.tsx` — reads `auditLog` from UI state, shows recent mutations grouped by day.
+LinkedIn's versioned REST API (used for `documents` carousels and `rest/posts`) expects `LinkedIn-Version: YYYYMM` and only keeps roughly the last ~12 months active. The previous fix bumped the header from `202405` to `202505` — but as of June 2026, `202505` (May 2025) has aged out too.
 
-## Wiring details
-- Mount `<ScenarioMenu />` and a year switcher (already in Topbar shell) — replace Topbar's current static markup with the real component.
-- All mutations go through `useBudgetStore` actions (already debounced → Supabase).
-- Recharts/jspdf/pptxgenjs stay client-only; routes already opt out of SSR.
-- No schema changes, no new secrets, no new deps (already added in Wave A).
+This only affects the carousel/PDF code path in `src/lib/outbound.functions.ts` (and the scheduled-cron variant) — text-only posts use the legacy `/v2/ugcPosts` endpoint, which doesn't need `LinkedIn-Version`, which is why those keep succeeding.
 
-## Out of scope (Wave C)
-- Wiring Board → XLSX / PDF / PPTX export buttons.
-- "Promote to VDNX baseline" server fn.
-- Realtime sync on `budget_scenarios`.
+## OpenRouter — not involved here
 
-## Build order in this turn
-ScenarioMenu + Topbar wiring → KpiCard + SectionHeader (shared) → Assumptions + Monthly + Statements (core trio) → Financing + Sensitivity → Scenarios + Compare + Results → Board + Changelog. Each route is a focused port; placeholders are overwritten in place.
+Per the project memory rule, all LLM calls go through OpenRouter via `src/server/llm.server.ts`. The outbound module imports `chatCompletion` from there for the "AI edit draft" feature only — it is not on the post-to-LinkedIn path. The carousel failure has nothing to do with OpenRouter; no change there is needed.
+
+## Fix
+
+1. In `src/lib/outbound.functions.ts`, change the `liVersion` constant inside `postLinkedInAsWorkspace` from `"202505"` to a currently active version: **`"202511"`** (Nov 2025, well within LinkedIn's supported window in mid-2026).
+2. Mirror the same change in `src/routes/api/public/cron/scheduled-outbound.ts` so the cron worker uses the same header.
+3. Retry the failed approval row from the Outbound page (the "Retry" button calls `approveOutbound` again, which re-runs the upload with the new header).
+
+## Hardening (small, same change set)
+
+- Add a clearer error wrapper when `documents init` returns `NONEXISTENT_VERSION`, suggesting the version needs bumping — so the next time this ages out (≈12 months) the message points straight at the fix instead of bubbling raw LinkedIn JSON.
+- No DB migration, no new dependencies, no UI changes.
+
+## Out of scope
+
+- The Vite/SSR errors in older dev-server logs (`budget.tsx` code-splitter, `outbound.tsx` stray `}`) — those were transient and the current files compile clean; not re-touching them here.
+- Changing the carousel upload pipeline itself (pdf-lib page count check, document URN flow) — it's correct, only the version header is stale.

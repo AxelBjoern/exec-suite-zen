@@ -73,7 +73,7 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
     if (doc.getPageCount() > PDF_MAX_PAGES) {
       throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
     }
-    const liVersion = { "LinkedIn-Version": "202405", "X-Restli-Protocol-Version": "2.0.0" };
+    const liVersion = { "LinkedIn-Version": "202505", "X-Restli-Protocol-Version": "2.0.0" };
     const initRes = await fetch(`${LINKEDIN_GATEWAY}/rest/documents?action=initializeUpload`, {
       method: "POST",
       headers: { ...h, ...liVersion, "Content-Type": "application/json" },

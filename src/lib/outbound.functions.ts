@@ -67,7 +67,7 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
       throw new Error(`Invalid PDF: ${e?.message ?? "could not parse"}`);
     }
 
-    const liVersion = { "LinkedIn-Version": "202405", "X-Restli-Protocol-Version": "2.0.0" };
+    const liVersion = { "LinkedIn-Version": "202505", "X-Restli-Protocol-Version": "2.0.0" };
     const initRes = await fetch(`${LINKEDIN_GATEWAY}/rest/documents?action=initializeUpload`, {
       method: "POST",
       headers: { ...wsHeaders, ...liVersion, "Content-Type": "application/json" },

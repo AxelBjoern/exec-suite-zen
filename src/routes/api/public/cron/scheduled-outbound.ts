@@ -141,9 +141,10 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
     const uploadUrl = j?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
     mediaAsset = j?.value?.asset ?? null;
     if (!uploadUrl || !mediaAsset) throw new Error("LI register missing upload data");
+    const buf = await mediaBytes(media);
     const up = await fetch(uploadUrl, {
       method: "PUT", headers: { "Content-Type": media.mime },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(buf),
     });
     if (!up.ok) throw new Error(`LI upload (${up.status})`);
     if (media.kind === "video") {

@@ -1310,15 +1310,19 @@ function OutboundPage() {
                           disabled={!!editBusy || !editKlingPrompt.trim()}
                           onClick={async () => {
                             setEditBusy("kling");
+                            setEditKlingElapsed(0);
                             setEditNarrationAudio(null);
                             try {
-                              const r = await genKling({ data: { prompt: editKlingPrompt, narration: editKlingNarration.trim() || undefined } });
-                              setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                              if (r.audioBase64 && r.audioMime) setEditNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
-                              toast.success("Kling clip ready");
+                              const r = await runKlingFlow({
+                                prompt: editKlingPrompt,
+                                narration: editKlingNarration.trim() || undefined,
+                                onTick: (s) => setEditKlingElapsed(s),
+                              });
+                              setEditMedia(r.media);
+                              toast.success("Kling clip ready — preview below");
                             } catch (e) {
                               toast.error(e instanceof Error ? e.message : "Kling failed");
-                            } finally { setEditBusy(null); }
+                            } finally { setEditBusy(null); setEditKlingElapsed(0); }
                           }}>
                           {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                           {editBusy === "kling" ? "Generating…" : "Generate"}
@@ -1333,7 +1337,9 @@ function OutboundPage() {
                         disabled={!!editBusy}
                       />
                       {editBusy === "kling" && (
-                        <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Generating video… {Math.floor(editKlingElapsed / 60)}:{String(editKlingElapsed % 60).padStart(2, "0")} / 7:00
+                        </p>
                       )}
                       {editNarrationAudio && (
                         <div className="rounded-md border border-border bg-muted/40 p-2">

@@ -67,20 +67,53 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
   if (!sub) throw new Error("LI userinfo missing sub");
   const author = `urn:li:person:${sub}`;
 
+  // PDF carousel uses the versioned /rest/documents + /rest/posts API.
+  if (media?.kind === "pdf") {
+    const doc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+    if (doc.getPageCount() > PDF_MAX_PAGES) {
+      throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
+    }
+    const liVersion = { "LinkedIn-Version": "202405", "X-Restli-Protocol-Version": "2.0.0" };
+    const initRes = await fetch(`${LINKEDIN_GATEWAY}/rest/documents?action=initializeUpload`, {
+      method: "POST",
+      headers: { ...h, ...liVersion, "Content-Type": "application/json" },
+      body: JSON.stringify({ initializeUploadRequest: { owner: author } }),
+    });
+    if (!initRes.ok) throw new Error(`LI document init (${initRes.status}): ${await initRes.text()}`);
+    const init = (await initRes.json()) as any;
+    const uploadUrl: string | undefined = init?.value?.uploadUrl;
+    const documentUrn: string | undefined = init?.value?.document;
+    if (!uploadUrl || !documentUrn) throw new Error("LI document init missing upload URL/urn");
+    const up = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+      body: Buffer.from(media.base64, "base64"),
+    });
+    if (!up.ok) throw new Error(`LI document upload (${up.status}): ${await up.text()}`);
+    const postRes = await fetch(`${LINKEDIN_GATEWAY}/rest/posts`, {
+      method: "POST",
+      headers: { ...h, ...liVersion, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        author,
+        commentary: text,
+        visibility: "PUBLIC",
+        distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+        content: { media: { id: documentUrn, title: media.filename.replace(/\.pdf$/i, "") } },
+        lifecycleState: "PUBLISHED",
+        isReshareDisabledByAuthor: false,
+      }),
+    });
+    if (!postRes.ok) throw new Error(`LI document post (${postRes.status}): ${await postRes.text()}`);
+    return;
+  }
+
   let mediaAsset: string | null = null;
-  let category: "NONE" | "IMAGE" | "DOCUMENT" | "VIDEO" = "NONE";
+  let category: "NONE" | "IMAGE" | "VIDEO" = "NONE";
   if (media) {
     const recipe = {
       image: "urn:li:digitalmediaRecipe:feedshare-image",
-      pdf: "urn:li:digitalmediaRecipe:feedshare-document",
       video: "urn:li:digitalmediaRecipe:feedshare-video",
-    }[media.kind];
-    if (media.kind === "pdf") {
-      const doc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
-      if (doc.getPageCount() > PDF_MAX_PAGES) {
-        throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
-      }
-    }
+    }[media.kind as "image" | "video"];
     const reg = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
       method: "POST", headers: { ...h, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -91,7 +124,7 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
         },
       }),
     });
-    if (!reg.ok) throw new Error(`LI register (${reg.status})`);
+    if (!reg.ok) throw new Error(`LI register (${reg.status}, recipe=${recipe}): ${await reg.text()}`);
     const j = (await reg.json()) as any;
     const uploadUrl = j?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
     mediaAsset = j?.value?.asset ?? null;
@@ -116,18 +149,12 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
       }
       if (!ok) throw new Error("LI video processing timed out");
     }
-    category = { image: "IMAGE", pdf: "DOCUMENT", video: "VIDEO" }[media.kind] as any;
+    category = media.kind === "video" ? "VIDEO" : "IMAGE";
   }
-
-  const mediaArray = mediaAsset
-    ? [media!.kind === "pdf"
-        ? { status: "READY", media: mediaAsset, title: { text: media!.filename.replace(/\.pdf$/i, "") } }
-        : { status: "READY", media: mediaAsset }]
-    : [];
 
   const body = mediaAsset
     ? { author, lifecycleState: "PUBLISHED", specificContent: { "com.linkedin.ugc.ShareContent": {
-          shareCommentary: { text }, shareMediaCategory: category, media: mediaArray } },
+          shareCommentary: { text }, shareMediaCategory: category, media: [{ status: "READY", media: mediaAsset }] } },
         visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" } }
     : { author, lifecycleState: "PUBLISHED", specificContent: { "com.linkedin.ugc.ShareContent": {
           shareCommentary: { text }, shareMediaCategory: "NONE" } },

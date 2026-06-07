@@ -582,8 +582,20 @@ function OutboundPage() {
     const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
-      // restore existing media into drop-zone state
-      if (p.mediaBase64 && !String(p.mediaBase64).startsWith("[") && p.mediaKind) {
+      // Prefer storage path → fresh signed URL
+      if (p.mediaPath && p.mediaKind) {
+        try {
+          const res = await getMediaUrl({ data: { id: r.id } });
+          if (res.url && res.kind) {
+            setEditMedia({
+              kind: res.kind, url: res.url, path: p.mediaPath,
+              mime: res.mime || "", filename: res.filename || "",
+            });
+          }
+        } catch {
+          /* fall through to base64 if any */
+        }
+      } else if (p.mediaBase64 && !String(p.mediaBase64).startsWith("[") && p.mediaKind) {
         setEditMedia({
           kind: p.mediaKind as "image" | "pdf" | "video",
           base64: p.mediaBase64,

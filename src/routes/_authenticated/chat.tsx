@@ -37,13 +37,9 @@ import {
 import { Trash2, Loader2, Menu, Square, Upload } from "lucide-react";
 
 import {
-  copyToClipboard,
   readFileAsBase64,
-  formatBytes,
-  formatRelative,
   MODEL_STORAGE_KEY,
   ACTIVE_CONVO_KEY,
-  ACCEPTED_TYPES,
   type Attachment,
   type Msg,
   type Conversation,

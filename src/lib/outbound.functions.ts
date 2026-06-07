@@ -37,7 +37,7 @@ function pickLiMedia(payload: Record<string, any>): {
 }
 
 
-async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null) {
+async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pickLiMedia>) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const liKey = process.env.LINKEDIN_API_KEY;
   if (!lovableKey || !liKey) throw new Error("Workspace LinkedIn connector not configured");
@@ -53,13 +53,40 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
   const author = `urn:li:person:${sub}`;
 
   let mediaAsset: string | null = null;
-  if (imageBase64) {
+  let shareMediaCategory: "NONE" | "IMAGE" | "DOCUMENT" | "VIDEO" = "NONE";
+
+  if (media) {
+    const recipeByKind: Record<LiMediaKind, string> = {
+      image: "urn:li:digitalmediaRecipe:feedshare-image",
+      pdf: "urn:li:digitalmediaRecipe:feedshare-document",
+      video: "urn:li:digitalmediaRecipe:feedshare-video",
+    };
+    const categoryByKind: Record<LiMediaKind, "IMAGE" | "DOCUMENT" | "VIDEO"> = {
+      image: "IMAGE",
+      pdf: "DOCUMENT",
+      video: "VIDEO",
+    };
+
+    // PDF page-count guard
+    if (media.kind === "pdf") {
+      try {
+        const pdfDoc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+        const pages = pdfDoc.getPageCount();
+        if (pages > PDF_MAX_PAGES) {
+          throw new Error(`PDF carousel exceeds ${PDF_MAX_PAGES}-page limit (${pages} pages).`);
+        }
+      } catch (e: any) {
+        if (e?.message?.includes("PDF carousel")) throw e;
+        throw new Error(`Invalid PDF: ${e?.message ?? "could not parse"}`);
+      }
+    }
+
     const regRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
       method: "POST",
       headers: { ...wsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({
         registerUploadRequest: {
-          recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+          recipes: [recipeByKind[media.kind]],
           owner: author,
           serviceRelationships: [
             { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
@@ -75,11 +102,40 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
     if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
     const upload = await fetch(uploadUrl, {
       method: "PUT",
-      headers: { "Content-Type": "image/png" },
-      body: Buffer.from(imageBase64, "base64"),
+      headers: { "Content-Type": media.mime },
+      body: Buffer.from(media.base64, "base64"),
     });
-    if (!upload.ok) throw new Error(`LinkedIn image upload failed (${upload.status}): ${await upload.text()}`);
+    if (!upload.ok) throw new Error(`LinkedIn ${media.kind} upload failed (${upload.status}): ${await upload.text()}`);
+
+    // Video assets must reach AVAILABLE before posting. Poll up to ~60s.
+    if (media.kind === "video") {
+      const assetId = mediaAsset.split(":").pop();
+      const deadline = Date.now() + 60_000;
+      let available = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const stRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets/${assetId}`, { headers: wsHeaders });
+        if (!stRes.ok) continue;
+        const st = (await stRes.json()) as any;
+        const status = st?.recipes?.[0]?.status ?? st?.status;
+        if (status === "AVAILABLE") { available = true; break; }
+        if (status === "PROCESSING_FAILED" || status === "CLIENT_ERROR" || status === "SERVER_ERROR") {
+          throw new Error(`LinkedIn video processing failed: ${status}`);
+        }
+      }
+      if (!available) throw new Error("LinkedIn video processing timed out (>60s). Try again shortly.");
+    }
+
+    shareMediaCategory = categoryByKind[media.kind];
   }
+
+  const mediaArray = mediaAsset
+    ? [
+        media!.kind === "pdf"
+          ? { status: "READY", media: mediaAsset, title: { text: media!.filename.replace(/\.pdf$/i, "") } }
+          : { status: "READY", media: mediaAsset },
+      ]
+    : [];
 
   const body = mediaAsset
     ? {
@@ -88,8 +144,8 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
         specificContent: {
           "com.linkedin.ugc.ShareContent": {
             shareCommentary: { text },
-            shareMediaCategory: "IMAGE",
-            media: [{ status: "READY", media: mediaAsset }],
+            shareMediaCategory,
+            media: mediaArray,
           },
         },
         visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
@@ -114,6 +170,7 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
   if (!postRes.ok) throw new Error(`LinkedIn post failed (${postRes.status}): ${await postRes.text()}`);
   return postRes.json();
 }
+
 
 function base64url(input: string | Buffer) {
   const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;

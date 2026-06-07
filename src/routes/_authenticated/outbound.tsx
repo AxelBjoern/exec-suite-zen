@@ -325,12 +325,13 @@ function OutboundPage() {
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
   // edit-modal: pdf / video media
-  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
+  const [editMedia, setEditMedia] = useState<MediaValue | null>(null);
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
   const [editKlingNarration, setEditKlingNarration] = useState("");
   const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
+  const [editKlingElapsed, setEditKlingElapsed] = useState(0);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
 
@@ -342,20 +343,28 @@ function OutboundPage() {
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
   // LinkedIn pdf/video media (main card)
-  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
+  const [postMedia, setPostMedia] = useState<MediaValue | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
   const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
+  const [klingElapsed, setKlingElapsed] = useState(0);
   const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop
   const [mainDragOver, setMainDragOver] = useState(false);
 
+  // Row preview modal
+  const [previewing, setPreviewing] = useState<any | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{ url: string; kind: "image" | "pdf" | "video"; mime: string; filename: string } | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);
   const liRef = useRef<HTMLElement>(null);
-  const genKling = useServerFn(generateKlingClipForOutbound);
+  const startKling = useServerFn(startKlingJob);
+  const pollKling = useServerFn(pollKlingJob);
+  const getMediaUrl = useServerFn(getOutboundMediaUrl);
 
   // ── Apply ?draft= pre-fill once on mount ────────────────────────
   useEffect(() => {

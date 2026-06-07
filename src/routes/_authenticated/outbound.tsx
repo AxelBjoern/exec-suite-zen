@@ -728,7 +728,23 @@ function OutboundPage() {
           </div>
         </Card>
 
-        <Card title="LinkedIn post" icon={Linkedin} refEl={liRef}>
+        <Card
+          title="LinkedIn post"
+          icon={Linkedin}
+          refEl={liRef}
+          collapsible
+          open={liOpen}
+          onToggle={() => setLiOpen((v) => !v)}
+          headerRight={
+            <Link
+              to="/outbound/archive"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+            >
+              <Archive className="h-3 w-3" />
+              Archive
+            </Link>
+          }
+        >
           <div className="grid gap-3">
             <textarea className={inputCls} rows={5} placeholder="What do you want to share?" value={post} onChange={(e) => setPost(e.target.value)} />
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">

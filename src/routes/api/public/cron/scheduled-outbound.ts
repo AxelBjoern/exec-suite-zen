@@ -164,7 +164,7 @@ export const Route = createFileRoute("/api/public/cron/scheduled-outbound")({
           if (!Number.isFinite(t) || t > Date.now()) continue;
           try {
             if (r.kind === "outbound_linkedin") {
-              await postLinkedIn(p.text, p.imageBase64 ?? null);
+              await postLinkedIn(p.text, pickMedia(p));
             } else {
               await sendGmail(p.to, p.subject, p.body);
             }

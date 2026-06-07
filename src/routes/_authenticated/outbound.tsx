@@ -515,6 +515,8 @@ function OutboundPage() {
     setEditImgDescription("");
     setEditMedia(null);
     setEditKlingPrompt("");
+    setEditKlingNarration("");
+    setEditNarrationAudio(null);
   }
 
   async function saveEdit(opts: { send: boolean }) {

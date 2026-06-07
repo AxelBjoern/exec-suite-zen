@@ -9,18 +9,29 @@ const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
 const PDF_MAX_PAGES = 10;
 
 type LiMediaKind = "image" | "pdf" | "video";
-function pickMedia(p: any): { kind: LiMediaKind; base64: string; mime: string; filename: string } | null {
-  if (p?.mediaKind && p?.mediaBase64) {
+const OUTBOUND_BUCKET = "chat-uploads";
+
+function pickMedia(p: any): { kind: LiMediaKind; base64?: string; path?: string; mime: string; filename: string } | null {
+  if (p?.mediaKind && (p?.mediaBase64 || p?.mediaPath)) {
     const kind = p.mediaKind as LiMediaKind;
     return {
       kind,
-      base64: p.mediaBase64,
+      base64: p.mediaBase64 ?? undefined,
+      path: p.mediaPath ?? undefined,
       mime: p.mediaMime ?? (kind === "pdf" ? "application/pdf" : kind === "video" ? "video/mp4" : "image/png"),
       filename: p.mediaFilename ?? (kind === "pdf" ? "carousel.pdf" : kind === "video" ? "clip.mp4" : "image.png"),
     };
   }
   if (p?.imageBase64) return { kind: "image", base64: p.imageBase64, mime: "image/png", filename: "image.png" };
   return null;
+}
+
+async function mediaBytes(m: { base64?: string; path?: string }): Promise<Buffer> {
+  if (m.base64) return Buffer.from(m.base64, "base64");
+  if (!m.path) throw new Error("Media has no base64 or path");
+  const { data, error } = await supabaseAdmin.storage.from(OUTBOUND_BUCKET).download(m.path);
+  if (error || !data) throw new Error(`Storage download failed: ${error?.message ?? "no data"}`);
+  return Buffer.from(await data.arrayBuffer());
 }
 
 function b64url(buf: Buffer) {

@@ -881,8 +881,8 @@ export async function sendOwnerDigestEmail(to: string, subject: string, body: st
 }
 
 // ── AI video generation (Kling v3.0 Std via OpenRouter) ─────────────────
-// Returns a base64-encoded MP4 the client can attach to a LinkedIn draft.
-// Optionally also synthesizes narration with ElevenLabs (voice: Sarah).
+// Requests audio generation from Kling and also stores a best-effort TTS
+// narration track derived from the post text for future reuse.
 const KlingInput = z.object({
   prompt: z.string().min(3).max(2000),
   narration: z.string().max(2000).optional(),
@@ -931,7 +931,7 @@ export const startKlingJob = createServerFn({ method: "POST" })
         "HTTP-Referer": "https://lovable.app",
         "X-Title": "VDNX Outbound",
       },
-      body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt }),
+      body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt, generate_audio: true }),
     });
     const startText = await startRes.text();
     if (!startRes.ok) throw new Error(`Kling start failed (${startRes.status}): ${startText.slice(0, 300)}`);

@@ -330,7 +330,6 @@ function OutboundPage() {
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
   const [editKlingNarration, setEditKlingNarration] = useState("");
-  const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const [editKlingElapsed, setEditKlingElapsed] = useState(0);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
@@ -348,7 +347,6 @@ function OutboundPage() {
   const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
   const [klingElapsed, setKlingElapsed] = useState(0);
-  const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop
@@ -579,7 +577,6 @@ function OutboundPage() {
     setEditMedia(null);
     setEditKlingPrompt("");
     setEditKlingNarration("");
-    setEditNarrationAudio(null);
     try {
       const full = await fetchFull({ data: { id: r.id } });
       if (full?.payload) p = full.payload;
@@ -633,7 +630,6 @@ function OutboundPage() {
     setEditMedia(null);
     setEditKlingPrompt("");
     setEditKlingNarration("");
-    setEditNarrationAudio(null);
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -1120,11 +1116,10 @@ function OutboundPage() {
                     onClick={async () => {
                       setKlingBusy(true);
                       setKlingElapsed(0);
-                      setNarrationAudio(null);
                       try {
                         const r = await runKlingFlow({
                           prompt: klingPrompt,
-                          narration: klingNarration.trim() || undefined,
+                          narration: klingNarration.trim() || post.trim() || undefined,
                           onTick: (s) => setKlingElapsed(s),
                         });
                         setPostMedia(r.media);
@@ -1137,24 +1132,13 @@ function OutboundPage() {
                     {klingBusy ? "Generating…" : "Generate clip"}
                   </button>
                 </div>
-                <textarea
-                  className={inputCls + " w-full"}
-                  rows={2}
-                  placeholder="Optional narration (ElevenLabs voice: Sarah) — leave empty for silent clip"
-                  value={klingNarration}
-                  onChange={(e) => setKlingNarration(e.target.value)}
-                  disabled={klingBusy}
-                />
+                <p className="text-[10px] text-muted-foreground">
+                  Narration is generated automatically from your LinkedIn post text.
+                </p>
                 {klingBusy && (
                   <p className="text-[10px] text-muted-foreground">
                     Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} (Kling typically takes 2–5 min)
                   </p>
-                )}
-                {narrationAudio && (
-                  <div className="rounded-md border border-border bg-muted/40 p-2">
-                    <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Narration preview (ElevenLabs)</div>
-                    <audio controls className="w-full" src={`data:${narrationAudio.mime};base64,${narrationAudio.base64}`} />
-                  </div>
                 )}
               </div>
             </div>
@@ -1349,11 +1333,10 @@ function OutboundPage() {
                           onClick={async () => {
                             setEditBusy("kling");
                             setEditKlingElapsed(0);
-                            setEditNarrationAudio(null);
                             try {
                               const r = await runKlingFlow({
                                 prompt: editKlingPrompt,
-                                narration: editKlingNarration.trim() || undefined,
+                                narration: editKlingNarration.trim() || editDraft.text?.trim() || undefined,
                                 onTick: (s) => setEditKlingElapsed(s),
                               });
                               setEditMedia(r.media);
@@ -1366,24 +1349,13 @@ function OutboundPage() {
                           {editBusy === "kling" ? "Generating…" : "Generate"}
                         </button>
                       </div>
-                      <textarea
-                        className={inputCls + " w-full"}
-                        rows={2}
-                        placeholder="Optional narration (ElevenLabs voice: Sarah) — leave empty for silent clip"
-                        value={editKlingNarration}
-                        onChange={(e) => setEditKlingNarration(e.target.value)}
-                        disabled={!!editBusy}
-                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Narration is generated automatically from the post text for this draft.
+                      </p>
                       {editBusy === "kling" && (
                         <p className="text-[10px] text-muted-foreground">
                           Generating video… {Math.floor(editKlingElapsed / 60)}:{String(editKlingElapsed % 60).padStart(2, "0")} (Kling typically takes 2–5 min)
                         </p>
-                      )}
-                      {editNarrationAudio && (
-                        <div className="rounded-md border border-border bg-muted/40 p-2">
-                          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Narration preview (ElevenLabs)</div>
-                          <audio controls className="w-full" src={`data:${editNarrationAudio.mime};base64,${editNarrationAudio.base64}`} />
-                        </div>
                       )}
                     </div>
                   </div>

@@ -612,14 +612,15 @@ export const updateOutboundDraft = createServerFn({ method: "POST" })
     if (data.payload.imageBase64 === undefined && prev.imageBase64) {
       merged.imageBase64 = prev.imageBase64;
     }
-    if (data.payload.mediaBase64 === undefined && prev.mediaBase64) {
+    if (data.payload.mediaBase64 === undefined && data.payload.mediaPath === undefined && (prev.mediaBase64 || prev.mediaPath)) {
       merged.mediaBase64 = prev.mediaBase64;
+      merged.mediaPath = prev.mediaPath;
       merged.mediaKind = prev.mediaKind;
       merged.mediaMime = prev.mediaMime;
       merged.mediaFilename = prev.mediaFilename;
     }
     // If new media is being set, clear the legacy image slot (mutual exclusion)
-    if (data.payload.mediaBase64) {
+    if (data.payload.mediaBase64 || data.payload.mediaPath) {
       merged.imageBase64 = null;
     }
     const { error: upErr } = await supabaseAdmin

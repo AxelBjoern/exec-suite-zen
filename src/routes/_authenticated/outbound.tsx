@@ -383,6 +383,75 @@ function OutboundPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Start Kling + poll loop. Returns the resolved MediaValue (video).
+  async function runKlingFlow(opts: {
+    prompt: string;
+    narration?: string;
+    onTick?: (elapsedSec: number) => void;
+  }): Promise<{ media: MediaValue }> {
+    const started = Date.now();
+    const job = await startKling({ data: { prompt: opts.prompt, narration: opts.narration } });
+    const deadline = started + 7 * 60_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
+      opts.onTick?.(Math.floor((Date.now() - started) / 1000));
+      const res = await pollKling({ data: { jobId: job.jobId, pollingUrl: job.pollingUrl ?? undefined } });
+      if (res.status === "processing") continue;
+      if (res.status === "failed") throw new Error(res.error);
+      return {
+        media: {
+          kind: "video",
+          url: res.videoUrl,
+          path: res.videoPath,
+          mime: res.videoMime,
+          filename: res.videoFilename,
+        },
+      };
+    }
+    throw new Error("Kling generation timed out (>7 minutes). Try again.");
+  }
+
+  async function openPreview(r: any) {
+    setPreviewing(r);
+    setPreviewMedia(null);
+    setPreviewBusy(true);
+    try {
+      const p = (r.payload ?? {}) as Record<string, any>;
+      if (p.mediaPath) {
+        const res = await getMediaUrl({ data: { id: r.id } });
+        if (!res.url || !res.kind) throw new Error("Media not found");
+        setPreviewMedia({ url: res.url, kind: res.kind, mime: res.mime ?? "", filename: res.filename ?? "" });
+      } else {
+        const full = await fetchFull({ data: { id: r.id } });
+        const fp = (full?.payload ?? {}) as Record<string, any>;
+        if (fp.mediaBase64 && fp.mediaKind) {
+          setPreviewMedia({
+            url: `data:${fp.mediaMime || "application/octet-stream"};base64,${fp.mediaBase64}`,
+            kind: fp.mediaKind, mime: fp.mediaMime ?? "", filename: fp.mediaFilename ?? "",
+          });
+        } else if (fp.imageBase64) {
+          setPreviewMedia({
+            url: `data:image/png;base64,${fp.imageBase64}`,
+            kind: "image", mime: "image/png", filename: "image.png",
+          });
+        } else {
+          throw new Error("No media attached");
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load preview");
+      setPreviewing(null);
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
+  function closePreview() {
+    setPreviewing(null);
+    setPreviewMedia(null);
+    setPreviewBusy(false);
+  }
+
   async function run<T>(name: string, fn: () => Promise<T>, clear: () => void, msg: { sent: string; pending: string }) {
     setBusy(name);
     try {

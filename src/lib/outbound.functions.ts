@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { PDFDocument } from "pdf-lib";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { chatCompletion } from "@/server/llm.server";
@@ -7,6 +8,34 @@ import { chatCompletion } from "@/server/llm.server";
 // ── Workspace connectors (shared, Lovable Connectors) ────────────────────
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
+
+// LinkedIn document carousels: max 10 pages
+const PDF_MAX_PAGES = 10;
+
+type LiMediaKind = "image" | "pdf" | "video";
+
+function pickLiMedia(payload: Record<string, any>): {
+  kind: LiMediaKind;
+  base64: string;
+  mime: string;
+  filename: string;
+} | null {
+  const mk = payload.mediaKind as LiMediaKind | undefined;
+  const mb = payload.mediaBase64 as string | undefined;
+  if (mk && mb) {
+    return {
+      kind: mk,
+      base64: mb,
+      mime: payload.mediaMime ?? (mk === "pdf" ? "application/pdf" : mk === "video" ? "video/mp4" : "image/png"),
+      filename: payload.mediaFilename ?? (mk === "pdf" ? "carousel.pdf" : mk === "video" ? "clip.mp4" : "image.png"),
+    };
+  }
+  if (payload.imageBase64) {
+    return { kind: "image", base64: payload.imageBase64, mime: "image/png", filename: "image.png" };
+  }
+  return null;
+}
+
 
 async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null) {
   const lovableKey = process.env.LOVABLE_API_KEY;

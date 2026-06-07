@@ -236,6 +236,8 @@ function OutboundPage() {
   const selfSend = useServerFn(sendOwnOutbound);
   const aiEdit = useServerFn(aiEditDraft);
   const deleteReq = useServerFn(deleteOutbound);
+  const fetchFull = useServerFn(getOutboundFull);
+
   const tagline = useServerFn(composeLinkedInTagline);
 
   const owner = useQuery({ queryKey: ["ensure-owner"], queryFn: () => claimOwner({ data: undefined as never }), staleTime: Infinity });

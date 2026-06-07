@@ -139,7 +139,7 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | "pdf" | "video" | "kling" | null>(null);
   const [aiInstr, setAiInstr] = useState("");
   // edit-modal image state (LinkedIn only)
   const [editImgB64, setEditImgB64] = useState<string | null>(null);
@@ -148,6 +148,11 @@ function OutboundPage() {
   const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  // edit-modal: pdf / video media
+  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const editPdfInputRef = useRef<HTMLInputElement>(null);
+  const editVideoInputRef = useRef<HTMLInputElement>(null);
+  const [editKlingPrompt, setEditKlingPrompt] = useState("");
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -156,10 +161,17 @@ function OutboundPage() {
   const [imgGenerating, setImgGenerating] = useState(false);
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
+  // LinkedIn pdf/video media (main card)
+  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [klingPrompt, setKlingPrompt] = useState("");
+  const [klingBusy, setKlingBusy] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);
   const liRef = useRef<HTMLElement>(null);
+  const genKling = useServerFn(generateKlingClipForOutbound);
 
   // ── Apply ?draft= pre-fill once on mount ────────────────────────
   useEffect(() => {

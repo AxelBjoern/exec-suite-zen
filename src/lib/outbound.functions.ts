@@ -983,7 +983,12 @@ export const pollKlingJob = createServerFn({ method: "POST" })
     const pollUrl = data.pollingUrl ?? `${OPENROUTER_VIDEO_URL}/${data.jobId}`;
     const pRes = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
     if (!pRes.ok) {
-      return { status: "processing" as const };
+      const body = await pRes.text().catch(() => "");
+      // 5xx / 429 → transient, keep polling. 4xx → real failure, surface it.
+      if (pRes.status >= 500 || pRes.status === 429) {
+        return { status: "processing" as const };
+      }
+      return { status: "failed" as const, error: `Kling poll failed (${pRes.status}): ${body.slice(0, 300)}` };
     }
     const st = (await pRes.json()) as any;
 

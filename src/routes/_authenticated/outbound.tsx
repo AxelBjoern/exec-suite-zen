@@ -414,6 +414,10 @@ function OutboundPage() {
     const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
+      // restore existing media into drop-zone state
+      if (p.mediaBase64 && !p.mediaBase64.startsWith("[") && p.mediaKind) {
+        setEditMedia({ kind: p.mediaKind as "image" | "pdf" | "video", base64: p.mediaBase64, mime: p.mediaMime || "", filename: p.mediaFilename || "" });
+      }
     } else {
       setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: localSched });
     }

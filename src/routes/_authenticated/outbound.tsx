@@ -149,10 +149,12 @@ function OutboundPage() {
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
   // edit-modal: pdf / video media
-  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
+  // drag-drop state
+  const [dragOver, setDragOver] = useState(false);
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);

@@ -286,6 +286,7 @@ function OutboundPage() {
   const [reminder, setReminder] = useState({ subject: "", body: "", scheduled_at: "" });
   const [post, setPost] = useState("");
   const [postSchedule, setPostSchedule] = useState("");
+  const [liOpen, setLiOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);

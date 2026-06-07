@@ -107,6 +107,8 @@ interface RemoteState {
   resetActive: (id: string) => void;
   /** force-flush any pending debounced writes (e.g. before navigation/unload). */
   flush: () => Promise<void>;
+  /** subscribe to realtime updates on budget_scenarios; returns an unsubscribe fn. */
+  subscribeRealtime: () => () => void;
 }
 
 // Per-scenario debounced flush registry.

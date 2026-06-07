@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film,
+  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive,
 } from "lucide-react";
 import {
   requestEmail,
@@ -96,17 +96,51 @@ const inputCls =
 const btnCls =
   "inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
 
-function Card({ title, icon: Icon, children, refEl }: { title: string; icon: typeof Mail; children: React.ReactNode; refEl?: React.Ref<HTMLElement> }) {
+function Card({
+  title,
+  icon: Icon,
+  children,
+  refEl,
+  collapsible,
+  open,
+  onToggle,
+  headerRight,
+}: {
+  title: string;
+  icon: typeof Mail;
+  children: React.ReactNode;
+  refEl?: React.Ref<HTMLElement>;
+  collapsible?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
+  headerRight?: React.ReactNode;
+}) {
+  const isOpen = collapsible ? !!open : true;
   return (
     <section ref={refEl} className="rounded-lg border border-border bg-panel p-5">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-4 w-4 text-primary" />
         <h2 className="font-serif text-lg font-semibold">{title}</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {headerRight}
+          {collapsible && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              aria-expanded={isOpen}
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              {isOpen ? "Hide" : "Open"}
+            </button>
+          )}
+        </div>
       </div>
-      {children}
+      {isOpen && children}
     </section>
   );
 }
+
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
@@ -252,6 +286,7 @@ function OutboundPage() {
   const [reminder, setReminder] = useState({ subject: "", body: "", scheduled_at: "" });
   const [post, setPost] = useState("");
   const [postSchedule, setPostSchedule] = useState("");
+  const [liOpen, setLiOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
@@ -693,7 +728,103 @@ function OutboundPage() {
           </div>
         </Card>
 
-        <Card title="LinkedIn post" icon={Linkedin} refEl={liRef}>
+        <section className="rounded-lg border border-border bg-panel p-5">
+          <h2 className="mb-3 font-serif text-lg font-semibold">My recent requests</h2>
+          {!data?.rows?.length && <p className="text-xs text-muted-foreground">Nothing submitted yet.</p>}
+          <ul className="divide-y divide-border">
+            {data?.rows?.map((r: any) => {
+              const p = (r.payload ?? {}) as Record<string, string>;
+              const clickable = r.status === "pending";
+              return (
+                <li
+                  key={r.id}
+                  className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
+                  onClick={clickable ? () => openEdit(r) : undefined}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium uppercase tracking-wider text-muted-foreground">
+                        {r.kind.replace("outbound_", "")}
+                      </span>
+                      <StatusBadge status={r.status} />
+                      {clickable && (
+                        <span className="text-[10px] text-primary">Click to edit</span>
+                      )}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
+                    {p.scheduled_at && (
+                      <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
+                        <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
+                      </p>
+                    )}
+                    {r.notes && r.status !== "sent" && (
+                      <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(r.created_at).toLocaleString()}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {r.status === "pending" && !r.notes && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                          disabled={rowBusy === r.id}
+                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        >
+                          {rowBusy === r.id ? "Sending…" : "Send now"}
+                        </button>
+                      )}
+                      {r.notes && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          disabled={rowBusy === r.id}
+                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                        >
+                          {rowBusy === r.id ? (
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                          {rowBusy === r.id ? "Retrying…" : "Retry"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        disabled={rowBusy === r.id}
+                        onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <Card
+          title="LinkedIn post"
+          icon={Linkedin}
+          refEl={liRef}
+          collapsible
+          open={liOpen}
+          onToggle={() => setLiOpen((v) => !v)}
+          headerRight={
+            <Link
+              to="/outbound/archive"
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+            >
+              <Archive className="h-3 w-3" />
+              Archive
+            </Link>
+          }
+        >
           <div className="grid gap-3">
             <textarea className={inputCls} rows={5} placeholder="What do you want to share?" value={post} onChange={(e) => setPost(e.target.value)} />
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -814,86 +945,6 @@ function OutboundPage() {
           </div>
         </Card>
 
-
-        <section className="rounded-lg border border-border bg-panel p-5">
-          <h2 className="mb-3 font-serif text-lg font-semibold">My recent requests</h2>
-          {!data?.rows?.length && <p className="text-xs text-muted-foreground">Nothing submitted yet.</p>}
-          <ul className="divide-y divide-border">
-            {data?.rows?.map((r: any) => {
-              const p = (r.payload ?? {}) as Record<string, string>;
-              const clickable = r.status === "pending";
-              return (
-                <li
-                  key={r.id}
-                  className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
-                  onClick={clickable ? () => openEdit(r) : undefined}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-medium uppercase tracking-wider text-muted-foreground">
-                        {r.kind.replace("outbound_", "")}
-                      </span>
-                      <StatusBadge status={r.status} />
-                      {clickable && (
-                        <span className="text-[10px] text-primary">Click to edit</span>
-                      )}
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
-                    {p.scheduled_at && (
-                      <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
-                        <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
-                      </p>
-                    )}
-                    {r.notes && r.status !== "sent" && (
-                      <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(r.created_at).toLocaleString()}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {r.status === "pending" && !r.notes && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-                          disabled={rowBusy === r.id}
-                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
-                        >
-                          {rowBusy === r.id ? "Sending…" : "Send now"}
-                        </button>
-                      )}
-                      {r.notes && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                          disabled={rowBusy === r.id}
-                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
-                        >
-                          {rowBusy === r.id ? (
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-3 w-3" />
-                          )}
-                          {rowBusy === r.id ? "Retrying…" : "Retry"}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                        disabled={rowBusy === r.id}
-                        onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
       </div>
 
       {editing && (

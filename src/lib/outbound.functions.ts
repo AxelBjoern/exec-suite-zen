@@ -457,6 +457,29 @@ export const listMyRequests = createServerFn({ method: "GET" })
     return { rows };
   });
 
+// Sent LinkedIn posts (read-only archive page)
+export const listSentLinkedIn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context as { userId: string };
+    const { data, error } = await supabaseAdmin
+      .from("approvals")
+      .select("id, status, payload, notes, decided_at, created_at")
+      .eq("requester_id", userId)
+      .eq("kind", "outbound_linkedin")
+      .eq("status", "sent")
+      .order("decided_at", { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map((r: any) => {
+      const p = { ...(r.payload ?? {}) };
+      if (p.imageBase64) p.imageBase64 = "[image]";
+      if (p.mediaBase64) p.mediaBase64 = `[${p.mediaKind ?? "media"}]`;
+      return { ...r, payload: p };
+    });
+    return { rows };
+  });
+
 // ── Full payload (for editing) — includes stripped media blobs ───────────
 const GetFullInput = z.object({ id: z.string().uuid() });
 export const getOutboundFull = createServerFn({ method: "POST" })

@@ -1,10 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PDFDocument } from "pdf-lib";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { checkCronAuth } from "@/server/cron-auth.server";
 
 // Workspace senders (shared connectors). Kept inline to avoid pulling client deps.
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
+const PDF_MAX_PAGES = 10;
+
+type LiMediaKind = "image" | "pdf" | "video";
+function pickMedia(p: any): { kind: LiMediaKind; base64: string; mime: string; filename: string } | null {
+  if (p?.mediaKind && p?.mediaBase64) {
+    const kind = p.mediaKind as LiMediaKind;
+    return {
+      kind,
+      base64: p.mediaBase64,
+      mime: p.mediaMime ?? (kind === "pdf" ? "application/pdf" : kind === "video" ? "video/mp4" : "image/png"),
+      filename: p.mediaFilename ?? (kind === "pdf" ? "carousel.pdf" : kind === "video" ? "clip.mp4" : "image.png"),
+    };
+  }
+  if (p?.imageBase64) return { kind: "image", base64: p.imageBase64, mime: "image/png", filename: "image.png" };
+  return null;
+}
 
 function b64url(buf: Buffer) {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -39,7 +56,7 @@ async function sendGmail(to: string, subject: string, body: string) {
   });
   if (!res.ok) throw new Error(`Gmail (${res.status}): ${await res.text()}`);
 }
-async function postLinkedIn(text: string, imageBase64?: string | null) {
+async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const liKey = process.env.LINKEDIN_API_KEY;
   if (!lovableKey || !liKey) throw new Error("LinkedIn connector not configured");
@@ -49,13 +66,26 @@ async function postLinkedIn(text: string, imageBase64?: string | null) {
   const { sub } = (await me.json()) as { sub?: string };
   if (!sub) throw new Error("LI userinfo missing sub");
   const author = `urn:li:person:${sub}`;
+
   let mediaAsset: string | null = null;
-  if (imageBase64) {
+  let category: "NONE" | "IMAGE" | "DOCUMENT" | "VIDEO" = "NONE";
+  if (media) {
+    const recipe = {
+      image: "urn:li:digitalmediaRecipe:feedshare-image",
+      pdf: "urn:li:digitalmediaRecipe:feedshare-document",
+      video: "urn:li:digitalmediaRecipe:feedshare-video",
+    }[media.kind];
+    if (media.kind === "pdf") {
+      const doc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+      if (doc.getPageCount() > PDF_MAX_PAGES) {
+        throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
+      }
+    }
     const reg = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
       method: "POST", headers: { ...h, "Content-Type": "application/json" },
       body: JSON.stringify({
         registerUploadRequest: {
-          recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+          recipes: [recipe],
           owner: author,
           serviceRelationships: [{ relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" }],
         },
@@ -67,15 +97,37 @@ async function postLinkedIn(text: string, imageBase64?: string | null) {
     mediaAsset = j?.value?.asset ?? null;
     if (!uploadUrl || !mediaAsset) throw new Error("LI register missing upload data");
     const up = await fetch(uploadUrl, {
-      method: "PUT", headers: { "Content-Type": "image/png" },
-      body: Buffer.from(imageBase64, "base64"),
+      method: "PUT", headers: { "Content-Type": media.mime },
+      body: Buffer.from(media.base64, "base64"),
     });
     if (!up.ok) throw new Error(`LI upload (${up.status})`);
+    if (media.kind === "video") {
+      const assetId = mediaAsset.split(":").pop();
+      const deadline = Date.now() + 60_000;
+      let ok = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const s = await fetch(`${LINKEDIN_GATEWAY}/v2/assets/${assetId}`, { headers: h });
+        if (!s.ok) continue;
+        const sj = (await s.json()) as any;
+        const status = sj?.recipes?.[0]?.status ?? sj?.status;
+        if (status === "AVAILABLE") { ok = true; break; }
+        if (status?.includes("FAILED") || status?.includes("ERROR")) throw new Error(`LI video ${status}`);
+      }
+      if (!ok) throw new Error("LI video processing timed out");
+    }
+    category = { image: "IMAGE", pdf: "DOCUMENT", video: "VIDEO" }[media.kind] as any;
   }
+
+  const mediaArray = mediaAsset
+    ? [media!.kind === "pdf"
+        ? { status: "READY", media: mediaAsset, title: { text: media!.filename.replace(/\.pdf$/i, "") } }
+        : { status: "READY", media: mediaAsset }]
+    : [];
+
   const body = mediaAsset
     ? { author, lifecycleState: "PUBLISHED", specificContent: { "com.linkedin.ugc.ShareContent": {
-          shareCommentary: { text }, shareMediaCategory: "IMAGE",
-          media: [{ status: "READY", media: mediaAsset }] } },
+          shareCommentary: { text }, shareMediaCategory: category, media: mediaArray } },
         visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" } }
     : { author, lifecycleState: "PUBLISHED", specificContent: { "com.linkedin.ugc.ShareContent": {
           shareCommentary: { text }, shareMediaCategory: "NONE" } },

@@ -442,6 +442,20 @@ function OutboundPage() {
     }
   }
 
+  async function archiveItem(id: string) {
+    setRowBusy(id);
+    try {
+      await archiveRow({ data: { id, archived: true } });
+      toast.success("Archived");
+      qc.invalidateQueries({ queryKey: ["my-outbound"] });
+      qc.invalidateQueries({ queryKey: ["outbound", "archive"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to archive");
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
   async function openEdit(r: any) {
     if (r.status !== "pending") return;
     // Hydrate the full payload — list view strips media blobs to sentinels like "[pdf]"

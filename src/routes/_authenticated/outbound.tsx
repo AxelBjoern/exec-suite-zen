@@ -17,7 +17,9 @@ import {
   sendOwnOutbound,
   aiEditDraft,
   deleteOutbound,
-  generateKlingClipForOutbound,
+  startKlingJob,
+  pollKlingJob,
+  getOutboundMediaUrl,
   getOutboundFull,
   setOutboundArchived,
 
@@ -160,6 +162,21 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type MediaValue = {
+  kind: "image" | "pdf" | "video";
+  base64?: string;
+  url?: string;
+  path?: string;
+  mime: string;
+  filename: string;
+};
+
+function mediaSrc(v: MediaValue): string {
+  if (v.url) return v.url;
+  if (v.base64) return `data:${v.mime};base64,${v.base64}`;
+  return "";
+}
+
 function DropZone({
   value,
   onChange,
@@ -169,8 +186,8 @@ function DropZone({
   setDragOver,
   label = "Drop image, PDF or video here",
 }: {
-  value: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string } | null;
-  onChange: (v: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string }) => void;
+  value: MediaValue | null;
+  onChange: (v: MediaValue) => void;
   onClear: () => void;
   disabled?: boolean;
   dragOver: boolean;
@@ -196,6 +213,8 @@ function DropZone({
     onChange({ kind, base64: b64, mime: f.type || (kind === "image" ? "image/png" : kind === "pdf" ? "application/pdf" : "video/mp4"), filename: f.name });
   }
 
+  const src = value ? mediaSrc(value) : "";
+
   return (
     <div
       className={cn(
@@ -216,16 +235,16 @@ function DropZone({
         onChange={(e) => handleFiles(e.target.files)}
       />
       {value ? (
-        <div className="flex flex-col items-center gap-2">
-          {value.kind === "image" && (
+        <div className="flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {value.kind === "image" && src && (
             <img
-              src={`data:${value.mime};base64,${value.base64}`}
+              src={src}
               alt={value.filename}
               className="h-auto max-h-40 w-auto max-w-full rounded-md object-contain"
             />
           )}
-          {value.kind === "video" && (
-            <video src={`data:${value.mime};base64,${value.base64}`} controls className="max-h-40 w-full rounded-md" />
+          {value.kind === "video" && src && (
+            <video src={src} controls className="max-h-60 w-full rounded-md" />
           )}
           {value.kind === "pdf" && (
             <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
@@ -235,7 +254,8 @@ function DropZone({
           )}
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="uppercase tracking-wider">{value.kind}</span>
-            <span>~{Math.round(value.base64.length * 0.75 / 1024)} KB</span>
+            {value.base64 && <span>~{Math.round(value.base64.length * 0.75 / 1024)} KB</span>}
+            {value.path && <span>stored</span>}
           </div>
           <button
             type="button"
@@ -305,12 +325,13 @@ function OutboundPage() {
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
   // edit-modal: pdf / video media
-  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
+  const [editMedia, setEditMedia] = useState<MediaValue | null>(null);
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
   const [editKlingNarration, setEditKlingNarration] = useState("");
   const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
+  const [editKlingElapsed, setEditKlingElapsed] = useState(0);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
 
@@ -322,20 +343,28 @@ function OutboundPage() {
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
   // LinkedIn pdf/video media (main card)
-  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
+  const [postMedia, setPostMedia] = useState<MediaValue | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
   const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
+  const [klingElapsed, setKlingElapsed] = useState(0);
   const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop
   const [mainDragOver, setMainDragOver] = useState(false);
 
+  // Row preview modal
+  const [previewing, setPreviewing] = useState<any | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{ url: string; kind: "image" | "pdf" | "video"; mime: string; filename: string } | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);
   const liRef = useRef<HTMLElement>(null);
-  const genKling = useServerFn(generateKlingClipForOutbound);
+  const startKling = useServerFn(startKlingJob);
+  const pollKling = useServerFn(pollKlingJob);
+  const getMediaUrl = useServerFn(getOutboundMediaUrl);
 
   // ── Apply ?draft= pre-fill once on mount ────────────────────────
   useEffect(() => {
@@ -353,6 +382,75 @@ function OutboundPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Start Kling + poll loop. Returns the resolved MediaValue (video).
+  async function runKlingFlow(opts: {
+    prompt: string;
+    narration?: string;
+    onTick?: (elapsedSec: number) => void;
+  }): Promise<{ media: MediaValue }> {
+    const started = Date.now();
+    const job = await startKling({ data: { prompt: opts.prompt, narration: opts.narration } });
+    const deadline = started + 7 * 60_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
+      opts.onTick?.(Math.floor((Date.now() - started) / 1000));
+      const res = await pollKling({ data: { jobId: job.jobId, pollingUrl: job.pollingUrl ?? undefined } });
+      if (res.status === "processing") continue;
+      if (res.status === "failed") throw new Error(res.error);
+      return {
+        media: {
+          kind: "video",
+          url: res.videoUrl,
+          path: res.videoPath,
+          mime: res.videoMime,
+          filename: res.videoFilename,
+        },
+      };
+    }
+    throw new Error("Kling generation timed out (>7 minutes). Try again.");
+  }
+
+  async function openPreview(r: any) {
+    setPreviewing(r);
+    setPreviewMedia(null);
+    setPreviewBusy(true);
+    try {
+      const p = (r.payload ?? {}) as Record<string, any>;
+      if (p.mediaPath) {
+        const res = await getMediaUrl({ data: { id: r.id } });
+        if (!res.url || !res.kind) throw new Error("Media not found");
+        setPreviewMedia({ url: res.url, kind: res.kind, mime: res.mime ?? "", filename: res.filename ?? "" });
+      } else {
+        const full = await fetchFull({ data: { id: r.id } });
+        const fp = (full?.payload ?? {}) as Record<string, any>;
+        if (fp.mediaBase64 && fp.mediaKind) {
+          setPreviewMedia({
+            url: `data:${fp.mediaMime || "application/octet-stream"};base64,${fp.mediaBase64}`,
+            kind: fp.mediaKind, mime: fp.mediaMime ?? "", filename: fp.mediaFilename ?? "",
+          });
+        } else if (fp.imageBase64) {
+          setPreviewMedia({
+            url: `data:image/png;base64,${fp.imageBase64}`,
+            kind: "image", mime: "image/png", filename: "image.png",
+          });
+        } else {
+          throw new Error("No media attached");
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load preview");
+      setPreviewing(null);
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
+  function closePreview() {
+    setPreviewing(null);
+    setPreviewMedia(null);
+    setPreviewBusy(false);
+  }
 
   async function run<T>(name: string, fn: () => Promise<T>, clear: () => void, msg: { sent: string; pending: string }) {
     setBusy(name);
@@ -484,8 +582,20 @@ function OutboundPage() {
     const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
-      // restore existing media into drop-zone state
-      if (p.mediaBase64 && !String(p.mediaBase64).startsWith("[") && p.mediaKind) {
+      // Prefer storage path → fresh signed URL
+      if (p.mediaPath && p.mediaKind) {
+        try {
+          const res = await getMediaUrl({ data: { id: r.id } });
+          if (res.url && res.kind) {
+            setEditMedia({
+              kind: res.kind, url: res.url, path: p.mediaPath,
+              mime: res.mime || "", filename: res.filename || "",
+            });
+          }
+        } catch {
+          /* fall through to base64 if any */
+        }
+      } else if (p.mediaBase64 && !String(p.mediaBase64).startsWith("[") && p.mediaKind) {
         setEditMedia({
           kind: p.mediaKind as "image" | "pdf" | "video",
           base64: p.mediaBase64,
@@ -534,9 +644,15 @@ function OutboundPage() {
       if (editing.kind === "outbound_linkedin") {
         if (editMedia) {
           payload.mediaKind = editMedia.kind;
-          payload.mediaBase64 = editMedia.base64;
           payload.mediaMime = editMedia.mime;
           payload.mediaFilename = editMedia.filename;
+          if (editMedia.path) {
+            payload.mediaPath = editMedia.path;
+            payload.mediaBase64 = null;
+          } else if (editMedia.base64) {
+            payload.mediaBase64 = editMedia.base64;
+            payload.mediaPath = null;
+          }
           payload.imageBase64 = null;
         } else if (editImgFinal && editImgB64) {
           payload.imageBase64 = editImgB64;
@@ -796,6 +912,19 @@ function OutboundPage() {
                                 {rowBusy === r.id ? "Retrying…" : "Retry"}
                               </button>
                             )}
+                            {(p.mediaKind || p.mediaPath || p.imageBase64) && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
+                                disabled={rowBusy === r.id}
+                                onClick={(e) => { e.stopPropagation(); openPreview(r); }}
+                                title={`Preview ${p.mediaKind ?? "image"}`}
+                              >
+                                {p.mediaKind === "video" ? <Film className="h-3.5 w-3.5" />
+                                  : p.mediaKind === "pdf" ? <FileText className="h-3.5 w-3.5" />
+                                  : <ImageIcon className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
@@ -983,15 +1112,19 @@ function OutboundPage() {
                     disabled={klingBusy || !klingPrompt.trim()}
                     onClick={async () => {
                       setKlingBusy(true);
+                      setKlingElapsed(0);
                       setNarrationAudio(null);
                       try {
-                        const r = await genKling({ data: { prompt: klingPrompt, narration: klingNarration.trim() || undefined } });
-                        setPostMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                        if (r.audioBase64 && r.audioMime) setNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
-                        toast.success("Kling clip ready");
+                        const r = await runKlingFlow({
+                          prompt: klingPrompt,
+                          narration: klingNarration.trim() || undefined,
+                          onTick: (s) => setKlingElapsed(s),
+                        });
+                        setPostMedia(r.media);
+                        toast.success("Kling clip ready — preview below");
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : "Kling generation failed");
-                      } finally { setKlingBusy(false); }
+                      } finally { setKlingBusy(false); setKlingElapsed(0); }
                     }}>
                     {klingBusy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                     {klingBusy ? "Generating…" : "Generate clip"}
@@ -1006,7 +1139,9 @@ function OutboundPage() {
                   disabled={klingBusy}
                 />
                 {klingBusy && (
-                  <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} / 7:00
+                  </p>
                 )}
                 {narrationAudio && (
                   <div className="rounded-md border border-border bg-muted/40 p-2">
@@ -1027,10 +1162,10 @@ function OutboundPage() {
                   () => reqLi({
                     data: {
                       text: post,
-                      // image (legacy) only if no pdf/video attached
                       imageBase64: !postMedia && imgFinal ? imgB64 : null,
                       mediaKind: postMedia?.kind ?? null,
                       mediaBase64: postMedia?.base64 ?? null,
+                      mediaPath: postMedia?.path ?? null,
                       mediaMime: postMedia?.mime ?? null,
                       mediaFilename: postMedia?.filename ?? null,
                       scheduled_at: localToIso(postSchedule),
@@ -1206,15 +1341,19 @@ function OutboundPage() {
                           disabled={!!editBusy || !editKlingPrompt.trim()}
                           onClick={async () => {
                             setEditBusy("kling");
+                            setEditKlingElapsed(0);
                             setEditNarrationAudio(null);
                             try {
-                              const r = await genKling({ data: { prompt: editKlingPrompt, narration: editKlingNarration.trim() || undefined } });
-                              setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                              if (r.audioBase64 && r.audioMime) setEditNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
-                              toast.success("Kling clip ready");
+                              const r = await runKlingFlow({
+                                prompt: editKlingPrompt,
+                                narration: editKlingNarration.trim() || undefined,
+                                onTick: (s) => setEditKlingElapsed(s),
+                              });
+                              setEditMedia(r.media);
+                              toast.success("Kling clip ready — preview below");
                             } catch (e) {
                               toast.error(e instanceof Error ? e.message : "Kling failed");
-                            } finally { setEditBusy(null); }
+                            } finally { setEditBusy(null); setEditKlingElapsed(0); }
                           }}>
                           {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                           {editBusy === "kling" ? "Generating…" : "Generate"}
@@ -1229,7 +1368,9 @@ function OutboundPage() {
                         disabled={!!editBusy}
                       />
                       {editBusy === "kling" && (
-                        <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Generating video… {Math.floor(editKlingElapsed / 60)}:{String(editKlingElapsed % 60).padStart(2, "0")} / 7:00
+                        </p>
                       )}
                       {editNarrationAudio && (
                         <div className="rounded-md border border-border bg-muted/40 p-2">
@@ -1329,6 +1470,51 @@ function OutboundPage() {
                 disabled={!!editBusy}
               >
                 {editBusy === "send" ? "Sending…" : "Save & send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={closePreview}
+        >
+          <div
+            className="w-full max-w-2xl rounded-lg border border-border bg-panel p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="font-serif text-lg font-semibold">
+                Preview {previewMedia?.kind ?? ""} {previewMedia?.filename && <span className="ml-2 text-xs text-muted-foreground">{previewMedia.filename}</span>}
+              </h3>
+              <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={closePreview}>✕</button>
+            </div>
+            {previewBusy && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {!previewBusy && previewMedia && (
+              <div className="flex flex-col items-center gap-3">
+                {previewMedia.kind === "video" && (
+                  <video src={previewMedia.url} controls autoPlay className="max-h-[70vh] w-full rounded-md" />
+                )}
+                {previewMedia.kind === "image" && (
+                  <img src={previewMedia.url} alt={previewMedia.filename} className="max-h-[70vh] w-full object-contain" />
+                )}
+                {previewMedia.kind === "pdf" && (
+                  <>
+                    <iframe src={previewMedia.url} className="h-[70vh] w-full rounded-md border border-border" title={previewMedia.filename} />
+                    <a href={previewMedia.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Open in new tab</a>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-muted"
+                onClick={closePreview}
+              >
+                Close
               </button>
             </div>
           </div>

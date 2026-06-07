@@ -9,18 +9,29 @@ const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
 const PDF_MAX_PAGES = 10;
 
 type LiMediaKind = "image" | "pdf" | "video";
-function pickMedia(p: any): { kind: LiMediaKind; base64: string; mime: string; filename: string } | null {
-  if (p?.mediaKind && p?.mediaBase64) {
+const OUTBOUND_BUCKET = "chat-uploads";
+
+function pickMedia(p: any): { kind: LiMediaKind; base64?: string; path?: string; mime: string; filename: string } | null {
+  if (p?.mediaKind && (p?.mediaBase64 || p?.mediaPath)) {
     const kind = p.mediaKind as LiMediaKind;
     return {
       kind,
-      base64: p.mediaBase64,
+      base64: p.mediaBase64 ?? undefined,
+      path: p.mediaPath ?? undefined,
       mime: p.mediaMime ?? (kind === "pdf" ? "application/pdf" : kind === "video" ? "video/mp4" : "image/png"),
       filename: p.mediaFilename ?? (kind === "pdf" ? "carousel.pdf" : kind === "video" ? "clip.mp4" : "image.png"),
     };
   }
   if (p?.imageBase64) return { kind: "image", base64: p.imageBase64, mime: "image/png", filename: "image.png" };
   return null;
+}
+
+async function mediaBytes(m: { base64?: string; path?: string }): Promise<Buffer> {
+  if (m.base64) return Buffer.from(m.base64, "base64");
+  if (!m.path) throw new Error("Media has no base64 or path");
+  const { data, error } = await supabaseAdmin.storage.from(OUTBOUND_BUCKET).download(m.path);
+  if (error || !data) throw new Error(`Storage download failed: ${error?.message ?? "no data"}`);
+  return Buffer.from(await data.arrayBuffer());
 }
 
 function b64url(buf: Buffer) {
@@ -69,7 +80,8 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
 
   // PDF carousel uses the versioned /rest/documents + /rest/posts API.
   if (media?.kind === "pdf") {
-    const doc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+    const pdfBuf = await mediaBytes(media);
+    const doc = await PDFDocument.load(pdfBuf);
     if (doc.getPageCount() > PDF_MAX_PAGES) {
       throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
     }
@@ -87,7 +99,7 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
     const up = await fetch(uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": "application/pdf" },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(pdfBuf),
     });
     if (!up.ok) throw new Error(`LI document upload (${up.status}): ${await up.text()}`);
     const postRes = await fetch(`${LINKEDIN_GATEWAY}/rest/posts`, {
@@ -129,9 +141,10 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
     const uploadUrl = j?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
     mediaAsset = j?.value?.asset ?? null;
     if (!uploadUrl || !mediaAsset) throw new Error("LI register missing upload data");
+    const buf = await mediaBytes(media);
     const up = await fetch(uploadUrl, {
       method: "PUT", headers: { "Content-Type": media.mime },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(buf),
     });
     if (!up.ok) throw new Error(`LI upload (${up.status})`);
     if (media.kind === "video") {

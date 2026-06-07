@@ -1182,11 +1182,11 @@ function OutboundPage() {
 
       {editing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:items-center sm:p-4"
           onClick={closeEdit}
         >
           <div
-            className="w-full max-w-lg rounded-lg border border-border bg-panel p-5 shadow-xl"
+            className="my-4 w-full max-w-lg rounded-lg border border-border bg-panel p-4 shadow-xl sm:p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -1457,11 +1457,11 @@ function OutboundPage() {
 
       {previewing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-3 sm:items-center sm:p-4"
           onClick={closePreview}
         >
           <div
-            className="w-full max-w-2xl rounded-lg border border-border bg-panel p-5 shadow-xl"
+            className="my-4 w-full max-w-2xl rounded-lg border border-border bg-panel p-4 shadow-xl sm:p-5 max-h-[calc(100dvh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between gap-3">

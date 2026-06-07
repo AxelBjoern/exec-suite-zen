@@ -71,10 +71,11 @@ export function ModuleSwitcher() {
         </nav>
         <button
           onClick={signOut}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+          aria-label="Sign out"
+          className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:border-destructive/40 hover:text-destructive sm:px-3"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign out
+          <span className="hidden sm:inline">Sign out</span>
         </button>
       </div>
     </header>

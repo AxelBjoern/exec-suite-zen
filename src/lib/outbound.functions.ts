@@ -423,6 +423,24 @@ export const listMyRequests = createServerFn({ method: "GET" })
     return { rows };
   });
 
+// ── Full payload (for editing) — includes stripped media blobs ───────────
+const GetFullInput = z.object({ id: z.string().uuid() });
+export const getOutboundFull = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => GetFullInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const { data: row, error } = await supabaseAdmin
+      .from("approvals")
+      .select("id, kind, status, payload, requester_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    return { payload: (row.payload ?? {}) as Record<string, any> };
+  });
+
+
 // ── Delete: requester deletes their own pending draft ────────────────────
 const DeleteInput = z.object({ id: z.string().uuid() });
 export const deleteOutbound = createServerFn({ method: "POST" })

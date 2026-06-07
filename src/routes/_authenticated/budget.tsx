@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { LineChart } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { BudgetTopbar } from "@/components/budget/Topbar";
+import { useBudgetStore } from "@/lib/budget/store";
 
 export const Route = createFileRoute("/_authenticated/budget")({
   ssr: false,

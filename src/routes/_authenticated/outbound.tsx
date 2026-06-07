@@ -272,6 +272,7 @@ function OutboundPage() {
   const aiEdit = useServerFn(aiEditDraft);
   const deleteReq = useServerFn(deleteOutbound);
   const fetchFull = useServerFn(getOutboundFull);
+  const archiveRow = useServerFn(setOutboundArchived);
 
   const tagline = useServerFn(composeLinkedInTagline);
 

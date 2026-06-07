@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers,
+  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film,
 } from "lucide-react";
 import {
   requestEmail,
@@ -17,6 +17,7 @@ import {
   sendOwnOutbound,
   aiEditDraft,
   deleteOutbound,
+  generateKlingClipForOutbound,
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
@@ -27,6 +28,33 @@ async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const t = data.session?.access_token;
   return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+// Convert "YYYY-MM-DDTHH:mm" (browser local) → real ISO string w/ offset.
+// Without this, the server reads the string as UTC and schedules fire at the
+// wrong wall-clock time for anyone outside UTC.
+function localToIso(local: string | null | undefined): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+function isoToLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+async function fileToBase64(f: File): Promise<string> {
+  const buf = await f.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return btoa(bin);
 }
 
 export const Route = createFileRoute("/_authenticated/outbound")({
@@ -111,7 +139,7 @@ function OutboundPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
-  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | null>(null);
+  const [editBusy, setEditBusy] = useState<"save" | "send" | "ai" | "img" | "carousel" | "pdf" | "video" | "kling" | null>(null);
   const [aiInstr, setAiInstr] = useState("");
   // edit-modal image state (LinkedIn only)
   const [editImgB64, setEditImgB64] = useState<string | null>(null);
@@ -120,6 +148,11 @@ function OutboundPage() {
   const [carouselVariants, setCarouselVariants] = useState<string[]>([]);
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  // edit-modal: pdf / video media
+  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const editPdfInputRef = useRef<HTMLInputElement>(null);
+  const editVideoInputRef = useRef<HTMLInputElement>(null);
+  const [editKlingPrompt, setEditKlingPrompt] = useState("");
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -128,10 +161,17 @@ function OutboundPage() {
   const [imgGenerating, setImgGenerating] = useState(false);
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
+  // LinkedIn pdf/video media (main card)
+  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [klingPrompt, setKlingPrompt] = useState("");
+  const [klingBusy, setKlingBusy] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);
   const liRef = useRef<HTMLElement>(null);
+  const genKling = useServerFn(generateKlingClipForOutbound);
 
   // ── Apply ?draft= pre-fill once on mount ────────────────────────
   useEffect(() => {
@@ -252,10 +292,13 @@ function OutboundPage() {
     setEditImgFinal(false);
     setCarouselVariants([]);
     setEditImgDescription("");
+    setEditMedia(null);
+    setEditKlingPrompt("");
+    const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
-      setEditDraft({ text: p.text ?? "", scheduled_at: p.scheduled_at ?? "" });
+      setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
     } else {
-      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: p.scheduled_at ?? "" });
+      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: localSched });
     }
   }
 
@@ -269,6 +312,8 @@ function OutboundPage() {
     setEditImgFinal(false);
     setCarouselVariants([]);
     setEditImgDescription("");
+    setEditMedia(null);
+    setEditKlingPrompt("");
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -276,10 +321,23 @@ function OutboundPage() {
     setEditBusy(opts.send ? "send" : "save");
     try {
       const payload: Record<string, any> = { ...editDraft };
-      // Strip the "[image]" sentinel so we don't overwrite the stored bytes
+      // Convert local datetime → real ISO with offset for the server / cron
+      payload.scheduled_at = localToIso(editDraft.scheduled_at) ?? null;
+      // Strip sentinels so we don't overwrite the stored bytes
       if (payload.imageBase64 === "[image]") delete payload.imageBase64;
-      if (editing.kind === "outbound_linkedin" && editImgFinal && editImgB64) {
-        payload.imageBase64 = editImgB64;
+      if (typeof payload.mediaBase64 === "string" && payload.mediaBase64.startsWith("[")) {
+        delete payload.mediaBase64; delete payload.mediaKind; delete payload.mediaMime; delete payload.mediaFilename;
+      }
+      if (editing.kind === "outbound_linkedin") {
+        if (editMedia) {
+          payload.mediaKind = editMedia.kind;
+          payload.mediaBase64 = editMedia.base64;
+          payload.mediaMime = editMedia.mime;
+          payload.mediaFilename = editMedia.filename;
+          payload.imageBase64 = null;
+        } else if (editImgFinal && editImgB64) {
+          payload.imageBase64 = editImgB64;
+        }
       }
       await updateDraft({ data: { id: editing.id, payload } });
       if (opts.send) {
@@ -458,7 +516,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "email" || !email.to || !email.subject || !email.body}
               onClick={() =>
-                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
+                run("email", () => reqEmail({ data: { ...email, scheduled_at: localToIso(email.scheduled_at) } }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })
@@ -482,7 +540,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "reminder" || !reminder.subject || !reminder.body}
               onClick={() =>
-                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
+                run("reminder", () => reqReminder({ data: { ...reminder, scheduled_at: localToIso(reminder.scheduled_at) } }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })
@@ -545,26 +603,111 @@ function OutboundPage() {
               )}
             </div>
 
+            {/* PDF carousel + video controls */}
+            <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {postMedia?.kind === "pdf" ? <FileText className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
+                  PDF carousel (max 10 pages) or video
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                    onClick={() => pdfInputRef.current?.click()} disabled={klingBusy}>
+                    <FileText className="h-3 w-3" /> Upload PDF
+                  </button>
+                  <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                    onClick={() => videoInputRef.current?.click()} disabled={klingBusy}>
+                    <Upload className="h-3 w-3" /> Upload video
+                  </button>
+                  {postMedia && (
+                    <button type="button" className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                      onClick={() => setPostMedia(null)}>Remove</button>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
+                  value={klingPrompt} onChange={(e) => setKlingPrompt(e.target.value)} disabled={klingBusy} />
+                <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                  disabled={klingBusy || !klingPrompt.trim()}
+                  onClick={async () => {
+                    setKlingBusy(true);
+                    try {
+                      const r = await genKling({ data: { prompt: klingPrompt } });
+                      setPostMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
+                      toast.success("Kling clip ready");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Kling generation failed");
+                    } finally { setKlingBusy(false); }
+                  }}>
+                  {klingBusy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {klingBusy ? "Generating…" : "Generate clip"}
+                </button>
+              </div>
+              <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]; e.target.value = "";
+                  if (!f) return;
+                  if (f.size > 12_000_000) { toast.error("PDF too large (>12 MB)"); return; }
+                  const b64 = await fileToBase64(f);
+                  setPostMedia({ kind: "pdf", base64: b64, mime: "application/pdf", filename: f.name });
+                  clearImage();
+                  toast.success("PDF attached — server checks page count on send");
+                }} />
+              <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]; e.target.value = "";
+                  if (!f) return;
+                  if (f.size > 20_000_000) { toast.error("Video too large (>20 MB)"); return; }
+                  const b64 = await fileToBase64(f);
+                  setPostMedia({ kind: "video", base64: b64, mime: f.type || "video/mp4", filename: f.name });
+                  clearImage();
+                  toast.success("Video attached");
+                }} />
+              {postMedia && (
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  Attached: <strong>{postMedia.filename}</strong> ({postMedia.kind}, ~{Math.round(postMedia.base64.length * 0.75 / 1024)} KB)
+                  {postMedia.kind === "video" && (
+                    <video src={`data:${postMedia.mime};base64,${postMedia.base64}`} controls className="mt-2 max-h-48 w-full rounded-md" />
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               className={btnCls}
               disabled={busy === "post" || !post.trim()}
               onClick={() =>
                 run(
                   "post",
-                  () => reqLi({ data: { text: post, imageBase64: imgFinal ? imgB64 : null, scheduled_at: postSchedule || null } }),
+                  () => reqLi({
+                    data: {
+                      text: post,
+                      // image (legacy) only if no pdf/video attached
+                      imageBase64: !postMedia && imgFinal ? imgB64 : null,
+                      mediaKind: postMedia?.kind ?? null,
+                      mediaBase64: postMedia?.base64 ?? null,
+                      mediaMime: postMedia?.mime ?? null,
+                      mediaFilename: postMedia?.filename ?? null,
+                      scheduled_at: localToIso(postSchedule),
+                    },
+                  }),
                   () => {
                     setPost("");
                     setPostSchedule("");
                     clearImage();
+                    setPostMedia(null);
+                    setKlingPrompt("");
                   },
                   { sent: "Posted", pending: "Queued for owner approval" },
                 )
               }
             >
-              {busy === "post" ? "Submitting…" : imgFinal ? "Submit with image" : "Submit"}
+              {busy === "post" ? "Submitting…" : postMedia ? `Submit with ${postMedia.kind}` : imgFinal ? "Submit with image" : "Submit"}
             </button>
           </div>
         </Card>
+
 
         <section className="rounded-lg border border-border bg-panel p-5">
           <h2 className="mb-3 font-serif text-lg font-semibold">My recent requests</h2>
@@ -771,7 +914,84 @@ function OutboundPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* PDF carousel + video for edit modal */}
+                  <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {editMedia?.kind === "pdf" ? <FileText className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
+                        PDF carousel (max 10 pages) / video
+                        {!editMedia && (editDraft.mediaBase64 || "").startsWith("[") && (
+                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
+                            {editDraft.mediaKind ?? "media"} attached
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editPdfInputRef.current?.click()} disabled={!!editBusy}>
+                          <FileText className="h-3 w-3" /> Upload PDF
+                        </button>
+                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editVideoInputRef.current?.click()} disabled={!!editBusy}>
+                          <Upload className="h-3 w-3" /> Upload video
+                        </button>
+                        {(editMedia || (editDraft.mediaBase64 || "").startsWith("[")) && (
+                          <button type="button" className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                            onClick={() => { setEditMedia(null); setEditDraft({ ...editDraft, mediaBase64: "", mediaKind: "", mediaMime: "", mediaFilename: "" }); }}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
+                        value={editKlingPrompt} onChange={(e) => setEditKlingPrompt(e.target.value)} disabled={!!editBusy} />
+                      <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                        disabled={!!editBusy || !editKlingPrompt.trim()}
+                        onClick={async () => {
+                          setEditBusy("kling");
+                          try {
+                            const r = await genKling({ data: { prompt: editKlingPrompt } });
+                            setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
+                            toast.success("Kling clip ready");
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Kling failed");
+                          } finally { setEditBusy(null); }
+                        }}>
+                        {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        {editBusy === "kling" ? "Generating…" : "Generate"}
+                      </button>
+                    </div>
+                    <input ref={editPdfInputRef} type="file" accept="application/pdf" className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]; e.target.value = "";
+                        if (!f) return;
+                        if (f.size > 12_000_000) { toast.error("PDF too large (>12 MB)"); return; }
+                        const b64 = await fileToBase64(f);
+                        setEditMedia({ kind: "pdf", base64: b64, mime: "application/pdf", filename: f.name });
+                        clearEditImage();
+                      }} />
+                    <input ref={editVideoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]; e.target.value = "";
+                        if (!f) return;
+                        if (f.size > 20_000_000) { toast.error("Video too large (>20 MB)"); return; }
+                        const b64 = await fileToBase64(f);
+                        setEditMedia({ kind: "video", base64: b64, mime: f.type || "video/mp4", filename: f.name });
+                        clearEditImage();
+                      }} />
+                    {editMedia && (
+                      <div className="mt-2 text-[11px] text-muted-foreground">
+                        Attached: <strong>{editMedia.filename}</strong> ({editMedia.kind})
+                        {editMedia.kind === "video" && (
+                          <video src={`data:${editMedia.mime};base64,${editMedia.base64}`} controls className="mt-2 max-h-40 w-full rounded-md" />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
+
               ) : (
                 <>
                   {editing.kind === "outbound_email" && (

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { PDFDocument } from "pdf-lib";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { chatCompletion } from "@/server/llm.server";
@@ -8,7 +9,35 @@ import { chatCompletion } from "@/server/llm.server";
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";
 const LINKEDIN_GATEWAY = "https://connector-gateway.lovable.dev/linkedin";
 
-async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null) {
+// LinkedIn document carousels: max 10 pages
+const PDF_MAX_PAGES = 10;
+
+type LiMediaKind = "image" | "pdf" | "video";
+
+function pickLiMedia(payload: Record<string, any>): {
+  kind: LiMediaKind;
+  base64: string;
+  mime: string;
+  filename: string;
+} | null {
+  const mk = payload.mediaKind as LiMediaKind | undefined;
+  const mb = payload.mediaBase64 as string | undefined;
+  if (mk && mb) {
+    return {
+      kind: mk,
+      base64: mb,
+      mime: payload.mediaMime ?? (mk === "pdf" ? "application/pdf" : mk === "video" ? "video/mp4" : "image/png"),
+      filename: payload.mediaFilename ?? (mk === "pdf" ? "carousel.pdf" : mk === "video" ? "clip.mp4" : "image.png"),
+    };
+  }
+  if (payload.imageBase64) {
+    return { kind: "image", base64: payload.imageBase64, mime: "image/png", filename: "image.png" };
+  }
+  return null;
+}
+
+
+async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pickLiMedia>) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const liKey = process.env.LINKEDIN_API_KEY;
   if (!lovableKey || !liKey) throw new Error("Workspace LinkedIn connector not configured");
@@ -24,13 +53,40 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
   const author = `urn:li:person:${sub}`;
 
   let mediaAsset: string | null = null;
-  if (imageBase64) {
+  let shareMediaCategory: "NONE" | "IMAGE" | "DOCUMENT" | "VIDEO" = "NONE";
+
+  if (media) {
+    const recipeByKind: Record<LiMediaKind, string> = {
+      image: "urn:li:digitalmediaRecipe:feedshare-image",
+      pdf: "urn:li:digitalmediaRecipe:feedshare-document",
+      video: "urn:li:digitalmediaRecipe:feedshare-video",
+    };
+    const categoryByKind: Record<LiMediaKind, "IMAGE" | "DOCUMENT" | "VIDEO"> = {
+      image: "IMAGE",
+      pdf: "DOCUMENT",
+      video: "VIDEO",
+    };
+
+    // PDF page-count guard
+    if (media.kind === "pdf") {
+      try {
+        const pdfDoc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+        const pages = pdfDoc.getPageCount();
+        if (pages > PDF_MAX_PAGES) {
+          throw new Error(`PDF carousel exceeds ${PDF_MAX_PAGES}-page limit (${pages} pages).`);
+        }
+      } catch (e: any) {
+        if (e?.message?.includes("PDF carousel")) throw e;
+        throw new Error(`Invalid PDF: ${e?.message ?? "could not parse"}`);
+      }
+    }
+
     const regRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
       method: "POST",
       headers: { ...wsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({
         registerUploadRequest: {
-          recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+          recipes: [recipeByKind[media.kind]],
           owner: author,
           serviceRelationships: [
             { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
@@ -46,11 +102,40 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
     if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
     const upload = await fetch(uploadUrl, {
       method: "PUT",
-      headers: { "Content-Type": "image/png" },
-      body: Buffer.from(imageBase64, "base64"),
+      headers: { "Content-Type": media.mime },
+      body: Buffer.from(media.base64, "base64"),
     });
-    if (!upload.ok) throw new Error(`LinkedIn image upload failed (${upload.status}): ${await upload.text()}`);
+    if (!upload.ok) throw new Error(`LinkedIn ${media.kind} upload failed (${upload.status}): ${await upload.text()}`);
+
+    // Video assets must reach AVAILABLE before posting. Poll up to ~60s.
+    if (media.kind === "video") {
+      const assetId = mediaAsset.split(":").pop();
+      const deadline = Date.now() + 60_000;
+      let available = false;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const stRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets/${assetId}`, { headers: wsHeaders });
+        if (!stRes.ok) continue;
+        const st = (await stRes.json()) as any;
+        const status = st?.recipes?.[0]?.status ?? st?.status;
+        if (status === "AVAILABLE") { available = true; break; }
+        if (status === "PROCESSING_FAILED" || status === "CLIENT_ERROR" || status === "SERVER_ERROR") {
+          throw new Error(`LinkedIn video processing failed: ${status}`);
+        }
+      }
+      if (!available) throw new Error("LinkedIn video processing timed out (>60s). Try again shortly.");
+    }
+
+    shareMediaCategory = categoryByKind[media.kind];
   }
+
+  const mediaArray = mediaAsset
+    ? [
+        media!.kind === "pdf"
+          ? { status: "READY", media: mediaAsset, title: { text: media!.filename.replace(/\.pdf$/i, "") } }
+          : { status: "READY", media: mediaAsset },
+      ]
+    : [];
 
   const body = mediaAsset
     ? {
@@ -59,8 +144,8 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
         specificContent: {
           "com.linkedin.ugc.ShareContent": {
             shareCommentary: { text },
-            shareMediaCategory: "IMAGE",
-            media: [{ status: "READY", media: mediaAsset }],
+            shareMediaCategory,
+            media: mediaArray,
           },
         },
         visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
@@ -85,6 +170,7 @@ async function postLinkedInAsWorkspace(text: string, imageBase64?: string | null
   if (!postRes.ok) throw new Error(`LinkedIn post failed (${postRes.status}): ${await postRes.text()}`);
   return postRes.json();
 }
+
 
 function base64url(input: string | Buffer) {
   const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
@@ -132,7 +218,7 @@ async function performSend(
   if (kind === "outbound_email" || kind === "outbound_reminder") {
     await sendGmailWorkspace(payload.to, payload.subject, payload.body);
   } else if (kind === "outbound_linkedin") {
-    await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
+    await postLinkedInAsWorkspace(payload.text, pickLiMedia(payload));
   }
 }
 
@@ -190,6 +276,11 @@ const ReminderReq = z.object({
 const LinkedInReq = z.object({
   text: z.string().min(1).max(3000),
   imageBase64: z.string().max(8_000_000).optional().nullable(),
+  // New unified media slot (image | pdf | video). Mutually exclusive w/ imageBase64.
+  mediaKind: z.enum(["image", "pdf", "video"]).optional().nullable(),
+  mediaBase64: z.string().max(28_000_000).optional().nullable(), // ~20MB binary
+  mediaMime: z.string().max(80).optional().nullable(),
+  mediaFilename: z.string().max(255).optional().nullable(),
   scheduled_at: ScheduledAt,
 });
 
@@ -322,10 +413,11 @@ export const listMyRequests = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw new Error(error.message);
-    // strip heavy imageBase64 from list payloads
+    // strip heavy media blobs from list payloads
     const rows = (data ?? []).map((r: any) => {
       const p = { ...(r.payload ?? {}) };
       if (p.imageBase64) p.imageBase64 = "[image]";
+      if (p.mediaBase64) p.mediaBase64 = `[${p.mediaKind ?? "media"}]`;
       return { ...r, payload: p };
     });
     return { rows };
@@ -398,11 +490,21 @@ export const updateOutboundDraft = createServerFn({ method: "POST" })
     if (error || !row) throw new Error("Request not found");
     if (row.requester_id !== userId) throw new Error("Forbidden");
     if (row.status !== "pending") throw new Error(`Cannot edit a ${row.status} request`);
-    // Preserve imageBase64 (the list strips it) unless explicitly overwritten
+    // Preserve image/media blobs (list strips them) unless explicitly overwritten
     const prev = (row.payload ?? {}) as Record<string, any>;
     const merged: Record<string, any> = { ...prev, ...data.payload };
     if (data.payload.imageBase64 === undefined && prev.imageBase64) {
       merged.imageBase64 = prev.imageBase64;
+    }
+    if (data.payload.mediaBase64 === undefined && prev.mediaBase64) {
+      merged.mediaBase64 = prev.mediaBase64;
+      merged.mediaKind = prev.mediaKind;
+      merged.mediaMime = prev.mediaMime;
+      merged.mediaFilename = prev.mediaFilename;
+    }
+    // If new media is being set, clear the legacy image slot (mutual exclusion)
+    if (data.payload.mediaBase64) {
+      merged.imageBase64 = null;
     }
     const { error: upErr } = await supabaseAdmin
       .from("approvals")
@@ -660,3 +762,64 @@ export async function sendOwnerDigestEmail(to: string, subject: string, body: st
   if (!res.ok) throw new Error(`digest gmail send failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
+
+// ── AI video generation (Kling v3.0 Std via OpenRouter) ─────────────────
+// Returns a base64-encoded MP4 the client can attach to a LinkedIn draft.
+const KlingInput = z.object({ prompt: z.string().min(3).max(2000) });
+const OPENROUTER_VIDEO_URL = "https://openrouter.ai/api/v1/videos";
+const KLING_MODEL = "kwaivgi/kling-v3.0-std";
+
+export const generateKlingClipForOutbound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => KlingInput.parse(i))
+  .handler(async ({ data }) => {
+    const token = process.env.OPENROUTER_API_KEY;
+    if (!token) throw new Error("OPENROUTER_API_KEY missing");
+
+    const startRes = await fetch(OPENROUTER_VIDEO_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://lovable.app",
+        "X-Title": "VDNX Outbound",
+      },
+      body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt }),
+    });
+    const startText = await startRes.text();
+    if (!startRes.ok) throw new Error(`Kling start failed (${startRes.status}): ${startText.slice(0, 300)}`);
+    const job = JSON.parse(startText) as { id: string; polling_url?: string };
+    if (!job.id) throw new Error("Kling returned no job id");
+
+    const pollUrl = job.polling_url ?? `${OPENROUTER_VIDEO_URL}/${job.id}`;
+    const deadline = Date.now() + 240_000;
+    let videoUrl: string | null = null;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const pRes = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!pRes.ok) continue;
+      const st = (await pRes.json()) as any;
+      if (st.status === "completed") {
+        videoUrl = st.unsigned_urls?.[0] ?? st.signed_urls?.[0] ?? st.urls?.[0] ?? null;
+        break;
+      }
+      if (st.status === "failed") {
+        const detail = typeof st.error === "string" ? st.error : st.error?.message ?? "no detail";
+        throw new Error(`Kling failed: ${detail}`);
+      }
+    }
+    if (!videoUrl) throw new Error("Kling timed out (>4 min)");
+
+    const dl = await fetch(videoUrl);
+    if (!dl.ok) throw new Error(`Video download failed (${dl.status})`);
+    const buf = Buffer.from(await dl.arrayBuffer());
+    if (buf.byteLength > 20_000_000) {
+      throw new Error(`Generated video too large (${(buf.byteLength / 1_000_000).toFixed(1)} MB)`);
+    }
+    return {
+      base64: buf.toString("base64"),
+      mime: "video/mp4",
+      filename: `kling-${Date.now()}.mp4`,
+    };
+  });
+

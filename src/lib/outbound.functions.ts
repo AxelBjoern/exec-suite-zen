@@ -73,7 +73,13 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
       headers: { ...wsHeaders, ...liVersion, "Content-Type": "application/json" },
       body: JSON.stringify({ initializeUploadRequest: { owner: author } }),
     });
-    if (!initRes.ok) throw new Error(`LinkedIn document init failed (${initRes.status}): ${await initRes.text()}`);
+    if (!initRes.ok) {
+      const body = await initRes.text();
+      if (body.includes("NONEXISTENT_VERSION")) {
+        throw new Error(`LinkedIn document init failed (${initRes.status}): LinkedIn-Version header "${liVersion["LinkedIn-Version"]}" is no longer active. Bump it to a current YYYYMM in src/lib/outbound.functions.ts and src/routes/api/public/cron/scheduled-outbound.ts. Raw: ${body}`);
+      }
+      throw new Error(`LinkedIn document init failed (${initRes.status}): ${body}`);
+    }
     const init = (await initRes.json()) as any;
     const uploadUrl: string | undefined = init?.value?.uploadUrl;
     const documentUrn: string | undefined = init?.value?.document;

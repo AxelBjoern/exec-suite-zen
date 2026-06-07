@@ -292,10 +292,13 @@ function OutboundPage() {
     setEditImgFinal(false);
     setCarouselVariants([]);
     setEditImgDescription("");
+    setEditMedia(null);
+    setEditKlingPrompt("");
+    const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
-      setEditDraft({ text: p.text ?? "", scheduled_at: p.scheduled_at ?? "" });
+      setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
     } else {
-      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: p.scheduled_at ?? "" });
+      setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: localSched });
     }
   }
 
@@ -309,6 +312,8 @@ function OutboundPage() {
     setEditImgFinal(false);
     setCarouselVariants([]);
     setEditImgDescription("");
+    setEditMedia(null);
+    setEditKlingPrompt("");
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -316,10 +321,23 @@ function OutboundPage() {
     setEditBusy(opts.send ? "send" : "save");
     try {
       const payload: Record<string, any> = { ...editDraft };
-      // Strip the "[image]" sentinel so we don't overwrite the stored bytes
+      // Convert local datetime → real ISO with offset for the server / cron
+      payload.scheduled_at = localToIso(editDraft.scheduled_at) ?? null;
+      // Strip sentinels so we don't overwrite the stored bytes
       if (payload.imageBase64 === "[image]") delete payload.imageBase64;
-      if (editing.kind === "outbound_linkedin" && editImgFinal && editImgB64) {
-        payload.imageBase64 = editImgB64;
+      if (typeof payload.mediaBase64 === "string" && payload.mediaBase64.startsWith("[")) {
+        delete payload.mediaBase64; delete payload.mediaKind; delete payload.mediaMime; delete payload.mediaFilename;
+      }
+      if (editing.kind === "outbound_linkedin") {
+        if (editMedia) {
+          payload.mediaKind = editMedia.kind;
+          payload.mediaBase64 = editMedia.base64;
+          payload.mediaMime = editMedia.mime;
+          payload.mediaFilename = editMedia.filename;
+          payload.imageBase64 = null;
+        } else if (editImgFinal && editImgB64) {
+          payload.imageBase64 = editImgB64;
+        }
       }
       await updateDraft({ data: { id: editing.id, payload } });
       if (opts.send) {

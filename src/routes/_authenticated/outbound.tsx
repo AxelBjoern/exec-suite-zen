@@ -486,7 +486,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "email" || !email.to || !email.subject || !email.body}
               onClick={() =>
-                run("email", () => reqEmail({ data: email }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
+                run("email", () => reqEmail({ data: { ...email, scheduled_at: localToIso(email.scheduled_at) } }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })

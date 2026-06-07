@@ -47,7 +47,7 @@ function ArchivePage() {
       await setArchived({ data: { id, archived: false } });
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["outbound", "archive"] }),
-        qc.invalidateQueries({ queryKey: ["outbound", "my-requests"] }),
+        qc.invalidateQueries({ queryKey: ["my-outbound"] }),
       ]);
       toast.success("Restored");
     } catch (e) {

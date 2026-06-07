@@ -66,10 +66,7 @@ export const Route = createFileRoute("/_authenticated/outbound")({
   notFoundComponent: () => <div className="p-8 text-sm">Not found.</div>,
 });
 
-const inputCls =
-  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
-const btnCls =
-  "inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
+
 
 function DropZone({
   value,

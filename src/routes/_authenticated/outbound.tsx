@@ -290,6 +290,7 @@ function OutboundPage() {
   const [postSchedule, setPostSchedule] = useState("");
   const [liOpen, setLiOpen] = useState(false);
   const [listOpen, setListOpen] = useState(true);
+  const [rowOpen, setRowOpen] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<any | null>(null);

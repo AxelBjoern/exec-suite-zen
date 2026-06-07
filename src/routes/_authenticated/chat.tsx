@@ -71,6 +71,7 @@ import {
   type Msg,
   type Conversation,
 } from "@/lib/chat-helpers";
+import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({

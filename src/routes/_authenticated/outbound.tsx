@@ -1116,11 +1116,10 @@ function OutboundPage() {
                     onClick={async () => {
                       setKlingBusy(true);
                       setKlingElapsed(0);
-                      setNarrationAudio(null);
                       try {
                         const r = await runKlingFlow({
                           prompt: klingPrompt,
-                          narration: klingNarration.trim() || undefined,
+                          narration: klingNarration.trim() || post.trim() || undefined,
                           onTick: (s) => setKlingElapsed(s),
                         });
                         setPostMedia(r.media);
@@ -1133,24 +1132,13 @@ function OutboundPage() {
                     {klingBusy ? "Generating…" : "Generate clip"}
                   </button>
                 </div>
-                <textarea
-                  className={inputCls + " w-full"}
-                  rows={2}
-                  placeholder="Optional narration (ElevenLabs voice: Sarah) — leave empty for silent clip"
-                  value={klingNarration}
-                  onChange={(e) => setKlingNarration(e.target.value)}
-                  disabled={klingBusy}
-                />
+                <p className="text-[10px] text-muted-foreground">
+                  Narration is generated automatically from your LinkedIn post text.
+                </p>
                 {klingBusy && (
                   <p className="text-[10px] text-muted-foreground">
                     Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} (Kling typically takes 2–5 min)
                   </p>
-                )}
-                {narrationAudio && (
-                  <div className="rounded-md border border-border bg-muted/40 p-2">
-                    <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Narration preview (ElevenLabs)</div>
-                    <audio controls className="w-full" src={`data:${narrationAudio.mime};base64,${narrationAudio.base64}`} />
-                  </div>
                 )}
               </div>
             </div>

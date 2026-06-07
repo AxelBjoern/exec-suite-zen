@@ -218,7 +218,7 @@ async function performSend(
   if (kind === "outbound_email" || kind === "outbound_reminder") {
     await sendGmailWorkspace(payload.to, payload.subject, payload.body);
   } else if (kind === "outbound_linkedin") {
-    await postLinkedInAsWorkspace(payload.text, payload.imageBase64 ?? null);
+    await postLinkedInAsWorkspace(payload.text, pickLiMedia(payload));
   }
 }
 

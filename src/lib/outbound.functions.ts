@@ -276,6 +276,11 @@ const ReminderReq = z.object({
 const LinkedInReq = z.object({
   text: z.string().min(1).max(3000),
   imageBase64: z.string().max(8_000_000).optional().nullable(),
+  // New unified media slot (image | pdf | video). Mutually exclusive w/ imageBase64.
+  mediaKind: z.enum(["image", "pdf", "video"]).optional().nullable(),
+  mediaBase64: z.string().max(28_000_000).optional().nullable(), // ~20MB binary
+  mediaMime: z.string().max(80).optional().nullable(),
+  mediaFilename: z.string().max(255).optional().nullable(),
   scheduled_at: ScheduledAt,
 });
 

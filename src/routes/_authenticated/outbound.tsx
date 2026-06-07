@@ -23,6 +23,7 @@ import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
 import { streamImage } from "@/lib/streamImage";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
@@ -55,6 +56,20 @@ async function fileToBase64(f: File): Promise<string> {
     bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
   }
   return btoa(bin);
+}
+
+const ACCEPT_MIME = {
+  image: "image/png,image/jpeg,image/webp,image/jpg",
+  pdf: "application/pdf",
+  video: "video/mp4,video/quicktime,video/mov",
+};
+const MAX_SIZE = { image: 6_000_000, pdf: 12_000_000, video: 20_000_000 };
+
+function mimeKind(mime: string): "image" | "pdf" | "video" | null {
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("video/")) return "video";
+  return null;
 }
 
 export const Route = createFileRoute("/_authenticated/outbound")({
@@ -108,6 +123,104 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function DropZone({
+  value,
+  onChange,
+  onClear,
+  disabled,
+  dragOver,
+  setDragOver,
+  label = "Drop image, PDF or video here",
+}: {
+  value: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string } | null;
+  onChange: (v: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string }) => void;
+  onClear: () => void;
+  disabled?: boolean;
+  dragOver: boolean;
+  setDragOver: (v: boolean) => void;
+  label?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || !files.length) return;
+    const f = files[0];
+    const kind = mimeKind(f.type);
+    if (!kind) {
+      toast.error("Only images (PNG/JPG/WebP), PDFs or MP4/MOV videos allowed.");
+      return;
+    }
+    const limit = MAX_SIZE[kind];
+    if (f.size > limit) {
+      toast.error(`${kind} too large (> ${Math.round(limit / 1e6)} MB)`);
+      return;
+    }
+    const b64 = await fileToBase64(f);
+    onChange({ kind, base64: b64, mime: f.type || (kind === "image" ? "image/png" : kind === "pdf" ? "application/pdf" : "video/mp4"), filename: f.name });
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative rounded-lg border-2 border-dashed p-6 text-center transition",
+        dragOver ? "border-primary bg-primary/5" : "border-border bg-background/40",
+        disabled && "opacity-50 pointer-events-none",
+      )}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+      onClick={() => inputRef.current?.click()}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={`${ACCEPT_MIME.image},${ACCEPT_MIME.pdf},${ACCEPT_MIME.video}`}
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      {value ? (
+        <div className="flex flex-col items-center gap-2">
+          {value.kind === "image" && (
+            <img
+              src={`data:${value.mime};base64,${value.base64}`}
+              alt={value.filename}
+              className="h-auto max-h-40 w-auto max-w-full rounded-md object-contain"
+            />
+          )}
+          {value.kind === "video" && (
+            <video src={`data:${value.mime};base64,${value.base64}`} controls className="max-h-40 w-full rounded-md" />
+          )}
+          {value.kind === "pdf" && (
+            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+              <FileText className="h-5 w-5 text-primary" />
+              <span className="max-w-[200px] truncate">{value.filename}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="uppercase tracking-wider">{value.kind}</span>
+            <span>~{Math.round(value.base64.length * 0.75 / 1024)} KB</span>
+          </div>
+          <button
+            type="button"
+            className="mt-1 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+            onClick={(e) => { e.stopPropagation(); onClear(); }}
+          >
+            <Trash2 className="h-3 w-3" /> Remove
+          </button>
+        </div>
+      ) : (
+        <>
+          <Upload className={cn("mx-auto mb-2 h-8 w-8", dragOver ? "text-primary" : "text-muted-foreground")} />
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            PNG, JPG, WebP, PDF or MP4/MOV
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function OutboundPage() {
   const qc = useQueryClient();
   const search = useSearch({ from: "/_authenticated/outbound" });
@@ -149,10 +262,12 @@ function OutboundPage() {
   const [editImgDescription, setEditImgDescription] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
   // edit-modal: pdf / video media
-  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [editMedia, setEditMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
+  // drag-drop state
+  const [dragOver, setDragOver] = useState(false);
 
   // LinkedIn image gen state
   const [imgB64, setImgB64] = useState<string | null>(null);
@@ -162,11 +277,13 @@ function OutboundPage() {
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
   // LinkedIn pdf/video media (main card)
-  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  // main card drag-drop
+  const [mainDragOver, setMainDragOver] = useState(false);
 
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);
@@ -297,6 +414,10 @@ function OutboundPage() {
     const localSched = isoToLocal(p.scheduled_at);
     if (r.kind === "outbound_linkedin") {
       setEditDraft({ text: p.text ?? "", scheduled_at: localSched });
+      // restore existing media into drop-zone state
+      if (p.mediaBase64 && !p.mediaBase64.startsWith("[") && p.mediaKind) {
+        setEditMedia({ kind: p.mediaKind as "image" | "pdf" | "video", base64: p.mediaBase64, mime: p.mediaMime || "", filename: p.mediaFilename || "" });
+      }
     } else {
       setEditDraft({ to: p.to ?? "", subject: p.subject ?? "", body: p.body ?? "", scheduled_at: localSched });
     }
@@ -603,29 +724,21 @@ function OutboundPage() {
               )}
             </div>
 
-            {/* PDF carousel + video controls */}
+            {/* Drag & drop media zone */}
             <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {postMedia?.kind === "pdf" ? <FileText className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
-                  PDF carousel (max 10 pages) or video
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                    onClick={() => pdfInputRef.current?.click()} disabled={klingBusy}>
-                    <FileText className="h-3 w-3" /> Upload PDF
-                  </button>
-                  <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                    onClick={() => videoInputRef.current?.click()} disabled={klingBusy}>
-                    <Upload className="h-3 w-3" /> Upload video
-                  </button>
-                  {postMedia && (
-                    <button type="button" className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
-                      onClick={() => setPostMedia(null)}>Remove</button>
-                  )}
-                </div>
+              <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Upload className="h-3.5 w-3.5" />
+                Media (image, PDF carousel or video)
               </div>
-              <div className="flex gap-2">
+              <DropZone
+                value={postMedia}
+                onChange={(v) => { setPostMedia(v); if (v.kind === "image") clearImage(); }}
+                onClear={() => setPostMedia(null)}
+                disabled={klingBusy}
+                dragOver={mainDragOver}
+                setDragOver={setMainDragOver}
+              />
+              <div className="mt-3 flex gap-2">
                 <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
                   value={klingPrompt} onChange={(e) => setKlingPrompt(e.target.value)} disabled={klingBusy} />
                 <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
@@ -644,34 +757,6 @@ function OutboundPage() {
                   {klingBusy ? "Generating…" : "Generate clip"}
                 </button>
               </div>
-              <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]; e.target.value = "";
-                  if (!f) return;
-                  if (f.size > 12_000_000) { toast.error("PDF too large (>12 MB)"); return; }
-                  const b64 = await fileToBase64(f);
-                  setPostMedia({ kind: "pdf", base64: b64, mime: "application/pdf", filename: f.name });
-                  clearImage();
-                  toast.success("PDF attached — server checks page count on send");
-                }} />
-              <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]; e.target.value = "";
-                  if (!f) return;
-                  if (f.size > 20_000_000) { toast.error("Video too large (>20 MB)"); return; }
-                  const b64 = await fileToBase64(f);
-                  setPostMedia({ kind: "video", base64: b64, mime: f.type || "video/mp4", filename: f.name });
-                  clearImage();
-                  toast.success("Video attached");
-                }} />
-              {postMedia && (
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                  Attached: <strong>{postMedia.filename}</strong> ({postMedia.kind}, ~{Math.round(postMedia.base64.length * 0.75 / 1024)} KB)
-                  {postMedia.kind === "video" && (
-                    <video src={`data:${postMedia.mime};base64,${postMedia.base64}`} controls className="mt-2 max-h-48 w-full rounded-md" />
-                  )}
-                </div>
-              )}
             </div>
 
             <button
@@ -915,36 +1000,26 @@ function OutboundPage() {
                     )}
                   </div>
 
-                  {/* PDF carousel + video for edit modal */}
+                  {/* Drag & drop media zone for edit modal */}
                   <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {editMedia?.kind === "pdf" ? <FileText className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
-                        PDF carousel (max 10 pages) / video
-                        {!editMedia && (editDraft.mediaBase64 || "").startsWith("[") && (
-                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
-                            {editDraft.mediaKind ?? "media"} attached
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                          onClick={() => editPdfInputRef.current?.click()} disabled={!!editBusy}>
-                          <FileText className="h-3 w-3" /> Upload PDF
-                        </button>
-                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                          onClick={() => editVideoInputRef.current?.click()} disabled={!!editBusy}>
-                          <Upload className="h-3 w-3" /> Upload video
-                        </button>
-                        {(editMedia || (editDraft.mediaBase64 || "").startsWith("[")) && (
-                          <button type="button" className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
-                            onClick={() => { setEditMedia(null); setEditDraft({ ...editDraft, mediaBase64: "", mediaKind: "", mediaMime: "", mediaFilename: "" }); }}>
-                            Remove
-                          </button>
-                        )}
-                      </div>
+                    <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Upload className="h-3.5 w-3.5" />
+                      Media (image, PDF carousel or video)
+                      {!editMedia && (editDraft.mediaBase64 || "").startsWith("[") && (
+                        <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
+                          {editDraft.mediaKind ?? "media"} attached
+                        </span>
+                      )}
                     </div>
-                    <div className="flex gap-2">
+                    <DropZone
+                      value={editMedia}
+                      onChange={(v) => { setEditMedia(v); if (v.kind === "image") clearEditImage(); }}
+                      onClear={() => { setEditMedia(null); setEditDraft({ ...editDraft, mediaBase64: "", mediaKind: "", mediaMime: "", mediaFilename: "" }); }}
+                      disabled={!!editBusy}
+                      dragOver={dragOver}
+                      setDragOver={setDragOver}
+                    />
+                    <div className="mt-3 flex gap-2">
                       <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
                         value={editKlingPrompt} onChange={(e) => setEditKlingPrompt(e.target.value)} disabled={!!editBusy} />
                       <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
@@ -963,32 +1038,6 @@ function OutboundPage() {
                         {editBusy === "kling" ? "Generating…" : "Generate"}
                       </button>
                     </div>
-                    <input ref={editPdfInputRef} type="file" accept="application/pdf" className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]; e.target.value = "";
-                        if (!f) return;
-                        if (f.size > 12_000_000) { toast.error("PDF too large (>12 MB)"); return; }
-                        const b64 = await fileToBase64(f);
-                        setEditMedia({ kind: "pdf", base64: b64, mime: "application/pdf", filename: f.name });
-                        clearEditImage();
-                      }} />
-                    <input ref={editVideoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]; e.target.value = "";
-                        if (!f) return;
-                        if (f.size > 20_000_000) { toast.error("Video too large (>20 MB)"); return; }
-                        const b64 = await fileToBase64(f);
-                        setEditMedia({ kind: "video", base64: b64, mime: f.type || "video/mp4", filename: f.name });
-                        clearEditImage();
-                      }} />
-                    {editMedia && (
-                      <div className="mt-2 text-[11px] text-muted-foreground">
-                        Attached: <strong>{editMedia.filename}</strong> ({editMedia.kind})
-                        {editMedia.kind === "video" && (
-                          <video src={`data:${editMedia.mime};base64,${editMedia.base64}`} controls className="mt-2 max-h-40 w-full rounded-md" />
-                        )}
-                      </div>
-                    )}
                   </div>
                 </>
 

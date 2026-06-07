@@ -162,7 +162,7 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
       set({ loading: false, error: error.message });
       return;
     }
-    const scenarios = (data ?? []).map(rowToScenario);
+    const scenarios: Scenario[] = ((data ?? []) as RemoteRow[]).map(rowToScenario);
     set({ loading: false, loaded: true, scenarios });
     // Ensure UI has an active selection.
     const ui = useBudgetUi.getState();

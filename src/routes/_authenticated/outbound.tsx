@@ -96,17 +96,51 @@ const inputCls =
 const btnCls =
   "inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50";
 
-function Card({ title, icon: Icon, children, refEl }: { title: string; icon: typeof Mail; children: React.ReactNode; refEl?: React.Ref<HTMLElement> }) {
+function Card({
+  title,
+  icon: Icon,
+  children,
+  refEl,
+  collapsible,
+  open,
+  onToggle,
+  headerRight,
+}: {
+  title: string;
+  icon: typeof Mail;
+  children: React.ReactNode;
+  refEl?: React.Ref<HTMLElement>;
+  collapsible?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
+  headerRight?: React.ReactNode;
+}) {
+  const isOpen = collapsible ? !!open : true;
   return (
     <section ref={refEl} className="rounded-lg border border-border bg-panel p-5">
       <div className="mb-4 flex items-center gap-2">
         <Icon className="h-4 w-4 text-primary" />
         <h2 className="font-serif text-lg font-semibold">{title}</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {headerRight}
+          {collapsible && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              aria-expanded={isOpen}
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              {isOpen ? "Hide" : "Open"}
+            </button>
+          )}
+        </div>
       </div>
-      {children}
+      {isOpen && children}
     </section>
   );
 }
+
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { icon: typeof Clock; cls: string; label: string }> = {

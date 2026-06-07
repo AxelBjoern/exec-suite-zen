@@ -159,10 +159,11 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
       reg?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
     mediaAsset = reg?.value?.asset ?? null;
     if (!uploadUrl || !mediaAsset) throw new Error("LinkedIn registerUpload missing upload URL/asset");
+    const mediaBytesBase64 = await resolveMediaBase64(media);
     const upload = await fetch(uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": media.mime },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(Buffer.from(mediaBytesBase64, "base64")),
     });
     if (!upload.ok) throw new Error(`LinkedIn ${media.kind} upload failed (${upload.status}): ${await upload.text()}`);
 

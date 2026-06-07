@@ -38,16 +38,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowLeft,
   Send,
   Trash2,
   Loader2,
   Paperclip,
   X,
   FileText,
-  Plus,
-  MessageSquare,
-  Pencil,
   FileDown,
   FileType,
   Copy,

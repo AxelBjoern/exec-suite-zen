@@ -30,6 +30,33 @@ async function authHeader(): Promise<Record<string, string>> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+// Convert "YYYY-MM-DDTHH:mm" (browser local) → real ISO string w/ offset.
+// Without this, the server reads the string as UTC and schedules fire at the
+// wrong wall-clock time for anyone outside UTC.
+function localToIso(local: string | null | undefined): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+function isoToLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+async function fileToBase64(f: File): Promise<string> {
+  const buf = await f.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return btoa(bin);
+}
+
 export const Route = createFileRoute("/_authenticated/outbound")({
   validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),
   head: () => ({

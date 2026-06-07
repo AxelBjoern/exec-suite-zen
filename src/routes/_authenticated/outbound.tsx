@@ -42,6 +42,7 @@ import {
 } from "@/lib/outbound-helpers";
 import type { MediaValue } from "@/lib/outbound-helpers";
 import { Card, StatusBadge } from "@/components/outbound/Card";
+import { DropZone } from "@/components/outbound/DropZone";
 
 const authHeader = async (): Promise<Record<string, string>> => {
   const { data } = await supabase.auth.getSession();

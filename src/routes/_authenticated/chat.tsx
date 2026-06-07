@@ -2,8 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   getCeoChat,
   sendCeoMessage,
@@ -15,7 +13,6 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
-import { filePlanFromChat } from "@/lib/outbound.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 import { isVdnxOwnerEmail } from "@/lib/vdnx";

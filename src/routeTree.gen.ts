@@ -20,6 +20,7 @@ import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/c
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenticated/budget.index'
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
@@ -84,6 +85,12 @@ const AuthenticatedSettingsIndexRoute =
     path: '/settings/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBudgetIndexRoute =
+  AuthenticatedBudgetIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
 const ApiPublicGenerateLinkedinImageRoute =
   ApiPublicGenerateLinkedinImageRouteImport.update({
     id: '/api/public/generate-linkedin-image',
@@ -137,7 +144,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
-  '/budget': typeof AuthenticatedBudgetRoute
+  '/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/budget/': typeof AuthenticatedBudgetIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -156,7 +164,6 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
-  '/budget': typeof AuthenticatedBudgetRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/budget': typeof AuthenticatedBudgetIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -178,7 +186,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
-  '/_authenticated/budget': typeof AuthenticatedBudgetRoute
+  '/_authenticated/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
   '/_authenticated/outbound': typeof AuthenticatedOutboundRoute
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/_authenticated/budget/': typeof AuthenticatedBudgetIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/budget/'
     | '/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -220,7 +230,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/approvals'
-    | '/budget'
     | '/chat'
     | '/forge'
     | '/outbound'
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/budget'
     | '/settings'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/_authenticated/budget/'
     | '/_authenticated/settings/'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -349,6 +360,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/budget/': {
+      id: '/_authenticated/budget/'
+      path: '/'
+      fullPath: '/budget/'
+      preLoaderRoute: typeof AuthenticatedBudgetIndexRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
     '/api/public/generate-linkedin-image': {
       id: '/api/public/generate-linkedin-image'
       path: '/api/public/generate-linkedin-image'
@@ -408,9 +426,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedBudgetRouteChildren {
+  AuthenticatedBudgetIndexRoute: typeof AuthenticatedBudgetIndexRoute
+}
+
+const AuthenticatedBudgetRouteChildren: AuthenticatedBudgetRouteChildren = {
+  AuthenticatedBudgetIndexRoute: AuthenticatedBudgetIndexRoute,
+}
+
+const AuthenticatedBudgetRouteWithChildren =
+  AuthenticatedBudgetRoute._addFileChildren(AuthenticatedBudgetRouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
-  AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRoute
+  AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRouteWithChildren
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
   AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRoute
@@ -423,7 +452,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
-  AuthenticatedBudgetRoute: AuthenticatedBudgetRoute,
+  AuthenticatedBudgetRoute: AuthenticatedBudgetRouteWithChildren,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
   AuthenticatedOutboundRoute: AuthenticatedOutboundRoute,
@@ -451,3 +480,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

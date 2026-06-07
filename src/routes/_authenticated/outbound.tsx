@@ -309,6 +309,8 @@ function OutboundPage() {
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
+  const [editKlingNarration, setEditKlingNarration] = useState("");
+  const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
 
@@ -322,7 +324,9 @@ function OutboundPage() {
   // LinkedIn pdf/video media (main card)
   const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
+  const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
+  const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop
@@ -469,6 +473,8 @@ function OutboundPage() {
     setEditImgDescription("");
     setEditMedia(null);
     setEditKlingPrompt("");
+    setEditKlingNarration("");
+    setEditNarrationAudio(null);
     try {
       const full = await fetchFull({ data: { id: r.id } });
       if (full?.payload) p = full.payload;
@@ -509,6 +515,8 @@ function OutboundPage() {
     setEditImgDescription("");
     setEditMedia(null);
     setEditKlingPrompt("");
+    setEditKlingNarration("");
+    setEditNarrationAudio(null);
   }
 
   async function saveEdit(opts: { send: boolean }) {
@@ -967,26 +975,48 @@ function OutboundPage() {
                 dragOver={mainDragOver}
                 setDragOver={setMainDragOver}
               />
-              <div className="mt-3 flex gap-2">
-                <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
-                  value={klingPrompt} onChange={(e) => setKlingPrompt(e.target.value)} disabled={klingBusy} />
-                <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                  disabled={klingBusy || !klingPrompt.trim()}
-                  onClick={async () => {
-                    setKlingBusy(true);
-                    try {
-                      const r = await genKling({ data: { prompt: klingPrompt } });
-                      setPostMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                      toast.success("Kling clip ready");
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : "Kling generation failed");
-                    } finally { setKlingBusy(false); }
-                  }}>
-                  {klingBusy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                  {klingBusy ? "Generating…" : "Generate clip"}
-                </button>
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <input className={inputCls + " flex-1"} placeholder="Describe a clip to generate with Kling…"
+                    value={klingPrompt} onChange={(e) => setKlingPrompt(e.target.value)} disabled={klingBusy} />
+                  <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                    disabled={klingBusy || !klingPrompt.trim()}
+                    onClick={async () => {
+                      setKlingBusy(true);
+                      setNarrationAudio(null);
+                      try {
+                        const r = await genKling({ data: { prompt: klingPrompt, narration: klingNarration.trim() || undefined } });
+                        setPostMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
+                        if (r.audioBase64 && r.audioMime) setNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
+                        toast.success("Kling clip ready");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Kling generation failed");
+                      } finally { setKlingBusy(false); }
+                    }}>
+                    {klingBusy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {klingBusy ? "Generating…" : "Generate clip"}
+                  </button>
+                </div>
+                <textarea
+                  className={inputCls + " w-full"}
+                  rows={2}
+                  placeholder="Optional narration (ElevenLabs voice: Sarah) — leave empty for silent clip"
+                  value={klingNarration}
+                  onChange={(e) => setKlingNarration(e.target.value)}
+                  disabled={klingBusy}
+                />
+                {klingBusy && (
+                  <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                )}
+                {narrationAudio && (
+                  <div className="rounded-md border border-border bg-muted/40 p-2">
+                    <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Narration preview (ElevenLabs)</div>
+                    <audio controls className="w-full" src={`data:${narrationAudio.mime};base64,${narrationAudio.base64}`} />
+                  </div>
+                )}
               </div>
             </div>
+
 
             <button
               className={btnCls}
@@ -1168,24 +1198,45 @@ function OutboundPage() {
                       dragOver={dragOver}
                       setDragOver={setDragOver}
                     />
-                    <div className="mt-3 flex gap-2">
-                      <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
-                        value={editKlingPrompt} onChange={(e) => setEditKlingPrompt(e.target.value)} disabled={!!editBusy} />
-                      <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                        disabled={!!editBusy || !editKlingPrompt.trim()}
-                        onClick={async () => {
-                          setEditBusy("kling");
-                          try {
-                            const r = await genKling({ data: { prompt: editKlingPrompt } });
-                            setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                            toast.success("Kling clip ready");
-                          } catch (e) {
-                            toast.error(e instanceof Error ? e.message : "Kling failed");
-                          } finally { setEditBusy(null); }
-                        }}>
-                        {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        {editBusy === "kling" ? "Generating…" : "Generate"}
-                      </button>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <input className={inputCls + " flex-1"} placeholder="Describe a clip to generate with Kling…"
+                          value={editKlingPrompt} onChange={(e) => setEditKlingPrompt(e.target.value)} disabled={!!editBusy} />
+                        <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          disabled={!!editBusy || !editKlingPrompt.trim()}
+                          onClick={async () => {
+                            setEditBusy("kling");
+                            setEditNarrationAudio(null);
+                            try {
+                              const r = await genKling({ data: { prompt: editKlingPrompt, narration: editKlingNarration.trim() || undefined } });
+                              setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
+                              if (r.audioBase64 && r.audioMime) setEditNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
+                              toast.success("Kling clip ready");
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Kling failed");
+                            } finally { setEditBusy(null); }
+                          }}>
+                          {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          {editBusy === "kling" ? "Generating…" : "Generate"}
+                        </button>
+                      </div>
+                      <textarea
+                        className={inputCls + " w-full"}
+                        rows={2}
+                        placeholder="Optional narration (ElevenLabs voice: Sarah) — leave empty for silent clip"
+                        value={editKlingNarration}
+                        onChange={(e) => setEditKlingNarration(e.target.value)}
+                        disabled={!!editBusy}
+                      />
+                      {editBusy === "kling" && (
+                        <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                      )}
+                      {editNarrationAudio && (
+                        <div className="rounded-md border border-border bg-muted/40 p-2">
+                          <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Narration preview (ElevenLabs)</div>
+                          <audio controls className="w-full" src={`data:${editNarrationAudio.mime};base64,${editNarrationAudio.base64}`} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

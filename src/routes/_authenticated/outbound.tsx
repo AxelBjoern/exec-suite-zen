@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, CheckCircle2, XCircle, AlertTriangle, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive,
+  Mail, BellRing, Linkedin, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, Archive,
 } from "lucide-react";
 import {
   requestEmail,
@@ -29,53 +29,25 @@ import { decodeDraft } from "@/lib/draftLink";
 import { streamImage } from "@/lib/streamImage";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  ACCEPT_MIME,
+  MAX_SIZE,
+  inputCls,
+  btnCls,
+  mimeKind,
+  localToIso,
+  isoToLocal,
+  fileToBase64,
+  mediaSrc,
+  type MediaValue,
+} from "@/lib/outbound-helpers";
+import { Card, StatusBadge } from "@/components/outbound/Card";
 
 const authHeader = async (): Promise<Record<string, string>> => {
   const { data } = await supabase.auth.getSession();
   const t = data.session?.access_token;
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
-
-// Convert "YYYY-MM-DDTHH:mm" (browser local) → real ISO string w/ offset.
-// Without this, the server reads the string as UTC and schedules fire at the
-// wrong wall-clock time for anyone outside UTC.
-function localToIso(local: string | null | undefined): string | null {
-  if (!local) return null;
-  const d = new Date(local);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-function isoToLocal(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-async function fileToBase64(f: File): Promise<string> {
-  const buf = await f.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
-  }
-  return btoa(bin);
-}
-
-const ACCEPT_MIME = {
-  image: "image/png,image/jpeg,image/webp,image/jpg",
-  pdf: "application/pdf",
-  video: "video/mp4,video/quicktime,video/mov",
-};
-const MAX_SIZE = { image: 6_000_000, pdf: 12_000_000, video: 20_000_000 };
-
-function mimeKind(mime: string): "image" | "pdf" | "video" | null {
-  if (mime.startsWith("image/")) return "image";
-  if (mime === "application/pdf") return "pdf";
-  if (mime.startsWith("video/")) return "video";
-  return null;
-}
 
 export const Route = createFileRoute("/_authenticated/outbound")({
   validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),

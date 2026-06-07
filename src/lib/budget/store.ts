@@ -107,6 +107,8 @@ interface RemoteState {
   resetActive: (id: string) => void;
   /** force-flush any pending debounced writes (e.g. before navigation/unload). */
   flush: () => Promise<void>;
+  /** subscribe to realtime updates on budget_scenarios; returns an unsubscribe fn. */
+  subscribeRealtime: () => () => void;
 }
 
 // Per-scenario debounced flush registry.
@@ -357,6 +359,39 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
   flush: async () => {
     const ids = Array.from(pendingTimers.keys());
     await Promise.all(ids.map((id) => flushScenario(id)));
+  },
+
+  subscribeRealtime: () => {
+    const channel = (supabase as any)
+      .channel("budget_scenarios_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "budget_scenarios" },
+        (payload: any) => {
+          const event = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+          if (event === "DELETE") {
+            const id = (payload.old as RemoteRow)?.id;
+            if (!id) return;
+            set((s) => ({ scenarios: s.scenarios.filter((x) => x.id !== id) }));
+            return;
+          }
+          const row = payload.new as RemoteRow | undefined;
+          if (!row) return;
+          // Skip echoes of our own pending writes.
+          if (pendingTimers.has(row.id)) return;
+          const sc = rowToScenario(row);
+          set((s) => {
+            const exists = s.scenarios.some((x) => x.id === sc.id);
+            return {
+              scenarios: exists
+                ? s.scenarios.map((x) => (x.id === sc.id ? sc : x))
+                : [sc, ...s.scenarios],
+            };
+          });
+        },
+      )
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
   },
 }));
 

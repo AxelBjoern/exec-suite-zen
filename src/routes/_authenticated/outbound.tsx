@@ -726,82 +726,107 @@ function OutboundPage() {
                 {data?.rows?.map((r: any) => {
                   const p = (r.payload ?? {}) as Record<string, string>;
                   const clickable = r.status === "pending";
+                  const isOpen = !!rowOpen[r.id];
+                  const summary = p.subject ?? p.text ?? p.to ?? "";
+                  const summaryLine = summary.split("\n")[0]?.slice(0, 120) ?? "";
                   return (
-                    <li
-                      key={r.id}
-                      className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
-                      onClick={clickable ? () => openEdit(r) : undefined}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="font-medium uppercase tracking-wider text-muted-foreground">
-                            {r.kind.replace("outbound_", "")}
+                    <li key={r.id} className="py-3">
+                      <div
+                        className={`flex items-start justify-between gap-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
+                        onClick={clickable ? () => openEdit(r) : undefined}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setRowOpen((s) => ({ ...s, [r.id]: !s[r.id] })); }}
+                              className="inline-flex items-center justify-center rounded-md border border-border p-1 text-muted-foreground hover:bg-muted"
+                              aria-expanded={isOpen}
+                              title={isOpen ? "Collapse" : "Expand"}
+                            >
+                              <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                            </button>
+                            <span className="font-medium uppercase tracking-wider text-muted-foreground">
+                              {r.kind.replace("outbound_", "")}
+                            </span>
+                            <StatusBadge status={r.status} />
+                            {clickable && (
+                              <span className="text-[10px] text-primary">Click to edit</span>
+                            )}
+                          </div>
+                          {!isOpen && summaryLine && (
+                            <p className="mt-1 truncate text-sm">{summaryLine}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(r.created_at).toLocaleString()}
                           </span>
-                          <StatusBadge status={r.status} />
-                          {clickable && (
-                            <span className="text-[10px] text-primary">Click to edit</span>
-                          )}
-                        </div>
-                        <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
-                        {p.scheduled_at && (
-                          <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
-                            <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
-                          </p>
-                        )}
-                        {r.notes && r.status !== "sent" && (
-                          <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(r.created_at).toLocaleString()}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {r.status === "pending" && !r.notes && (
+                          <div className="flex items-center gap-2">
+                            {r.status === "pending" && !r.notes && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                                disabled={rowBusy === r.id}
+                                onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                              >
+                                {rowBusy === r.id ? "Sending…" : "Send now"}
+                              </button>
+                            )}
+                            {r.notes && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                                disabled={rowBusy === r.id}
+                                onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                              >
+                                {rowBusy === r.id ? (
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                                {rowBusy === r.id ? "Retrying…" : "Retry"}
+                              </button>
+                            )}
                             <button
                               type="button"
-                              className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                              className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
                               disabled={rowBusy === r.id}
-                              onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                              onClick={(e) => { e.stopPropagation(); archiveItem(r.id); }}
+                              title="Archive"
                             >
-                              {rowBusy === r.id ? "Sending…" : "Send now"}
+                              <Archive className="h-3.5 w-3.5" />
                             </button>
-                          )}
-                          {r.notes && (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                              className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                               disabled={rowBusy === r.id}
-                              onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                              onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
+                              title="Delete"
                             >
-                              {rowBusy === r.id ? (
-                                <RefreshCw className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
-                              {rowBusy === r.id ? "Retrying…" : "Retry"}
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
-                            disabled={rowBusy === r.id}
-                            onClick={(e) => { e.stopPropagation(); archiveItem(r.id); }}
-                            title="Archive"
-                          >
-                            <Archive className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                            disabled={rowBusy === r.id}
-                            onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          </div>
                         </div>
                       </div>
+                      {isOpen && (
+                        <div className="mt-2 px-2 -mx-2">
+                          {summary && (
+                            <p className="whitespace-pre-wrap break-words text-sm">{summary}</p>
+                          )}
+                          {p.body && p.body !== summary && (
+                            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{p.body}</p>
+                          )}
+                          {p.scheduled_at && (
+                            <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
+                              <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
+                            </p>
+                          )}
+                          {r.notes && r.status !== "sent" && (
+                            <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

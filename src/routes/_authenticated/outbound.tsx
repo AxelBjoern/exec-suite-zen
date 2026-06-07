@@ -383,7 +383,7 @@ function OutboundPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start Kling + poll loop. Returns the resolved MediaValue (video).
+  // Start Kling + poll loop. Polls until completed or failed (no time cap).
   async function runKlingFlow(opts: {
     prompt: string;
     narration?: string;
@@ -391,11 +391,19 @@ function OutboundPage() {
   }): Promise<{ media: MediaValue }> {
     const started = Date.now();
     const job = await startKling({ data: { prompt: opts.prompt, narration: opts.narration } });
-    const deadline = started + 7 * 60_000;
-    while (Date.now() < deadline) {
+    // Poll forever until terminal state. The server returns explicit
+    // processing/completed/failed; we never give up on the client side.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
       await new Promise((r) => setTimeout(r, 5000));
       opts.onTick?.(Math.floor((Date.now() - started) / 1000));
-      const res = await pollKling({ data: { jobId: job.jobId, pollingUrl: job.pollingUrl ?? undefined } });
+      let res;
+      try {
+        res = await pollKling({ data: { jobId: job.jobId, pollingUrl: job.pollingUrl ?? undefined } });
+      } catch (e) {
+        // transient network error — keep polling
+        continue;
+      }
       if (res.status === "processing") continue;
       if (res.status === "failed") throw new Error(res.error);
       return {
@@ -408,7 +416,6 @@ function OutboundPage() {
         },
       };
     }
-    throw new Error("Kling generation timed out (>7 minutes). Try again.");
   }
 
   async function openPreview(r: any) {
@@ -1140,7 +1147,7 @@ function OutboundPage() {
                 />
                 {klingBusy && (
                   <p className="text-[10px] text-muted-foreground">
-                    Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} / 7:00
+                    Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} (Kling typically takes 2–5 min)
                   </p>
                 )}
                 {narrationAudio && (
@@ -1369,7 +1376,7 @@ function OutboundPage() {
                       />
                       {editBusy === "kling" && (
                         <p className="text-[10px] text-muted-foreground">
-                          Generating video… {Math.floor(editKlingElapsed / 60)}:{String(editKlingElapsed % 60).padStart(2, "0")} / 7:00
+                          Generating video… {Math.floor(editKlingElapsed / 60)}:{String(editKlingElapsed % 60).padStart(2, "0")} (Kling typically takes 2–5 min)
                         </p>
                       )}
                       {editNarrationAudio && (

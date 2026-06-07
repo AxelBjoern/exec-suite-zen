@@ -1149,10 +1149,10 @@ function OutboundPage() {
                   () => reqLi({
                     data: {
                       text: post,
-                      // image (legacy) only if no pdf/video attached
                       imageBase64: !postMedia && imgFinal ? imgB64 : null,
                       mediaKind: postMedia?.kind ?? null,
                       mediaBase64: postMedia?.base64 ?? null,
+                      mediaPath: postMedia?.path ?? null,
                       mediaMime: postMedia?.mime ?? null,
                       mediaFilename: postMedia?.filename ?? null,
                       scheduled_at: localToIso(postSchedule),

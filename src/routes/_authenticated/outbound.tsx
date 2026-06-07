@@ -39,8 +39,8 @@ import {
   isoToLocal,
   fileToBase64,
   mediaSrc,
-  type MediaValue,
 } from "@/lib/outbound-helpers";
+import type { MediaValue } from "@/lib/outbound-helpers";
 import { Card, StatusBadge } from "@/components/outbound/Card";
 
 const authHeader = async (): Promise<Record<string, string>> => {

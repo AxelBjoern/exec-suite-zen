@@ -24,6 +24,16 @@ import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenti
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
+import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
+import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
+import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
+import { Route as AuthenticatedBudgetResultsRouteImport } from './routes/_authenticated/budget.results'
+import { Route as AuthenticatedBudgetMonthlyRouteImport } from './routes/_authenticated/budget.monthly'
+import { Route as AuthenticatedBudgetFinancingRouteImport } from './routes/_authenticated/budget.financing'
+import { Route as AuthenticatedBudgetCompareRouteImport } from './routes/_authenticated/budget.compare'
+import { Route as AuthenticatedBudgetChangelogRouteImport } from './routes/_authenticated/budget.changelog'
+import { Route as AuthenticatedBudgetBoardRouteImport } from './routes/_authenticated/budget.board'
+import { Route as AuthenticatedBudgetAssumptionsRouteImport } from './routes/_authenticated/budget.assumptions'
 import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
@@ -109,6 +119,66 @@ const AuthenticatedSettingsConnectionsRoute =
     path: '/settings/connections',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBudgetStatementsRoute =
+  AuthenticatedBudgetStatementsRouteImport.update({
+    id: '/statements',
+    path: '/statements',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetSensitivityRoute =
+  AuthenticatedBudgetSensitivityRouteImport.update({
+    id: '/sensitivity',
+    path: '/sensitivity',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetScenariosRoute =
+  AuthenticatedBudgetScenariosRouteImport.update({
+    id: '/scenarios',
+    path: '/scenarios',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetResultsRoute =
+  AuthenticatedBudgetResultsRouteImport.update({
+    id: '/results',
+    path: '/results',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetMonthlyRoute =
+  AuthenticatedBudgetMonthlyRouteImport.update({
+    id: '/monthly',
+    path: '/monthly',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetFinancingRoute =
+  AuthenticatedBudgetFinancingRouteImport.update({
+    id: '/financing',
+    path: '/financing',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetCompareRoute =
+  AuthenticatedBudgetCompareRouteImport.update({
+    id: '/compare',
+    path: '/compare',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetChangelogRoute =
+  AuthenticatedBudgetChangelogRouteImport.update({
+    id: '/changelog',
+    path: '/changelog',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetBoardRoute =
+  AuthenticatedBudgetBoardRouteImport.update({
+    id: '/board',
+    path: '/board',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetAssumptionsRoute =
+  AuthenticatedBudgetAssumptionsRouteImport.update({
+    id: '/assumptions',
+    path: '/assumptions',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
 const ApiPublicCronScheduledOutboundRoute =
   ApiPublicCronScheduledOutboundRouteImport.update({
     id: '/api/public/cron/scheduled-outbound',
@@ -149,6 +219,16 @@ export interface FileRoutesByFullPath {
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
+  '/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
+  '/budget/board': typeof AuthenticatedBudgetBoardRoute
+  '/budget/changelog': typeof AuthenticatedBudgetChangelogRoute
+  '/budget/compare': typeof AuthenticatedBudgetCompareRoute
+  '/budget/financing': typeof AuthenticatedBudgetFinancingRoute
+  '/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
+  '/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
+  '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
+  '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -169,6 +249,16 @@ export interface FileRoutesByTo {
   '/outbound': typeof AuthenticatedOutboundRoute
   '/terminal': typeof AuthenticatedTerminalRoute
   '/': typeof AuthenticatedIndexRoute
+  '/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
+  '/budget/board': typeof AuthenticatedBudgetBoardRoute
+  '/budget/changelog': typeof AuthenticatedBudgetChangelogRoute
+  '/budget/compare': typeof AuthenticatedBudgetCompareRoute
+  '/budget/financing': typeof AuthenticatedBudgetFinancingRoute
+  '/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
+  '/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
+  '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
+  '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -192,6 +282,16 @@ export interface FileRoutesById {
   '/_authenticated/outbound': typeof AuthenticatedOutboundRoute
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
+  '/_authenticated/budget/board': typeof AuthenticatedBudgetBoardRoute
+  '/_authenticated/budget/changelog': typeof AuthenticatedBudgetChangelogRoute
+  '/_authenticated/budget/compare': typeof AuthenticatedBudgetCompareRoute
+  '/_authenticated/budget/financing': typeof AuthenticatedBudgetFinancingRoute
+  '/_authenticated/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
+  '/_authenticated/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/_authenticated/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
+  '/_authenticated/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
+  '/_authenticated/budget/statements': typeof AuthenticatedBudgetStatementsRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -215,6 +315,16 @@ export interface FileRouteTypes {
     | '/forge'
     | '/outbound'
     | '/terminal'
+    | '/budget/assumptions'
+    | '/budget/board'
+    | '/budget/changelog'
+    | '/budget/compare'
+    | '/budget/financing'
+    | '/budget/monthly'
+    | '/budget/results'
+    | '/budget/scenarios'
+    | '/budget/sensitivity'
+    | '/budget/statements'
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -235,6 +345,16 @@ export interface FileRouteTypes {
     | '/outbound'
     | '/terminal'
     | '/'
+    | '/budget/assumptions'
+    | '/budget/board'
+    | '/budget/changelog'
+    | '/budget/compare'
+    | '/budget/financing'
+    | '/budget/monthly'
+    | '/budget/results'
+    | '/budget/scenarios'
+    | '/budget/sensitivity'
+    | '/budget/statements'
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -257,6 +377,16 @@ export interface FileRouteTypes {
     | '/_authenticated/outbound'
     | '/_authenticated/terminal'
     | '/_authenticated/'
+    | '/_authenticated/budget/assumptions'
+    | '/_authenticated/budget/board'
+    | '/_authenticated/budget/changelog'
+    | '/_authenticated/budget/compare'
+    | '/_authenticated/budget/financing'
+    | '/_authenticated/budget/monthly'
+    | '/_authenticated/budget/results'
+    | '/_authenticated/budget/scenarios'
+    | '/_authenticated/budget/sensitivity'
+    | '/_authenticated/budget/statements'
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -388,6 +518,76 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/budget/statements': {
+      id: '/_authenticated/budget/statements'
+      path: '/statements'
+      fullPath: '/budget/statements'
+      preLoaderRoute: typeof AuthenticatedBudgetStatementsRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/sensitivity': {
+      id: '/_authenticated/budget/sensitivity'
+      path: '/sensitivity'
+      fullPath: '/budget/sensitivity'
+      preLoaderRoute: typeof AuthenticatedBudgetSensitivityRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/scenarios': {
+      id: '/_authenticated/budget/scenarios'
+      path: '/scenarios'
+      fullPath: '/budget/scenarios'
+      preLoaderRoute: typeof AuthenticatedBudgetScenariosRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/results': {
+      id: '/_authenticated/budget/results'
+      path: '/results'
+      fullPath: '/budget/results'
+      preLoaderRoute: typeof AuthenticatedBudgetResultsRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/monthly': {
+      id: '/_authenticated/budget/monthly'
+      path: '/monthly'
+      fullPath: '/budget/monthly'
+      preLoaderRoute: typeof AuthenticatedBudgetMonthlyRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/financing': {
+      id: '/_authenticated/budget/financing'
+      path: '/financing'
+      fullPath: '/budget/financing'
+      preLoaderRoute: typeof AuthenticatedBudgetFinancingRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/compare': {
+      id: '/_authenticated/budget/compare'
+      path: '/compare'
+      fullPath: '/budget/compare'
+      preLoaderRoute: typeof AuthenticatedBudgetCompareRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/changelog': {
+      id: '/_authenticated/budget/changelog'
+      path: '/changelog'
+      fullPath: '/budget/changelog'
+      preLoaderRoute: typeof AuthenticatedBudgetChangelogRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/board': {
+      id: '/_authenticated/budget/board'
+      path: '/board'
+      fullPath: '/budget/board'
+      preLoaderRoute: typeof AuthenticatedBudgetBoardRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/assumptions': {
+      id: '/_authenticated/budget/assumptions'
+      path: '/assumptions'
+      fullPath: '/budget/assumptions'
+      preLoaderRoute: typeof AuthenticatedBudgetAssumptionsRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
     '/api/public/cron/scheduled-outbound': {
       id: '/api/public/cron/scheduled-outbound'
       path: '/api/public/cron/scheduled-outbound'
@@ -427,10 +627,30 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedBudgetRouteChildren {
+  AuthenticatedBudgetAssumptionsRoute: typeof AuthenticatedBudgetAssumptionsRoute
+  AuthenticatedBudgetBoardRoute: typeof AuthenticatedBudgetBoardRoute
+  AuthenticatedBudgetChangelogRoute: typeof AuthenticatedBudgetChangelogRoute
+  AuthenticatedBudgetCompareRoute: typeof AuthenticatedBudgetCompareRoute
+  AuthenticatedBudgetFinancingRoute: typeof AuthenticatedBudgetFinancingRoute
+  AuthenticatedBudgetMonthlyRoute: typeof AuthenticatedBudgetMonthlyRoute
+  AuthenticatedBudgetResultsRoute: typeof AuthenticatedBudgetResultsRoute
+  AuthenticatedBudgetScenariosRoute: typeof AuthenticatedBudgetScenariosRoute
+  AuthenticatedBudgetSensitivityRoute: typeof AuthenticatedBudgetSensitivityRoute
+  AuthenticatedBudgetStatementsRoute: typeof AuthenticatedBudgetStatementsRoute
   AuthenticatedBudgetIndexRoute: typeof AuthenticatedBudgetIndexRoute
 }
 
 const AuthenticatedBudgetRouteChildren: AuthenticatedBudgetRouteChildren = {
+  AuthenticatedBudgetAssumptionsRoute: AuthenticatedBudgetAssumptionsRoute,
+  AuthenticatedBudgetBoardRoute: AuthenticatedBudgetBoardRoute,
+  AuthenticatedBudgetChangelogRoute: AuthenticatedBudgetChangelogRoute,
+  AuthenticatedBudgetCompareRoute: AuthenticatedBudgetCompareRoute,
+  AuthenticatedBudgetFinancingRoute: AuthenticatedBudgetFinancingRoute,
+  AuthenticatedBudgetMonthlyRoute: AuthenticatedBudgetMonthlyRoute,
+  AuthenticatedBudgetResultsRoute: AuthenticatedBudgetResultsRoute,
+  AuthenticatedBudgetScenariosRoute: AuthenticatedBudgetScenariosRoute,
+  AuthenticatedBudgetSensitivityRoute: AuthenticatedBudgetSensitivityRoute,
+  AuthenticatedBudgetStatementsRoute: AuthenticatedBudgetStatementsRoute,
   AuthenticatedBudgetIndexRoute: AuthenticatedBudgetIndexRoute,
 }
 
@@ -480,3 +700,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

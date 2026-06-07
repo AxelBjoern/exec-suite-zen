@@ -1,34 +1,24 @@
-## What's actually failing
+## Changes
 
-The failed approval in the DB confirms it: yes, **only the PDF carousel post is failing**. A text-only LinkedIn post in the same batch went through fine.
+### 1. `src/routes/_authenticated/outbound.tsx` — reorder + collapsible
+- Reorder cards inside the main grid to: **Email → Reminder to owner → My recent requests → LinkedIn post** (LinkedIn post moves to the bottom of the page, below the recent-requests list).
+- Wrap the LinkedIn post `Card` in a collapsible shell:
+  - Add `const [liOpen, setLiOpen] = useState(false)` (collapsed by default).
+  - Card header gets a chevron button that toggles `liOpen`; body (textarea, schedule, generated image, media dropzone, submit button) only renders when `liOpen` is `true`.
+  - Lightweight implementation using the existing `Card` component — extend it with an optional `collapsible`/`open`/`onToggle` prop, or render a custom header+body in this one spot using the same panel styling (`rounded-lg border border-border bg-panel p-5`) so it visually matches.
+- Keep all existing logic (state, handlers, submit flow, image gen, Kling, media drop) unchanged.
 
-The failure note on `approvals.id = 09b8983a…`:
+### 2. New route `src/routes/_authenticated/outbound.archive.tsx` — past LinkedIn posts
+- URL: `/outbound/archive` (file-based route under `_authenticated`, so still gated by auth).
+- Reuses `listOutbound` server fn already imported in `outbound.tsx`; filters client-side to `kind === "outbound_linkedin"` AND `status === "sent"` (i.e. posts that actually went out). Shows newest first.
+- Each row shows: post text excerpt, sent timestamp, scheduled timestamp if any, thumbnail of any attached media when present in payload, and a link out to the LinkedIn post URL if the payload stores one (otherwise omit).
+- Header: "LinkedIn archive" with a back link to `/outbound`.
+- No edit/send/delete actions — read-only.
 
-```
-LinkedIn document init failed (426):
-{"status":426,"code":"NONEXISTENT_VERSION","message":"Requested version 20250501 is not active"}
-```
-
-LinkedIn's versioned REST API (used for `documents` carousels and `rest/posts`) expects `LinkedIn-Version: YYYYMM` and only keeps roughly the last ~12 months active. The previous fix bumped the header from `202405` to `202505` — but as of June 2026, `202505` (May 2025) has aged out too.
-
-This only affects the carousel/PDF code path in `src/lib/outbound.functions.ts` (and the scheduled-cron variant) — text-only posts use the legacy `/v2/ugcPosts` endpoint, which doesn't need `LinkedIn-Version`, which is why those keep succeeding.
-
-## OpenRouter — not involved here
-
-Per the project memory rule, all LLM calls go through OpenRouter via `src/server/llm.server.ts`. The outbound module imports `chatCompletion` from there for the "AI edit draft" feature only — it is not on the post-to-LinkedIn path. The carousel failure has nothing to do with OpenRouter; no change there is needed.
-
-## Fix
-
-1. In `src/lib/outbound.functions.ts`, change the `liVersion` constant inside `postLinkedInAsWorkspace` from `"202505"` to a currently active version: **`"202511"`** (Nov 2025, well within LinkedIn's supported window in mid-2026).
-2. Mirror the same change in `src/routes/api/public/cron/scheduled-outbound.ts` so the cron worker uses the same header.
-3. Retry the failed approval row from the Outbound page (the "Retry" button calls `approveOutbound` again, which re-runs the upload with the new header).
-
-## Hardening (small, same change set)
-
-- Add a clearer error wrapper when `documents init` returns `NONEXISTENT_VERSION`, suggesting the version needs bumping — so the next time this ages out (≈12 months) the message points straight at the fix instead of bubbling raw LinkedIn JSON.
-- No DB migration, no new dependencies, no UI changes.
+### 3. Cross-link
+- On `outbound.tsx`, add a small "View archive" link in the LinkedIn post card header next to the collapse chevron, pointing to `/outbound/archive`.
 
 ## Out of scope
-
-- The Vite/SSR errors in older dev-server logs (`budget.tsx` code-splitter, `outbound.tsx` stray `}`) — those were transient and the current files compile clean; not re-touching them here.
-- Changing the carousel upload pipeline itself (pdf-lib page count check, document URN flow) — it's correct, only the version header is stale.
+- No DB migration — archive reads from the existing `approvals` rows via the current `listOutbound` server fn.
+- No change to posting/scheduling logic, LinkedIn API version, or carousel flow.
+- No new components beyond the one route file; keep the collapsible inline rather than adding a generic component.

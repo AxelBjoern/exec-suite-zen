@@ -162,6 +162,21 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+type MediaValue = {
+  kind: "image" | "pdf" | "video";
+  base64?: string;
+  url?: string;
+  path?: string;
+  mime: string;
+  filename: string;
+};
+
+function mediaSrc(v: MediaValue): string {
+  if (v.url) return v.url;
+  if (v.base64) return `data:${v.mime};base64,${v.base64}`;
+  return "";
+}
+
 function DropZone({
   value,
   onChange,
@@ -171,8 +186,8 @@ function DropZone({
   setDragOver,
   label = "Drop image, PDF or video here",
 }: {
-  value: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string } | null;
-  onChange: (v: { kind: "image" | "pdf" | "video"; base64: string; mime: string; filename: string }) => void;
+  value: MediaValue | null;
+  onChange: (v: MediaValue) => void;
   onClear: () => void;
   disabled?: boolean;
   dragOver: boolean;
@@ -198,6 +213,8 @@ function DropZone({
     onChange({ kind, base64: b64, mime: f.type || (kind === "image" ? "image/png" : kind === "pdf" ? "application/pdf" : "video/mp4"), filename: f.name });
   }
 
+  const src = value ? mediaSrc(value) : "";
+
   return (
     <div
       className={cn(
@@ -218,16 +235,16 @@ function DropZone({
         onChange={(e) => handleFiles(e.target.files)}
       />
       {value ? (
-        <div className="flex flex-col items-center gap-2">
-          {value.kind === "image" && (
+        <div className="flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {value.kind === "image" && src && (
             <img
-              src={`data:${value.mime};base64,${value.base64}`}
+              src={src}
               alt={value.filename}
               className="h-auto max-h-40 w-auto max-w-full rounded-md object-contain"
             />
           )}
-          {value.kind === "video" && (
-            <video src={`data:${value.mime};base64,${value.base64}`} controls className="max-h-40 w-full rounded-md" />
+          {value.kind === "video" && src && (
+            <video src={src} controls className="max-h-60 w-full rounded-md" />
           )}
           {value.kind === "pdf" && (
             <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
@@ -237,7 +254,8 @@ function DropZone({
           )}
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="uppercase tracking-wider">{value.kind}</span>
-            <span>~{Math.round(value.base64.length * 0.75 / 1024)} KB</span>
+            {value.base64 && <span>~{Math.round(value.base64.length * 0.75 / 1024)} KB</span>}
+            {value.path && <span>stored</span>}
           </div>
           <button
             type="button"

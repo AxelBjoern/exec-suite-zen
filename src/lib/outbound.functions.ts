@@ -762,3 +762,64 @@ export async function sendOwnerDigestEmail(to: string, subject: string, body: st
   if (!res.ok) throw new Error(`digest gmail send failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
+
+// ── AI video generation (Kling v3.0 Std via OpenRouter) ─────────────────
+// Returns a base64-encoded MP4 the client can attach to a LinkedIn draft.
+const KlingInput = z.object({ prompt: z.string().min(3).max(2000) });
+const OPENROUTER_VIDEO_URL = "https://openrouter.ai/api/v1/videos";
+const KLING_MODEL = "kwaivgi/kling-v3.0-std";
+
+export const generateKlingClipForOutbound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => KlingInput.parse(i))
+  .handler(async ({ data }) => {
+    const token = process.env.OPENROUTER_API_KEY;
+    if (!token) throw new Error("OPENROUTER_API_KEY missing");
+
+    const startRes = await fetch(OPENROUTER_VIDEO_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://lovable.app",
+        "X-Title": "VDNX Outbound",
+      },
+      body: JSON.stringify({ model: KLING_MODEL, prompt: data.prompt }),
+    });
+    const startText = await startRes.text();
+    if (!startRes.ok) throw new Error(`Kling start failed (${startRes.status}): ${startText.slice(0, 300)}`);
+    const job = JSON.parse(startText) as { id: string; polling_url?: string };
+    if (!job.id) throw new Error("Kling returned no job id");
+
+    const pollUrl = job.polling_url ?? `${OPENROUTER_VIDEO_URL}/${job.id}`;
+    const deadline = Date.now() + 240_000;
+    let videoUrl: string | null = null;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const pRes = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!pRes.ok) continue;
+      const st = (await pRes.json()) as any;
+      if (st.status === "completed") {
+        videoUrl = st.unsigned_urls?.[0] ?? st.signed_urls?.[0] ?? st.urls?.[0] ?? null;
+        break;
+      }
+      if (st.status === "failed") {
+        const detail = typeof st.error === "string" ? st.error : st.error?.message ?? "no detail";
+        throw new Error(`Kling failed: ${detail}`);
+      }
+    }
+    if (!videoUrl) throw new Error("Kling timed out (>4 min)");
+
+    const dl = await fetch(videoUrl);
+    if (!dl.ok) throw new Error(`Video download failed (${dl.status})`);
+    const buf = Buffer.from(await dl.arrayBuffer());
+    if (buf.byteLength > 20_000_000) {
+      throw new Error(`Generated video too large (${(buf.byteLength / 1_000_000).toFixed(1)} MB)`);
+    }
+    return {
+      base64: buf.toString("base64"),
+      mime: "video/mp4",
+      filename: `kling-${Date.now()}.mp4`,
+    };
+  });
+

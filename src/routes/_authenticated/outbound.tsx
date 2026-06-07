@@ -473,6 +473,8 @@ function OutboundPage() {
     setEditImgDescription("");
     setEditMedia(null);
     setEditKlingPrompt("");
+    setEditKlingNarration("");
+    setEditNarrationAudio(null);
     try {
       const full = await fetchFull({ data: { id: r.id } });
       if (full?.payload) p = full.payload;

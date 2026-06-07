@@ -413,10 +413,11 @@ export const listMyRequests = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw new Error(error.message);
-    // strip heavy imageBase64 from list payloads
+    // strip heavy media blobs from list payloads
     const rows = (data ?? []).map((r: any) => {
       const p = { ...(r.payload ?? {}) };
       if (p.imageBase64) p.imageBase64 = "[image]";
+      if (p.mediaBase64) p.mediaBase64 = `[${p.mediaKind ?? "media"}]`;
       return { ...r, payload: p };
     });
     return { rows };

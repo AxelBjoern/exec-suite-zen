@@ -441,13 +441,13 @@ export const listMyRequests = createServerFn({ method: "GET" })
     const { userId } = context as { userId: string };
     const { data, error } = await supabaseAdmin
       .from("approvals")
-      .select("id, kind, status, payload, notes, decided_at, created_at")
+      .select("id, kind, status, payload, notes, decided_at, created_at, archived_at")
       .eq("requester_id", userId)
       .in("kind", ["outbound_email", "outbound_linkedin", "outbound_reminder"])
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw new Error(error.message);
-    // strip heavy media blobs from list payloads
     const rows = (data ?? []).map((r: any) => {
       const p = { ...(r.payload ?? {}) };
       if (p.imageBase64) p.imageBase64 = "[image]";
@@ -457,18 +457,18 @@ export const listMyRequests = createServerFn({ method: "GET" })
     return { rows };
   });
 
-// Sent LinkedIn posts (read-only archive page)
-export const listSentLinkedIn = createServerFn({ method: "GET" })
+// Archived outbound items (all kinds) for the current user
+export const listArchivedOutbound = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { userId } = context as { userId: string };
     const { data, error } = await supabaseAdmin
       .from("approvals")
-      .select("id, status, payload, notes, decided_at, created_at")
+      .select("id, kind, status, payload, notes, decided_at, created_at, archived_at")
       .eq("requester_id", userId)
-      .eq("kind", "outbound_linkedin")
-      .eq("status", "sent")
-      .order("decided_at", { ascending: false })
+      .in("kind", ["outbound_email", "outbound_linkedin", "outbound_reminder"])
+      .not("archived_at", "is", null)
+      .order("archived_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
     const rows = (data ?? []).map((r: any) => {
@@ -478,6 +478,28 @@ export const listSentLinkedIn = createServerFn({ method: "GET" })
       return { ...r, payload: p };
     });
     return { rows };
+  });
+
+// Archive / unarchive an outbound row
+const SetArchivedInput = z.object({ id: z.string().uuid(), archived: z.boolean() });
+export const setOutboundArchived = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => SetArchivedInput.parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as { userId: string };
+    const { data: row, error: fetchErr } = await supabaseAdmin
+      .from("approvals")
+      .select("id, requester_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (fetchErr || !row) throw new Error("Request not found");
+    if (row.requester_id !== userId) throw new Error("Forbidden");
+    const { error } = await supabaseAdmin
+      .from("approvals")
+      .update({ archived_at: data.archived ? new Date().toISOString() : null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 // ── Full payload (for editing) — includes stripped media blobs ───────────

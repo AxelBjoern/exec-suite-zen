@@ -912,6 +912,19 @@ function OutboundPage() {
                                 {rowBusy === r.id ? "Retrying…" : "Retry"}
                               </button>
                             )}
+                            {(p.mediaKind || p.mediaPath || p.imageBase64) && (
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
+                                disabled={rowBusy === r.id}
+                                onClick={(e) => { e.stopPropagation(); openPreview(r); }}
+                                title={`Preview ${p.mediaKind ?? "image"}`}
+                              >
+                                {p.mediaKind === "video" ? <Film className="h-3.5 w-3.5" />
+                                  : p.mediaKind === "pdf" ? <FileText className="h-3.5 w-3.5" />
+                                  : <ImageIcon className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"

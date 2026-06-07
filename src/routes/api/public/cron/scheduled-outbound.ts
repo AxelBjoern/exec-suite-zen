@@ -80,7 +80,8 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
 
   // PDF carousel uses the versioned /rest/documents + /rest/posts API.
   if (media?.kind === "pdf") {
-    const doc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+    const pdfBuf = await mediaBytes(media);
+    const doc = await PDFDocument.load(pdfBuf);
     if (doc.getPageCount() > PDF_MAX_PAGES) {
       throw new Error(`PDF exceeds ${PDF_MAX_PAGES}-page limit`);
     }
@@ -98,7 +99,7 @@ async function postLinkedIn(text: string, media: ReturnType<typeof pickMedia>) {
     const up = await fetch(uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": "application/pdf" },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(pdfBuf),
     });
     if (!up.ok) throw new Error(`LI document upload (${up.status}): ${await up.text()}`);
     const postRes = await fetch(`${LINKEDIN_GATEWAY}/rest/posts`, {

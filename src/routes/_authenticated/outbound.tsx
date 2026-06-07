@@ -1475,6 +1475,51 @@ function OutboundPage() {
           </div>
         </div>
       )}
+
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={closePreview}
+        >
+          <div
+            className="w-full max-w-2xl rounded-lg border border-border bg-panel p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="font-serif text-lg font-semibold">
+                Preview {previewMedia?.kind ?? ""} {previewMedia?.filename && <span className="ml-2 text-xs text-muted-foreground">{previewMedia.filename}</span>}
+              </h3>
+              <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={closePreview}>✕</button>
+            </div>
+            {previewBusy && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {!previewBusy && previewMedia && (
+              <div className="flex flex-col items-center gap-3">
+                {previewMedia.kind === "video" && (
+                  <video src={previewMedia.url} controls autoPlay className="max-h-[70vh] w-full rounded-md" />
+                )}
+                {previewMedia.kind === "image" && (
+                  <img src={previewMedia.url} alt={previewMedia.filename} className="max-h-[70vh] w-full object-contain" />
+                )}
+                {previewMedia.kind === "pdf" && (
+                  <>
+                    <iframe src={previewMedia.url} className="h-[70vh] w-full rounded-md border border-border" title={previewMedia.filename} />
+                    <a href={previewMedia.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Open in new tab</a>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider hover:bg-muted"
+                onClick={closePreview}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

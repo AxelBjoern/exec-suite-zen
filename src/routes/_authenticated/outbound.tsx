@@ -164,11 +164,13 @@ function OutboundPage() {
   const [taglineText, setTaglineText] = useState("");
   const [visualPrompt, setVisualPrompt] = useState("");
   // LinkedIn pdf/video media (main card)
-  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video"; base64: string; mime: string; filename: string } | null>(null);
+  const [postMedia, setPostMedia] = useState<{ kind: "pdf" | "video" | "image"; base64: string; mime: string; filename: string } | null>(null);
   const [klingPrompt, setKlingPrompt] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  // main card drag-drop
+  const [mainDragOver, setMainDragOver] = useState(false);
 
   const emailRef = useRef<HTMLElement>(null);
   const reminderRef = useRef<HTMLElement>(null);

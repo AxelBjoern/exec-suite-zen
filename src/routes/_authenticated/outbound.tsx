@@ -1081,15 +1081,19 @@ function OutboundPage() {
                     disabled={klingBusy || !klingPrompt.trim()}
                     onClick={async () => {
                       setKlingBusy(true);
+                      setKlingElapsed(0);
                       setNarrationAudio(null);
                       try {
-                        const r = await genKling({ data: { prompt: klingPrompt, narration: klingNarration.trim() || undefined } });
-                        setPostMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
-                        if (r.audioBase64 && r.audioMime) setNarrationAudio({ base64: r.audioBase64, mime: r.audioMime });
-                        toast.success("Kling clip ready");
+                        const r = await runKlingFlow({
+                          prompt: klingPrompt,
+                          narration: klingNarration.trim() || undefined,
+                          onTick: (s) => setKlingElapsed(s),
+                        });
+                        setPostMedia(r.media);
+                        toast.success("Kling clip ready — preview below");
                       } catch (e) {
                         toast.error(e instanceof Error ? e.message : "Kling generation failed");
-                      } finally { setKlingBusy(false); }
+                      } finally { setKlingBusy(false); setKlingElapsed(0); }
                     }}>
                     {klingBusy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                     {klingBusy ? "Generating…" : "Generate clip"}

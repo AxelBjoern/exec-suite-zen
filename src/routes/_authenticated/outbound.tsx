@@ -644,9 +644,15 @@ function OutboundPage() {
       if (editing.kind === "outbound_linkedin") {
         if (editMedia) {
           payload.mediaKind = editMedia.kind;
-          payload.mediaBase64 = editMedia.base64;
           payload.mediaMime = editMedia.mime;
           payload.mediaFilename = editMedia.filename;
+          if (editMedia.path) {
+            payload.mediaPath = editMedia.path;
+            payload.mediaBase64 = null;
+          } else if (editMedia.base64) {
+            payload.mediaBase64 = editMedia.base64;
+            payload.mediaPath = null;
+          }
           payload.imageBase64 = null;
         } else if (editImgFinal && editImgB64) {
           payload.imageBase64 = editImgB64;

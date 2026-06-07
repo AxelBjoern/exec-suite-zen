@@ -68,6 +68,7 @@ import {
   type Conversation,
 } from "@/lib/chat-helpers";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import { ChatComposer } from "@/components/chat/ChatComposer";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({

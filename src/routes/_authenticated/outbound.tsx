@@ -330,7 +330,6 @@ function OutboundPage() {
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
   const [editKlingNarration, setEditKlingNarration] = useState("");
-  const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const [editKlingElapsed, setEditKlingElapsed] = useState(0);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
@@ -348,7 +347,6 @@ function OutboundPage() {
   const [klingNarration, setKlingNarration] = useState("");
   const [klingBusy, setKlingBusy] = useState(false);
   const [klingElapsed, setKlingElapsed] = useState(0);
-  const [narrationAudio, setNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   // main card drag-drop
@@ -579,7 +577,6 @@ function OutboundPage() {
     setEditMedia(null);
     setEditKlingPrompt("");
     setEditKlingNarration("");
-    setEditNarrationAudio(null);
     try {
       const full = await fetchFull({ data: { id: r.id } });
       if (full?.payload) p = full.payload;
@@ -633,7 +630,6 @@ function OutboundPage() {
     setEditMedia(null);
     setEditKlingPrompt("");
     setEditKlingNarration("");
-    setEditNarrationAudio(null);
   }
 
   async function saveEdit(opts: { send: boolean }) {

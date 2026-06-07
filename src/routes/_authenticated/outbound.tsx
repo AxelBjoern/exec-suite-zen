@@ -1108,7 +1108,9 @@ function OutboundPage() {
                   disabled={klingBusy}
                 />
                 {klingBusy && (
-                  <p className="text-[10px] text-muted-foreground">Video generation can take 1–4 minutes. Hang tight.</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Generating video… {Math.floor(klingElapsed / 60)}:{String(klingElapsed % 60).padStart(2, "0")} / 7:00
+                  </p>
                 )}
                 {narrationAudio && (
                   <div className="rounded-md border border-border bg-muted/40 p-2">

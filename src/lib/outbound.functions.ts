@@ -72,8 +72,9 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
   // The legacy /v2/assets registerUpload endpoint does NOT accept feedshare-document
   // and returns a 403 "Data Processing Exception" on the recipes field.
   if (media?.kind === "pdf") {
+    const pdfBase64 = await resolveMediaBase64(media);
     try {
-      const pdfDoc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+      const pdfDoc = await PDFDocument.load(Buffer.from(pdfBase64, "base64"));
       const pages = pdfDoc.getPageCount();
       if (pages > PDF_MAX_PAGES) {
         throw new Error(`PDF carousel exceeds ${PDF_MAX_PAGES}-page limit (${pages} pages).`);
@@ -104,7 +105,7 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
     const up = await fetch(uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": "application/pdf" },
-      body: Buffer.from(media.base64, "base64"),
+      body: new Uint8Array(Buffer.from(pdfBase64, "base64")),
     });
     if (!up.ok) throw new Error(`LinkedIn document upload failed (${up.status}): ${await up.text()}`);
 

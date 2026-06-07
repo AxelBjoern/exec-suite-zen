@@ -24,6 +24,7 @@ import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenti
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
+import { Route as AuthenticatedOutboundArchiveRouteImport } from './routes/_authenticated/outbound.archive'
 import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
 import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
 import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
@@ -118,6 +119,12 @@ const AuthenticatedSettingsConnectionsRoute =
     id: '/settings/connections',
     path: '/settings/connections',
     getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOutboundArchiveRoute =
+  AuthenticatedOutboundArchiveRouteImport.update({
+    id: '/archive',
+    path: '/archive',
+    getParentRoute: () => AuthenticatedOutboundRoute,
   } as any)
 const AuthenticatedBudgetStatementsRoute =
   AuthenticatedBudgetStatementsRouteImport.update({
@@ -217,7 +224,7 @@ export interface FileRoutesByFullPath {
   '/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
-  '/outbound': typeof AuthenticatedOutboundRoute
+  '/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/terminal': typeof AuthenticatedTerminalRoute
   '/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
   '/budget/board': typeof AuthenticatedBudgetBoardRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -246,7 +254,7 @@ export interface FileRoutesByTo {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
-  '/outbound': typeof AuthenticatedOutboundRoute
+  '/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/terminal': typeof AuthenticatedTerminalRoute
   '/': typeof AuthenticatedIndexRoute
   '/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
@@ -259,6 +267,7 @@ export interface FileRoutesByTo {
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -279,7 +288,7 @@ export interface FileRoutesById {
   '/_authenticated/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
-  '/_authenticated/outbound': typeof AuthenticatedOutboundRoute
+  '/_authenticated/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
@@ -292,6 +301,7 @@ export interface FileRoutesById {
   '/_authenticated/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/_authenticated/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/_authenticated/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/_authenticated/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
+    | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -355,6 +366,7 @@ export interface FileRouteTypes {
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
+    | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -387,6 +399,7 @@ export interface FileRouteTypes {
     | '/_authenticated/budget/scenarios'
     | '/_authenticated/budget/sensitivity'
     | '/_authenticated/budget/statements'
+    | '/_authenticated/outbound/archive'
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
     | '/api/public/generate-linkedin-image'
@@ -517,6 +530,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/connections'
       preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/outbound/archive': {
+      id: '/_authenticated/outbound/archive'
+      path: '/archive'
+      fullPath: '/outbound/archive'
+      preLoaderRoute: typeof AuthenticatedOutboundArchiveRouteImport
+      parentRoute: typeof AuthenticatedOutboundRoute
     }
     '/_authenticated/budget/statements': {
       id: '/_authenticated/budget/statements'
@@ -657,12 +677,25 @@ const AuthenticatedBudgetRouteChildren: AuthenticatedBudgetRouteChildren = {
 const AuthenticatedBudgetRouteWithChildren =
   AuthenticatedBudgetRoute._addFileChildren(AuthenticatedBudgetRouteChildren)
 
+interface AuthenticatedOutboundRouteChildren {
+  AuthenticatedOutboundArchiveRoute: typeof AuthenticatedOutboundArchiveRoute
+}
+
+const AuthenticatedOutboundRouteChildren: AuthenticatedOutboundRouteChildren = {
+  AuthenticatedOutboundArchiveRoute: AuthenticatedOutboundArchiveRoute,
+}
+
+const AuthenticatedOutboundRouteWithChildren =
+  AuthenticatedOutboundRoute._addFileChildren(
+    AuthenticatedOutboundRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRouteWithChildren
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
-  AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRoute
+  AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRouteWithChildren
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedSettingsConnectionsRoute: typeof AuthenticatedSettingsConnectionsRoute
@@ -675,7 +708,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBudgetRoute: AuthenticatedBudgetRouteWithChildren,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
-  AuthenticatedOutboundRoute: AuthenticatedOutboundRoute,
+  AuthenticatedOutboundRoute: AuthenticatedOutboundRouteWithChildren,
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedSettingsConnectionsRoute: AuthenticatedSettingsConnectionsRoute,
@@ -700,3 +733,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

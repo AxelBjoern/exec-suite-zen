@@ -34,23 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Send,
-  Trash2,
-  Loader2,
-  Paperclip,
-  X,
-  FileText,
-  FileDown,
-  FileType,
-  Copy,
-  Check,
-  Menu,
-  Square,
-  Upload,
-  ClipboardPaste,
-  Send as SendIcon,
-} from "lucide-react";
+import { Trash2, Loader2, Menu, Square, Upload } from "lucide-react";
 
 import {
   copyToClipboard,

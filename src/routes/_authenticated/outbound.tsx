@@ -914,7 +914,84 @@ function OutboundPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* PDF carousel + video for edit modal */}
+                  <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {editMedia?.kind === "pdf" ? <FileText className="h-3.5 w-3.5" /> : <Film className="h-3.5 w-3.5" />}
+                        PDF carousel (max 10 pages) / video
+                        {!editMedia && (editDraft.mediaBase64 || "").startsWith("[") && (
+                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
+                            {editDraft.mediaKind ?? "media"} attached
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editPdfInputRef.current?.click()} disabled={!!editBusy}>
+                          <FileText className="h-3 w-3" /> Upload PDF
+                        </button>
+                        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                          onClick={() => editVideoInputRef.current?.click()} disabled={!!editBusy}>
+                          <Upload className="h-3 w-3" /> Upload video
+                        </button>
+                        {(editMedia || (editDraft.mediaBase64 || "").startsWith("[")) && (
+                          <button type="button" className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                            onClick={() => { setEditMedia(null); setEditDraft({ ...editDraft, mediaBase64: "", mediaKind: "", mediaMime: "", mediaFilename: "" }); }}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input className={inputCls + " flex-1"} placeholder="Or describe a clip to generate with Kling…"
+                        value={editKlingPrompt} onChange={(e) => setEditKlingPrompt(e.target.value)} disabled={!!editBusy} />
+                      <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                        disabled={!!editBusy || !editKlingPrompt.trim()}
+                        onClick={async () => {
+                          setEditBusy("kling");
+                          try {
+                            const r = await genKling({ data: { prompt: editKlingPrompt } });
+                            setEditMedia({ kind: "video", base64: r.base64, mime: r.mime, filename: r.filename });
+                            toast.success("Kling clip ready");
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Kling failed");
+                          } finally { setEditBusy(null); }
+                        }}>
+                        {editBusy === "kling" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        {editBusy === "kling" ? "Generating…" : "Generate"}
+                      </button>
+                    </div>
+                    <input ref={editPdfInputRef} type="file" accept="application/pdf" className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]; e.target.value = "";
+                        if (!f) return;
+                        if (f.size > 12_000_000) { toast.error("PDF too large (>12 MB)"); return; }
+                        const b64 = await fileToBase64(f);
+                        setEditMedia({ kind: "pdf", base64: b64, mime: "application/pdf", filename: f.name });
+                        clearEditImage();
+                      }} />
+                    <input ref={editVideoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]; e.target.value = "";
+                        if (!f) return;
+                        if (f.size > 20_000_000) { toast.error("Video too large (>20 MB)"); return; }
+                        const b64 = await fileToBase64(f);
+                        setEditMedia({ kind: "video", base64: b64, mime: f.type || "video/mp4", filename: f.name });
+                        clearEditImage();
+                      }} />
+                    {editMedia && (
+                      <div className="mt-2 text-[11px] text-muted-foreground">
+                        Attached: <strong>{editMedia.filename}</strong> ({editMedia.kind})
+                        {editMedia.kind === "video" && (
+                          <video src={`data:${editMedia.mime};base64,${editMedia.base64}`} controls className="mt-2 max-h-40 w-full rounded-md" />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
+
               ) : (
                 <>
                   {editing.kind === "outbound_email" && (

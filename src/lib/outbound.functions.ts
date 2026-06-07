@@ -52,41 +52,77 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
   if (!sub) throw new Error("LinkedIn userinfo missing sub");
   const author = `urn:li:person:${sub}`;
 
+  // PDF carousels live on a different endpoint (LinkedIn versioned REST documents API).
+  // The legacy /v2/assets registerUpload endpoint does NOT accept feedshare-document
+  // and returns a 403 "Data Processing Exception" on the recipes field.
+  if (media?.kind === "pdf") {
+    try {
+      const pdfDoc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
+      const pages = pdfDoc.getPageCount();
+      if (pages > PDF_MAX_PAGES) {
+        throw new Error(`PDF carousel exceeds ${PDF_MAX_PAGES}-page limit (${pages} pages).`);
+      }
+    } catch (e: any) {
+      if (e?.message?.includes("PDF carousel")) throw e;
+      throw new Error(`Invalid PDF: ${e?.message ?? "could not parse"}`);
+    }
+
+    const liVersion = { "LinkedIn-Version": "202405", "X-Restli-Protocol-Version": "2.0.0" };
+    const initRes = await fetch(`${LINKEDIN_GATEWAY}/rest/documents?action=initializeUpload`, {
+      method: "POST",
+      headers: { ...wsHeaders, ...liVersion, "Content-Type": "application/json" },
+      body: JSON.stringify({ initializeUploadRequest: { owner: author } }),
+    });
+    if (!initRes.ok) throw new Error(`LinkedIn document init failed (${initRes.status}): ${await initRes.text()}`);
+    const init = (await initRes.json()) as any;
+    const uploadUrl: string | undefined = init?.value?.uploadUrl;
+    const documentUrn: string | undefined = init?.value?.document;
+    if (!uploadUrl || !documentUrn) throw new Error("LinkedIn document init missing upload URL/urn");
+
+    const up = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+      body: Buffer.from(media.base64, "base64"),
+    });
+    if (!up.ok) throw new Error(`LinkedIn document upload failed (${up.status}): ${await up.text()}`);
+
+    const postRes = await fetch(`${LINKEDIN_GATEWAY}/rest/posts`, {
+      method: "POST",
+      headers: { ...wsHeaders, ...liVersion, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        author,
+        commentary: text,
+        visibility: "PUBLIC",
+        distribution: {
+          feedDistribution: "MAIN_FEED",
+          targetEntities: [],
+          thirdPartyDistributionChannels: [],
+        },
+        content: { media: { id: documentUrn, title: media.filename.replace(/\.pdf$/i, "") } },
+        lifecycleState: "PUBLISHED",
+        isReshareDisabledByAuthor: false,
+      }),
+    });
+    if (!postRes.ok) throw new Error(`LinkedIn document post failed (${postRes.status}): ${await postRes.text()}`);
+    return { ok: true, kind: "pdf", documentUrn };
+  }
+
   let mediaAsset: string | null = null;
-  let shareMediaCategory: "NONE" | "IMAGE" | "DOCUMENT" | "VIDEO" = "NONE";
+  let shareMediaCategory: "NONE" | "IMAGE" | "VIDEO" = "NONE";
 
   if (media) {
-    const recipeByKind: Record<LiMediaKind, string> = {
+    const recipeByKind: Record<"image" | "video", string> = {
       image: "urn:li:digitalmediaRecipe:feedshare-image",
-      pdf: "urn:li:digitalmediaRecipe:feedshare-document",
       video: "urn:li:digitalmediaRecipe:feedshare-video",
     };
-    const categoryByKind: Record<LiMediaKind, "IMAGE" | "DOCUMENT" | "VIDEO"> = {
-      image: "IMAGE",
-      pdf: "DOCUMENT",
-      video: "VIDEO",
-    };
-
-    // PDF page-count guard
-    if (media.kind === "pdf") {
-      try {
-        const pdfDoc = await PDFDocument.load(Buffer.from(media.base64, "base64"));
-        const pages = pdfDoc.getPageCount();
-        if (pages > PDF_MAX_PAGES) {
-          throw new Error(`PDF carousel exceeds ${PDF_MAX_PAGES}-page limit (${pages} pages).`);
-        }
-      } catch (e: any) {
-        if (e?.message?.includes("PDF carousel")) throw e;
-        throw new Error(`Invalid PDF: ${e?.message ?? "could not parse"}`);
-      }
-    }
+    const recipe = recipeByKind[media.kind as "image" | "video"];
 
     const regRes = await fetch(`${LINKEDIN_GATEWAY}/v2/assets?action=registerUpload`, {
       method: "POST",
       headers: { ...wsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({
         registerUploadRequest: {
-          recipes: [recipeByKind[media.kind]],
+          recipes: [recipe],
           owner: author,
           serviceRelationships: [
             { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
@@ -94,7 +130,7 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
         },
       }),
     });
-    if (!regRes.ok) throw new Error(`LinkedIn registerUpload failed (${regRes.status}): ${await regRes.text()}`);
+    if (!regRes.ok) throw new Error(`LinkedIn registerUpload failed (${regRes.status}, recipe=${recipe}): ${await regRes.text()}`);
     const reg = (await regRes.json()) as any;
     const uploadUrl: string | undefined =
       reg?.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
@@ -126,16 +162,8 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
       if (!available) throw new Error("LinkedIn video processing timed out (>60s). Try again shortly.");
     }
 
-    shareMediaCategory = categoryByKind[media.kind];
+    shareMediaCategory = media.kind === "video" ? "VIDEO" : "IMAGE";
   }
-
-  const mediaArray = mediaAsset
-    ? [
-        media!.kind === "pdf"
-          ? { status: "READY", media: mediaAsset, title: { text: media!.filename.replace(/\.pdf$/i, "") } }
-          : { status: "READY", media: mediaAsset },
-      ]
-    : [];
 
   const body = mediaAsset
     ? {
@@ -145,7 +173,7 @@ async function postLinkedInAsWorkspace(text: string, media: ReturnType<typeof pi
           "com.linkedin.ugc.ShareContent": {
             shareCommentary: { text },
             shareMediaCategory,
-            media: mediaArray,
+            media: [{ status: "READY", media: mediaAsset }],
           },
         },
         visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },

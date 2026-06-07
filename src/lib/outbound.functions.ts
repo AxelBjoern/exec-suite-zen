@@ -490,11 +490,21 @@ export const updateOutboundDraft = createServerFn({ method: "POST" })
     if (error || !row) throw new Error("Request not found");
     if (row.requester_id !== userId) throw new Error("Forbidden");
     if (row.status !== "pending") throw new Error(`Cannot edit a ${row.status} request`);
-    // Preserve imageBase64 (the list strips it) unless explicitly overwritten
+    // Preserve image/media blobs (list strips them) unless explicitly overwritten
     const prev = (row.payload ?? {}) as Record<string, any>;
     const merged: Record<string, any> = { ...prev, ...data.payload };
     if (data.payload.imageBase64 === undefined && prev.imageBase64) {
       merged.imageBase64 = prev.imageBase64;
+    }
+    if (data.payload.mediaBase64 === undefined && prev.mediaBase64) {
+      merged.mediaBase64 = prev.mediaBase64;
+      merged.mediaKind = prev.mediaKind;
+      merged.mediaMime = prev.mediaMime;
+      merged.mediaFilename = prev.mediaFilename;
+    }
+    // If new media is being set, clear the legacy image slot (mutual exclusion)
+    if (data.payload.mediaBase64) {
+      merged.imageBase64 = null;
     }
     const { error: upErr } = await supabaseAdmin
       .from("approvals")

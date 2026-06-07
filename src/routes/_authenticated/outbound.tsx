@@ -23,11 +23,7 @@ import { composeLinkedInTagline } from "@/lib/tagline.functions";
 import { decodeDraft } from "@/lib/draftLink";
 import { streamImage } from "@/lib/streamImage";
 import { supabase } from "@/integrations/supabase/client";
-
-async function authHeader(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const t = data.session?.access_token;
-  return t ? { Authorization: `Bearer ${t}` } : {};
+import { cn } from "@/lib/utils";
 }
 
 // Convert "YYYY-MM-DDTHH:mm" (browser local) → real ISO string w/ offset.

@@ -746,84 +746,118 @@ function OutboundPage() {
         </Card>
 
         <section className="rounded-lg border border-border bg-panel p-5">
-          <h2 className="mb-3 font-serif text-lg font-semibold">My recent requests</h2>
-          {!data?.rows?.length && <p className="text-xs text-muted-foreground">Nothing submitted yet.</p>}
-          <ul className="divide-y divide-border">
-            {data?.rows?.map((r: any) => {
-              const p = (r.payload ?? {}) as Record<string, string>;
-              const clickable = r.status === "pending";
-              return (
-                <li
-                  key={r.id}
-                  className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
-                  onClick={clickable ? () => openEdit(r) : undefined}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-medium uppercase tracking-wider text-muted-foreground">
-                        {r.kind.replace("outbound_", "")}
-                      </span>
-                      <StatusBadge status={r.status} />
-                      {clickable && (
-                        <span className="text-[10px] text-primary">Click to edit</span>
-                      )}
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
-                    {p.scheduled_at && (
-                      <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
-                        <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
-                      </p>
-                    )}
-                    {r.notes && r.status !== "sent" && (
-                      <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(r.created_at).toLocaleString()}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {r.status === "pending" && !r.notes && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-                          disabled={rowBusy === r.id}
-                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
-                        >
-                          {rowBusy === r.id ? "Sending…" : "Send now"}
-                        </button>
-                      )}
-                      {r.notes && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
-                          disabled={rowBusy === r.id}
-                          onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
-                        >
-                          {rowBusy === r.id ? (
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-3 w-3" />
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="font-serif text-lg font-semibold">My recent requests</h2>
+            <div className="ml-auto flex items-center gap-2">
+              <Link
+                to="/outbound/archive"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              >
+                <Archive className="h-3 w-3" />
+                Archive
+              </Link>
+              <button
+                type="button"
+                onClick={() => setListOpen((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+                aria-expanded={listOpen}
+              >
+                <ChevronDown className={`h-3 w-3 transition-transform ${listOpen ? "rotate-180" : ""}`} />
+                {listOpen ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+          {listOpen && (
+            <>
+              {!data?.rows?.length && <p className="text-xs text-muted-foreground">Nothing submitted yet.</p>}
+              <ul className="divide-y divide-border">
+                {data?.rows?.map((r: any) => {
+                  const p = (r.payload ?? {}) as Record<string, string>;
+                  const clickable = r.status === "pending";
+                  return (
+                    <li
+                      key={r.id}
+                      className={`flex items-start justify-between gap-3 py-3 ${clickable ? "cursor-pointer rounded-md px-2 -mx-2 hover:bg-muted/40" : ""}`}
+                      onClick={clickable ? () => openEdit(r) : undefined}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-medium uppercase tracking-wider text-muted-foreground">
+                            {r.kind.replace("outbound_", "")}
+                          </span>
+                          <StatusBadge status={r.status} />
+                          {clickable && (
+                            <span className="text-[10px] text-primary">Click to edit</span>
                           )}
-                          {rowBusy === r.id ? "Retrying…" : "Retry"}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                        disabled={rowBusy === r.id}
-                        onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm">{p.subject ?? p.text ?? p.to ?? ""}</p>
+                        {p.scheduled_at && (
+                          <p className="mt-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-primary">
+                            <Clock className="h-3 w-3" /> Scheduled: {new Date(p.scheduled_at).toLocaleString()}
+                          </p>
+                        )}
+                        {r.notes && r.status !== "sent" && (
+                          <p className="mt-1 text-xs text-muted-foreground">Note: {r.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(r.created_at).toLocaleString()}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {r.status === "pending" && !r.notes && (
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+                              disabled={rowBusy === r.id}
+                              onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                            >
+                              {rowBusy === r.id ? "Sending…" : "Send now"}
+                            </button>
+                          )}
+                          {r.notes && (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                              disabled={rowBusy === r.id}
+                              onClick={(e) => { e.stopPropagation(); sendNow(r.id); }}
+                            >
+                              {rowBusy === r.id ? (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3 w-3" />
+                              )}
+                              {rowBusy === r.id ? "Retrying…" : "Retry"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-muted disabled:opacity-50"
+                            disabled={rowBusy === r.id}
+                            onClick={(e) => { e.stopPropagation(); archiveItem(r.id); }}
+                            title="Archive"
+                          >
+                            <Archive className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                            disabled={rowBusy === r.id}
+                            onClick={(e) => { e.stopPropagation(); deleteRow(r.id); }}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </section>
+
 
         <Card
           title="LinkedIn post"

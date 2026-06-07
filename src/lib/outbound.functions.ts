@@ -553,7 +553,8 @@ export const deleteOutbound = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !row) throw new Error("Request not found");
     if (row.requester_id !== userId) throw new Error("Forbidden");
-    if (row.status !== "pending") throw new Error(`Cannot delete a ${row.status} request`);
+    const deletable = ["pending", "failed", "rejected", "cancelled", "canceled"];
+    if (!deletable.includes(row.status)) throw new Error(`Cannot delete a ${row.status} request`);
     const { error: delErr } = await supabaseAdmin.from("approvals").delete().eq("id", data.id);
     if (delErr) throw new Error(delErr.message);
     return { ok: true };

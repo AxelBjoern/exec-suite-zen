@@ -91,6 +91,7 @@ export type Database = {
       }
       approvals: {
         Row: {
+          archived_at: string | null
           created_at: string
           decided_at: string | null
           id: string
@@ -103,6 +104,7 @@ export type Database = {
           task_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           decided_at?: string | null
           id?: string
@@ -115,6 +117,7 @@ export type Database = {
           task_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           decided_at?: string | null
           id?: string

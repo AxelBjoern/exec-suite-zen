@@ -19,6 +19,7 @@ import {
   deleteOutbound,
   generateKlingClipForOutbound,
   getOutboundFull,
+  setOutboundArchived,
 
 } from "@/lib/outbound.functions";
 import { composeLinkedInTagline } from "@/lib/tagline.functions";

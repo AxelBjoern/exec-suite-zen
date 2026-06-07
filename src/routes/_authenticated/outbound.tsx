@@ -510,7 +510,7 @@ function OutboundPage() {
               className={btnCls}
               disabled={busy === "reminder" || !reminder.subject || !reminder.body}
               onClick={() =>
-                run("reminder", () => reqReminder({ data: reminder }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
+                run("reminder", () => reqReminder({ data: { ...reminder, scheduled_at: localToIso(reminder.scheduled_at) } }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
                   sent: "Sent",
                   pending: "Queued for owner approval",
                 })

@@ -309,6 +309,8 @@ function OutboundPage() {
   const editPdfInputRef = useRef<HTMLInputElement>(null);
   const editVideoInputRef = useRef<HTMLInputElement>(null);
   const [editKlingPrompt, setEditKlingPrompt] = useState("");
+  const [editKlingNarration, setEditKlingNarration] = useState("");
+  const [editNarrationAudio, setEditNarrationAudio] = useState<{ base64: string; mime: string } | null>(null);
   // drag-drop state
   const [dragOver, setDragOver] = useState(false);
 

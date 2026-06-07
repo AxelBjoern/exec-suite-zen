@@ -696,55 +696,6 @@ function OutboundPage() {
       </p>
 
       <div className="mt-8 grid gap-4">
-        <Card title="Email" icon={Mail} refEl={emailRef}>
-          <div className="grid gap-2">
-            <input className={inputCls} placeholder="to@example.com" value={email.to} onChange={(e) => setEmail({ ...email, to: e.target.value })} />
-            <input className={inputCls} placeholder="Subject" value={email.subject} onChange={(e) => setEmail({ ...email, subject: e.target.value })} />
-            <textarea className={inputCls} rows={5} placeholder="Body" value={email.body} onChange={(e) => setEmail({ ...email, body: e.target.value })} />
-            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <Clock className="h-3 w-3" /> Send at (optional)
-              <input type="datetime-local" className={inputCls + " flex-1"} value={email.scheduled_at}
-                onChange={(e) => setEmail({ ...email, scheduled_at: e.target.value })} />
-            </label>
-            <button
-              className={btnCls}
-              disabled={busy === "email" || !email.to || !email.subject || !email.body}
-              onClick={() =>
-                run("email", () => reqEmail({ data: { ...email, scheduled_at: localToIso(email.scheduled_at) } }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
-                  sent: "Sent",
-                  pending: "Queued for owner approval",
-                })
-              }
-            >
-              {busy === "email" ? "Submitting…" : "Submit"}
-            </button>
-          </div>
-        </Card>
-
-        <Card title="Reminder to owner" icon={BellRing} refEl={reminderRef}>
-          <div className="grid gap-2">
-            <input className={inputCls} placeholder="Subject" value={reminder.subject} onChange={(e) => setReminder({ ...reminder, subject: e.target.value })} />
-            <textarea className={inputCls} rows={4} placeholder="What should the owner be reminded about?" value={reminder.body} onChange={(e) => setReminder({ ...reminder, body: e.target.value })} />
-            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <Clock className="h-3 w-3" /> Send at (optional)
-              <input type="datetime-local" className={inputCls + " flex-1"} value={reminder.scheduled_at}
-                onChange={(e) => setReminder({ ...reminder, scheduled_at: e.target.value })} />
-            </label>
-            <button
-              className={btnCls}
-              disabled={busy === "reminder" || !reminder.subject || !reminder.body}
-              onClick={() =>
-                run("reminder", () => reqReminder({ data: { ...reminder, scheduled_at: localToIso(reminder.scheduled_at) } }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
-                  sent: "Sent",
-                  pending: "Queued for owner approval",
-                })
-              }
-            >
-              {busy === "reminder" ? "Submitting…" : "Submit"}
-            </button>
-          </div>
-        </Card>
-
         <section className="rounded-lg border border-border bg-panel p-5">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="font-serif text-lg font-semibold">My recent requests</h2>
@@ -857,6 +808,55 @@ function OutboundPage() {
             </>
           )}
         </section>
+
+        <Card title="Email" icon={Mail} refEl={emailRef}>
+          <div className="grid gap-2">
+            <input className={inputCls} placeholder="to@example.com" value={email.to} onChange={(e) => setEmail({ ...email, to: e.target.value })} />
+            <input className={inputCls} placeholder="Subject" value={email.subject} onChange={(e) => setEmail({ ...email, subject: e.target.value })} />
+            <textarea className={inputCls} rows={5} placeholder="Body" value={email.body} onChange={(e) => setEmail({ ...email, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={email.scheduled_at}
+                onChange={(e) => setEmail({ ...email, scheduled_at: e.target.value })} />
+            </label>
+            <button
+              className={btnCls}
+              disabled={busy === "email" || !email.to || !email.subject || !email.body}
+              onClick={() =>
+                run("email", () => reqEmail({ data: { ...email, scheduled_at: localToIso(email.scheduled_at) } }), () => setEmail({ to: "", subject: "", body: "", scheduled_at: "" }), {
+                  sent: "Sent",
+                  pending: "Queued for owner approval",
+                })
+              }
+            >
+              {busy === "email" ? "Submitting…" : "Submit"}
+            </button>
+          </div>
+        </Card>
+
+        <Card title="Reminder to owner" icon={BellRing} refEl={reminderRef}>
+          <div className="grid gap-2">
+            <input className={inputCls} placeholder="Subject" value={reminder.subject} onChange={(e) => setReminder({ ...reminder, subject: e.target.value })} />
+            <textarea className={inputCls} rows={4} placeholder="What should the owner be reminded about?" value={reminder.body} onChange={(e) => setReminder({ ...reminder, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <Clock className="h-3 w-3" /> Send at (optional)
+              <input type="datetime-local" className={inputCls + " flex-1"} value={reminder.scheduled_at}
+                onChange={(e) => setReminder({ ...reminder, scheduled_at: e.target.value })} />
+            </label>
+            <button
+              className={btnCls}
+              disabled={busy === "reminder" || !reminder.subject || !reminder.body}
+              onClick={() =>
+                run("reminder", () => reqReminder({ data: { ...reminder, scheduled_at: localToIso(reminder.scheduled_at) } }), () => setReminder({ subject: "", body: "", scheduled_at: "" }), {
+                  sent: "Sent",
+                  pending: "Queued for owner approval",
+                })
+              }
+            >
+              {busy === "reminder" ? "Submitting…" : "Submit"}
+            </button>
+          </div>
+        </Card>
 
 
         <Card

@@ -25,11 +25,11 @@ import { streamImage } from "@/lib/streamImage";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-async function authHeader(): Promise<Record<string, string>> {
+const authHeader = async (): Promise<Record<string, string>> => {
   const { data } = await supabase.auth.getSession();
   const t = data.session?.access_token;
   return t ? { Authorization: `Bearer ${t}` } : {};
-}
+};
 
 // Convert "YYYY-MM-DDTHH:mm" (browser local) → real ISO string w/ offset.
 // Without this, the server reads the string as UTC and schedules fire at the

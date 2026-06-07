@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
-const NAV = [
+type NavItem = { to: string; label: string; exact?: boolean };
+const NAV: NavItem[] = [
   { to: "/budget", label: "Overview", exact: true },
   { to: "/budget/board", label: "Board" },
   { to: "/budget/assumptions", label: "Assumptions" },
@@ -22,7 +23,7 @@ const NAV = [
   { to: "/budget/results", label: "Results" },
   { to: "/budget/scenarios", label: "Scenarios" },
   { to: "/budget/changelog", label: "Changelog" },
-] as const;
+];
 
 export function BudgetTopbar() {
   const load = useBudgetStore((s) => s.load);

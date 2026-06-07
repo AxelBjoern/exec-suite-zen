@@ -14,18 +14,23 @@ const PDF_MAX_PAGES = 10;
 
 type LiMediaKind = "image" | "pdf" | "video";
 
+const OUTBOUND_BUCKET = "chat-uploads";
+
 function pickLiMedia(payload: Record<string, any>): {
   kind: LiMediaKind;
-  base64: string;
+  base64?: string;
+  path?: string;
   mime: string;
   filename: string;
 } | null {
   const mk = payload.mediaKind as LiMediaKind | undefined;
   const mb = payload.mediaBase64 as string | undefined;
-  if (mk && mb) {
+  const mp = payload.mediaPath as string | undefined;
+  if (mk && (mb || mp)) {
     return {
       kind: mk,
-      base64: mb,
+      base64: mb && !mb.startsWith("[") ? mb : undefined,
+      path: mp,
       mime: payload.mediaMime ?? (mk === "pdf" ? "application/pdf" : mk === "video" ? "video/mp4" : "image/png"),
       filename: payload.mediaFilename ?? (mk === "pdf" ? "carousel.pdf" : mk === "video" ? "clip.mp4" : "image.png"),
     };
@@ -34,6 +39,17 @@ function pickLiMedia(payload: Record<string, any>): {
     return { kind: "image", base64: payload.imageBase64, mime: "image/png", filename: "image.png" };
   }
   return null;
+}
+
+async function resolveMediaBase64(
+  media: { base64?: string; path?: string },
+): Promise<string> {
+  if (media.base64) return media.base64;
+  if (!media.path) throw new Error("Media has no base64 or path");
+  const { data, error } = await supabaseAdmin.storage.from(OUTBOUND_BUCKET).download(media.path);
+  if (error || !data) throw new Error(`Storage download failed: ${error?.message ?? "no data"}`);
+  const buf = Buffer.from(await data.arrayBuffer());
+  return buf.toString("base64");
 }
 
 

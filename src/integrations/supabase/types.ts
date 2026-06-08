@@ -390,6 +390,7 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           id: string
+          model_used: string | null
           role: string
         }
         Insert: {
@@ -398,6 +399,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           id?: string
+          model_used?: string | null
           role: string
         }
         Update: {
@@ -406,6 +408,7 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           id?: string
+          model_used?: string | null
           role?: string
         }
         Relationships: [

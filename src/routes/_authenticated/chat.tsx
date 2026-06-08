@@ -636,6 +636,7 @@ function ChatPage() {
                 content={m.content}
                 attachments={m.attachments ?? []}
                 artifact={m.artifact_json ?? parseArtifactFromMarkdown(m.content)}
+                modelUsed={(m as any).model_used ?? null}
                 onOpenArtifact={setOpenArtifact}
               />
             ))}

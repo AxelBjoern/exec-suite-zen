@@ -13,12 +13,14 @@ export function MessageRow({
   content,
   attachments,
   artifact,
+  modelUsed,
   onOpenArtifact,
 }: {
   role: "user" | "assistant";
   content: string;
   attachments: Attachment[];
   artifact?: DocArtifact | null;
+  modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
 }) {
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));
@@ -171,9 +173,22 @@ export function MessageRow({
             )}
           </button>
           <SendPlanButton content={content} />
+          {modelUsed && <ModelPill model={modelUsed} />}
         </div>
       </div>
     </div>
+  );
+}
+
+function ModelPill({ model }: { model: string }) {
+  const short = model.split("/").pop() ?? model;
+  return (
+    <span
+      title={model}
+      className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+    >
+      {short}
+    </span>
   );
 }
 

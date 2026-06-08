@@ -396,6 +396,7 @@ async function insertCeoChatMessage<TSelect extends string>(opts: {
   conversationId?: string | null;
   title?: string | null;
   artifactJson?: Record<string, any> | null;
+  modelUsed?: string | null;
   select: TSelect;
 }) {
   let conversationId = await ensureCeoConversation({
@@ -411,6 +412,7 @@ async function insertCeoChatMessage<TSelect extends string>(opts: {
         content: opts.content,
         conversation_id: conversationId,
         ...(opts.artifactJson === undefined ? {} : { artifact_json: opts.artifactJson }),
+        ...(opts.modelUsed === undefined ? {} : { model_used: opts.modelUsed }),
       })
       .select(opts.select)
       .single();
@@ -701,7 +703,7 @@ export const getCeoChat = createServerFn({ method: "GET" })
     if (!data.conversationId) return [];
     const { data: messages, error } = await supabaseAdmin
       .from("ceo_chat_messages")
-      .select("id, role, content, created_at, artifact_json")
+      .select("id, role, content, created_at, artifact_json, model_used")
       .eq("conversation_id", data.conversationId)
       .order("created_at", { ascending: true })
       .limit(500);
@@ -1189,13 +1191,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         .update({ updated_at: new Date().toISOString() })
         .eq("id", conversationId!);
 
-    const saveAssistant = async (markdown: string) => {
+    const saveAssistant = async (markdown: string, modelOverride?: string | null) => {
       const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
         role: "assistant",
         content: markdown,
         conversationId,
         title: data.content || "New conversation",
-        select: "id, role, content, created_at",
+        modelUsed: modelOverride ?? resolvedModel ?? null,
+        select: "id, role, content, created_at, model_used",
       });
       conversationId = finalConversationId;
       await bump();

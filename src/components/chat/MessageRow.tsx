@@ -180,6 +180,18 @@ export function MessageRow({
   );
 }
 
+function ModelPill({ model }: { model: string }) {
+  const short = model.split("/").pop() ?? model;
+  return (
+    <span
+      title={model}
+      className="inline-flex items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground"
+    >
+      {short}
+    </span>
+  );
+}
+
 function SendPlanButton({ content }: { content: string }) {
   const filePlan = useServerFn(filePlanFromChat);
   const [busy, setBusy] = useState(false);

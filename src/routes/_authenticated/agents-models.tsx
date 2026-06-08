@@ -24,6 +24,7 @@ type AgentType = {
   description: string;
   is_system: boolean;
   is_public?: boolean;
+  owner_id?: string | null;
 };
 type BaseModel = {
   id: string;
@@ -33,6 +34,7 @@ type BaseModel = {
   description: string;
   is_system: boolean;
   is_public?: boolean;
+  owner_id?: string | null;
 };
 
 function AgentsModelsShell() {

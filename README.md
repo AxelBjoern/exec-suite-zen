@@ -1,6 +1,6 @@
 # VDNX Terminal
 
-Institutional Company Operating System — an executive workspace combining chat, terminal, budget modeling, agent forge, outbound (email + LinkedIn), and approvals.
+Institutional Company Operating System — an executive workspace combining chat, terminal, budget modeling, agents & models, outbound (email + LinkedIn), and approvals.
 
 **Live:** https://exec-suite-zen.lovable.app
 

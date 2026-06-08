@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Cpu, Plus, Sparkles, Trash2, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,11 @@ type BaseModel = {
 
 function AgentsModelsShell() {
   const qc = useQueryClient();
+  const agentFormRef = useRef<HTMLDivElement | null>(null);
+  const modelFormRef = useRef<HTMLDivElement | null>(null);
+
+  const [agentPrefill, setAgentPrefill] = useState<AgentDraft | null>(null);
+  const [modelPrefill, setModelPrefill] = useState<ModelDraft | null>(null);
 
   const { data: me } = useQuery({
     queryKey: ["am", "me"],
@@ -139,45 +144,68 @@ function AgentsModelsShell() {
           userId={me.id}
           hasOwnAgent={types.some((t) => t.owner_id === me.id)}
           hasOwnModel={models.some((m) => m.owner_id === me.id)}
-          onCreateAgent={(v: AgentDraft) => createAgent.mutateAsync(v)}
-          onCreateModel={(v: ModelDraft) => createModel.mutateAsync(v)}
+          onPrefillAgent={(v) => {
+            setAgentPrefill(v);
+            setTimeout(() => agentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+          }}
+          onPrefillModel={(v) => {
+            setModelPrefill(v);
+            setTimeout(() => modelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+          }}
         />
       )}
 
       <div className="grid gap-8 md:grid-cols-2">
-
-        <Section
-          title="Agents"
-          count={types.length}
-          empty="No custom agents yet — VDNX defaults are read-only."
-          items={types.map((t) => ({
-            id: t.id,
-            primary: t.name,
-            secondary: `${t.industry}${t.description ? " · " + t.description : ""}`,
-            system: t.is_system,
-            isPublic: !!t.is_public,
-          }))}
-          onDelete={(id) => remove.mutate({ table: "agent_types", id })}
-          form={
-            <AgentForm onSubmit={(v) => createAgent.mutate(v)} busy={createAgent.isPending} />
-          }
-        />
-        <Section
-          title="Models"
-          count={models.length}
-          empty="No custom models yet — VDNX defaults are read-only."
-          items={models.map((m) => ({
-            id: m.id,
-            primary: m.name,
-            secondary: `${m.provider} · ${m.slug}`,
-            system: m.is_system,
-            isPublic: !!m.is_public,
-          }))}
-          onDelete={(id) => remove.mutate({ table: "base_models", id })}
-          form={
-            <ModelForm onSubmit={(v) => createModel.mutate(v)} busy={createModel.isPending} />
-          }
-        />
+        <div ref={agentFormRef}>
+          <Section
+            title="Agents"
+            count={types.length}
+            empty="No custom agents yet — VDNX defaults are read-only."
+            items={types.map((t) => ({
+              id: t.id,
+              primary: t.name,
+              secondary: `${t.industry}${t.description ? " · " + t.description : ""}`,
+              system: t.is_system,
+              isPublic: !!t.is_public,
+            }))}
+            onDelete={(id) => remove.mutate({ table: "agent_types", id })}
+            form={
+              <AgentForm
+                onSubmit={(v) => {
+                  createAgent.mutate(v);
+                  setAgentPrefill(null);
+                }}
+                busy={createAgent.isPending}
+                prefill={agentPrefill ?? undefined}
+              />
+            }
+          />
+        </div>
+        <div ref={modelFormRef}>
+          <Section
+            title="Models"
+            count={models.length}
+            empty="No custom models yet — VDNX defaults are read-only."
+            items={models.map((m) => ({
+              id: m.id,
+              primary: m.name,
+              secondary: `${m.provider} · ${m.slug}`,
+              system: m.is_system,
+              isPublic: !!m.is_public,
+            }))}
+            onDelete={(id) => remove.mutate({ table: "base_models", id })}
+            form={
+              <ModelForm
+                onSubmit={(v) => {
+                  createModel.mutate(v);
+                  setModelPrefill(null);
+                }}
+                busy={createModel.isPending}
+                prefill={modelPrefill ?? undefined}
+              />
+            }
+          />
+        </div>
       </div>
     </main>
   );
@@ -244,15 +272,31 @@ function Section(props: {
   );
 }
 
-function AgentForm({ onSubmit, busy }: { onSubmit: (v: { name: string; industry: string; description: string }) => void; busy: boolean }) {
-  const [name, setName] = useState("");
-  const [industry, setIndustry] = useState("general");
-  const [description, setDescription] = useState("");
+function AgentForm({
+  onSubmit,
+  busy,
+  prefill,
+}: {
+  onSubmit: (v: { name: string; industry: string; description: string }) => void;
+  busy: boolean;
+  prefill?: AgentDraft;
+}) {
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [industry, setIndustry] = useState(prefill?.industry ?? "general");
+  const [description, setDescription] = useState(prefill?.description ?? "");
+
+  useEffect(() => {
+    if (prefill) {
+      setName(prefill.name);
+      setIndustry(prefill.industry);
+      setDescription(prefill.description);
+    }
+  }, [prefill]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     onSubmit({ name: name.trim(), industry: industry.trim() || "general", description: description.trim() });
-    setName(""); setIndustry("general"); setDescription("");
   }
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
@@ -277,16 +321,33 @@ function AgentForm({ onSubmit, busy }: { onSubmit: (v: { name: string; industry:
   );
 }
 
-function ModelForm({ onSubmit, busy }: { onSubmit: (v: { slug: string; name: string; provider: string; description: string }) => void; busy: boolean }) {
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
-  const [provider, setProvider] = useState("openrouter");
-  const [description, setDescription] = useState("");
+function ModelForm({
+  onSubmit,
+  busy,
+  prefill,
+}: {
+  onSubmit: (v: { slug: string; name: string; provider: string; description: string }) => void;
+  busy: boolean;
+  prefill?: ModelDraft;
+}) {
+  const [slug, setSlug] = useState(prefill?.slug ?? "");
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [provider, setProvider] = useState(prefill?.provider ?? "openrouter");
+  const [description, setDescription] = useState(prefill?.description ?? "");
+
+  useEffect(() => {
+    if (prefill) {
+      setSlug(prefill.slug);
+      setName(prefill.name);
+      setProvider(prefill.provider);
+      setDescription(prefill.description);
+    }
+  }, [prefill]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!slug.trim() || !name.trim()) return;
     onSubmit({ slug: slug.trim(), name: name.trim(), provider: provider.trim() || "openrouter", description: description.trim() });
-    setSlug(""); setName(""); setProvider("openrouter"); setDescription("");
   }
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
@@ -333,15 +394,14 @@ function SetupWizard(props: {
   userId: string;
   hasOwnAgent: boolean;
   hasOwnModel: boolean;
-  onCreateAgent: (v: AgentDraft) => Promise<unknown>;
-  onCreateModel: (v: ModelDraft) => Promise<unknown>;
+  onPrefillAgent: (v: AgentDraft) => void;
+  onPrefillModel: (v: ModelDraft) => void;
 }) {
   const storageKey = `am-wizard-dismissed:${props.userId}`;
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(storageKey) === "1";
   });
-  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (props.hasOwnAgent && props.hasOwnModel) {
@@ -358,20 +418,6 @@ function SetupWizard(props: {
     setDismissed(true);
   }
 
-  async function add(kind: "agent" | "model", preset: AgentDraft | ModelDraft) {
-    const key = `${kind}:${(preset as AgentDraft).name ?? (preset as ModelDraft).slug}`;
-    setBusy(key);
-    try {
-      if (kind === "agent") {
-        await props.onCreateAgent(preset as AgentDraft);
-      } else {
-        await props.onCreateModel(preset as ModelDraft);
-      }
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <section className="mb-8 rounded-lg border border-primary/30 bg-primary/5 p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -386,8 +432,8 @@ function SetupWizard(props: {
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {step === 1
-                ? "Agents define a role and tone. Pick a preset or build one from scratch in the Agents panel below."
-                : "Models are the LLMs behind your agents. The two defaults below are public; you can add any OpenRouter slug."}
+                ? "Agents define a role and tone. Pick a preset to prefill the form below — edit before creating."
+                : "Models are the LLMs behind your agents. Pick a preset to prefill the form below — edit before adding."}
             </p>
           </div>
         </div>
@@ -402,37 +448,31 @@ function SetupWizard(props: {
 
       {step === 1 ? (
         <ul className="grid gap-2 sm:grid-cols-3">
-          {AGENT_PRESETS.map((p) => {
-            const key = `agent:${p.name}`;
-            return (
-              <li key={p.name} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
-                <div>
-                  <div className="text-sm font-medium text-foreground">{p.name}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{p.description}</div>
-                </div>
-                <Button size="sm" variant="outline" disabled={busy === key} onClick={() => add("agent", p)}>
-                  {busy === key ? "Adding…" : (<><Plus className="mr-1 h-3.5 w-3.5" />Use preset</>)}
-                </Button>
-              </li>
-            );
-          })}
+          {AGENT_PRESETS.map((p) => (
+            <li key={p.name} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">{p.name}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{p.description}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => props.onPrefillAgent(p)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />Use preset
+              </Button>
+            </li>
+          ))}
         </ul>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
-          {MODEL_PRESETS.map((p) => {
-            const key = `model:${p.slug}`;
-            return (
-              <li key={p.slug} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
-                <div>
-                  <div className="text-sm font-medium text-foreground">{p.name}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">{p.provider} · {p.slug}</div>
-                </div>
-                <Button size="sm" variant="outline" disabled={busy === key} onClick={() => add("model", p)}>
-                  {busy === key ? "Adding…" : (<><Plus className="mr-1 h-3.5 w-3.5" />Add model</>)}
-                </Button>
-              </li>
-            );
-          })}
+          {MODEL_PRESETS.map((p) => (
+            <li key={p.slug} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">{p.name}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{p.provider} · {p.slug}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => props.onPrefillModel(p)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />Use preset
+              </Button>
+            </li>
+          ))}
         </ul>
       )}
 

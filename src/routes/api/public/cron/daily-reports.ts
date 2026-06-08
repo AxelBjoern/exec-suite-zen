@@ -18,8 +18,23 @@ export const Route = createFileRoute("/api/public/cron/daily-reports")({
 
         const { companyContext, recentDecisions } = await loadContext();
         const reports: any[] = [];
+        const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
 
         for (const a of agents) {
+          // Dedup: skip if a standup thread already exists today for this agent
+          const { data: existing } = await supabaseAdmin
+            .from("threads")
+            .select("id")
+            .eq("agent_id", a.id)
+            .eq("kind", "standup")
+            .gte("created_at", todayStart.toISOString())
+            .limit(1)
+            .maybeSingle();
+          if (existing) {
+            reports.push({ agent: a.slug, ok: true, skipped: "already-ran-today" });
+            continue;
+          }
+
           // Pull this agent's open tasks for context
           const { data: openTasks } = await supabaseAdmin
             .from("tasks").select("title,status,completed_at")

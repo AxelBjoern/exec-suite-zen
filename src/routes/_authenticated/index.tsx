@@ -42,9 +42,9 @@ const TILES = [
     badge: "Module",
   },
   {
-    to: "/forge",
-    label: "Forge",
-    desc: "Train and deploy specialised agents on OpenRouter models.",
+    to: "/agents-models",
+    label: "Agents & Models",
+    desc: "Browse VDNX defaults and register your own agents and OpenRouter models.",
     icon: Cpu,
     badge: "Module",
   },

@@ -4,6 +4,25 @@ Institutional Company Operating System — an executive workspace combining chat
 
 **Live:** https://exec-suite-zen.lovable.app
 
+## Philosophy & Workflow
+
+This project is **not** built with "full AI auto-loops".
+
+After 3+ years using AI daily, I follow a pragmatic, quality-first approach:
+
+- **Claude Opus 4.8 (max intelligence)** → Analysis, architecture, and planning
+- **Lovable** → Rapid prototyping and UI generation
+- **DeepSeek V4 Flash / Qwen** (via OpenRouter) → Most implementation work (fast + very cheap)
+- **Heavy human review** on all critical systems (ownership, payments, compliance, audit trails)
+
+**Memo payments** were built manually without connectors or loops — and work reliably.
+
+I believe the real skill is **designing systems where you stay in control**, not handing everything to the AI.
+
+## Why Open Source?
+
+To show a realistic, production-minded workflow instead of the usual hype.
+
 ## Stack
 
 - TanStack Start v1 (React 19, Vite 7) — file-based routing under `src/routes/`

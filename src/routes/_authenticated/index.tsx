@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "VDNX Terminal — Workspace" },
-      { name: "description", content: "VDNX operations workspace: chat, terminal, budget, forge, outbound, approvals." },
+      { name: "description", content: "VDNX operations workspace: chat, terminal, budget, agents & models, outbound, approvals." },
       { property: "og:title", content: "VDNX Terminal — Workspace" },
       { property: "og:description", content: "Institutional Company Operating System." },
       { property: "og:url", content: "https://exec-suite-zen.lovable.app/" },
@@ -42,9 +42,9 @@ const TILES = [
     badge: "Module",
   },
   {
-    to: "/forge",
-    label: "Forge",
-    desc: "Train and deploy specialised agents on OpenRouter models.",
+    to: "/agents-models",
+    label: "Agents & Models",
+    desc: "Browse VDNX defaults and register your own agents and OpenRouter models.",
     icon: Cpu,
     badge: "Module",
   },

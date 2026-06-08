@@ -1,6 +1,6 @@
 # VDNX Terminal
 
-Institutional Company Operating System — an executive workspace combining chat, terminal, budget modeling, agent forge, outbound (email + LinkedIn), and approvals.
+Institutional Company Operating System — an executive workspace combining chat, terminal, budget modeling, agents & models, outbound (email + LinkedIn), and approvals.
 
 **Live:** https://exec-suite-zen.lovable.app
 
@@ -87,9 +87,9 @@ VDNX follows a **human-in-the-loop** principle:
 
 External keywords (`post`, `send`, `publish`, `commit`, `deploy`, `launch-day`, etc.) always force approval — regardless of what the model suggests.
 
-### Creating Custom Agents (`/forge`)
+### Custom Agents & Models (`/agents-models`)
 
-The built-in roster covers standard executive functions. Use `/forge` to train and deploy specialized agents on your own OpenRouter models for domain-specific work (e.g. legal review, technical support, industry research).
+The built-in roster covers standard executive functions. Use `/agents-models` to register your own agents and OpenRouter models for domain-specific work (e.g. legal review, technical support, industry research). DeepSeek V4 Flash and Gemini 2.5 Flash ship as defaults for every user; VDNX defaults are admin-only.
 
 ### Quick Command Reference
 
@@ -125,7 +125,7 @@ The built-in roster covers standard executive functions. Use `/forge` to train a
 | `/chat` | Free-form conversation with the executive board |
 | `/terminal` | Structured-verb command surface |
 | `/budget` | Scenario modeling, P&L, cash flow, sensitivity |
-| `/forge` | Train and deploy specialized agents |
+| `/agents-models` | Register custom agents and OpenRouter models |
 | `/outbound` | Email, self-reminders, LinkedIn posts |
 | `/approvals` | Owner review of outbound mail and posts |
 | `/settings` | Connections (Gmail / LinkedIn), models, guardrails |

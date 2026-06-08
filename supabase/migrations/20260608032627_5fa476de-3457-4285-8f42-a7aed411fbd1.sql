@@ -1,0 +1,1 @@
+UPDATE public.base_models SET is_public = true WHERE slug = 'deepseek/deepseek-v4-flash';

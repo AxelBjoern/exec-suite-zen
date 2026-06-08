@@ -5,6 +5,7 @@ Disallow: /chat
 Disallow: /terminal
 Disallow: /budget
 Disallow: /forge
+Disallow: /agents-models
 Disallow: /outbound
 Disallow: /approvals
 Disallow: /settings

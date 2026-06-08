@@ -10,7 +10,7 @@ const MODS = [
   { to: "/chat", label: "Chat", icon: MessageSquare, ownerOnly: false },
   { to: "/terminal", label: "Terminal", icon: TerminalSquare, ownerOnly: true },
   { to: "/budget", label: "Budget", icon: LineChart, ownerOnly: false },
-  { to: "/forge", label: "Forge", icon: Cpu, ownerOnly: false },
+  { to: "/agents-models", label: "Agents & Models", icon: Cpu, ownerOnly: false },
   { to: "/outbound", label: "Outbound", icon: Send, ownerOnly: false },
 ] as const;
 

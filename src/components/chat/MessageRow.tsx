@@ -13,12 +13,14 @@ export function MessageRow({
   content,
   attachments,
   artifact,
+  modelUsed,
   onOpenArtifact,
 }: {
   role: "user" | "assistant";
   content: string;
   attachments: Attachment[];
   artifact?: DocArtifact | null;
+  modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
 }) {
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));

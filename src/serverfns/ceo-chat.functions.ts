@@ -396,6 +396,7 @@ async function insertCeoChatMessage<TSelect extends string>(opts: {
   conversationId?: string | null;
   title?: string | null;
   artifactJson?: Record<string, any> | null;
+  modelUsed?: string | null;
   select: TSelect;
 }) {
   let conversationId = await ensureCeoConversation({
@@ -411,6 +412,7 @@ async function insertCeoChatMessage<TSelect extends string>(opts: {
         content: opts.content,
         conversation_id: conversationId,
         ...(opts.artifactJson === undefined ? {} : { artifact_json: opts.artifactJson }),
+        ...(opts.modelUsed === undefined ? {} : { model_used: opts.modelUsed }),
       })
       .select(opts.select)
       .single();

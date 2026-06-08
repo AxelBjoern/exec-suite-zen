@@ -3,8 +3,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu } from "lucide-react";
-import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
+import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { getMySettings, updateMySettings, getConnectorStatus, ensureOwnerRole } from "@/lib/connections.functions";
+import {
+  listAutoApproveRules,
+  createAutoApproveRule,
+  toggleAutoApproveRule,
+  deleteAutoApproveRule,
+} from "@/lib/automation.functions";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   head: () => ({

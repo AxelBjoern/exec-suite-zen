@@ -37,11 +37,14 @@ import { Route as AuthenticatedBudgetCompareRouteImport } from './routes/_authen
 import { Route as AuthenticatedBudgetChangelogRouteImport } from './routes/_authenticated/budget.changelog'
 import { Route as AuthenticatedBudgetBoardRouteImport } from './routes/_authenticated/budget.board'
 import { Route as AuthenticatedBudgetAssumptionsRouteImport } from './routes/_authenticated/budget.assumptions'
+import { Route as ApiPublicCronWeeklyDraftsRouteImport } from './routes/api/public/cron/weekly-drafts'
 import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
+import { Route as ApiPublicCronLeadReplyTriageRouteImport } from './routes/api/public/cron/lead-reply-triage'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
 import { Route as ApiPublicCronDailyReminderRouteImport } from './routes/api/public/cron/daily-reminder'
+import { Route as ApiPublicCronApprovalSweeperRouteImport } from './routes/api/public/cron/approval-sweeper'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -199,6 +202,12 @@ const AuthenticatedBudgetAssumptionsRoute =
     path: '/assumptions',
     getParentRoute: () => AuthenticatedBudgetRoute,
   } as any)
+const ApiPublicCronWeeklyDraftsRoute =
+  ApiPublicCronWeeklyDraftsRouteImport.update({
+    id: '/api/public/cron/weekly-drafts',
+    path: '/api/public/cron/weekly-drafts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronScheduledOutboundRoute =
   ApiPublicCronScheduledOutboundRouteImport.update({
     id: '/api/public/cron/scheduled-outbound',
@@ -209,6 +218,12 @@ const ApiPublicCronMondayBoardRoute =
   ApiPublicCronMondayBoardRouteImport.update({
     id: '/api/public/cron/monday-board',
     path: '/api/public/cron/monday-board',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronLeadReplyTriageRoute =
+  ApiPublicCronLeadReplyTriageRouteImport.update({
+    id: '/api/public/cron/lead-reply-triage',
+    path: '/api/public/cron/lead-reply-triage',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicCronJobTickRoute = ApiPublicCronJobTickRouteImport.update({
@@ -226,6 +241,12 @@ const ApiPublicCronDailyReminderRoute =
   ApiPublicCronDailyReminderRouteImport.update({
     id: '/api/public/cron/daily-reminder',
     path: '/api/public/cron/daily-reminder',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronApprovalSweeperRoute =
+  ApiPublicCronApprovalSweeperRouteImport.update({
+    id: '/api/public/cron/approval-sweeper',
+    path: '/api/public/cron/approval-sweeper',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -257,11 +278,14 @@ export interface FileRoutesByFullPath {
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/budget/': typeof AuthenticatedBudgetIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
+  '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -290,11 +314,14 @@ export interface FileRoutesByTo {
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/budget': typeof AuthenticatedBudgetIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
+  '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -326,11 +353,14 @@ export interface FileRoutesById {
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/_authenticated/budget/': typeof AuthenticatedBudgetIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
+  '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
+  '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -362,11 +392,14 @@ export interface FileRouteTypes {
     | '/api/public/generate-linkedin-image'
     | '/budget/'
     | '/settings/'
+    | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
+    | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
     | '/api/public/cron/scheduled-outbound'
+    | '/api/public/cron/weekly-drafts'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -395,11 +428,14 @@ export interface FileRouteTypes {
     | '/api/public/generate-linkedin-image'
     | '/budget'
     | '/settings'
+    | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
+    | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
     | '/api/public/cron/scheduled-outbound'
+    | '/api/public/cron/weekly-drafts'
   id:
     | '__root__'
     | '/_authenticated'
@@ -430,11 +466,14 @@ export interface FileRouteTypes {
     | '/api/public/generate-linkedin-image'
     | '/_authenticated/budget/'
     | '/_authenticated/settings/'
+    | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
     | '/api/public/cron/job-tick'
+    | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
     | '/api/public/cron/scheduled-outbound'
+    | '/api/public/cron/weekly-drafts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -443,11 +482,14 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPublicGenerateLinkedinImageRoute: typeof ApiPublicGenerateLinkedinImageRoute
+  ApiPublicCronApprovalSweeperRoute: typeof ApiPublicCronApprovalSweeperRoute
   ApiPublicCronDailyReminderRoute: typeof ApiPublicCronDailyReminderRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
+  ApiPublicCronLeadReplyTriageRoute: typeof ApiPublicCronLeadReplyTriageRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
   ApiPublicCronScheduledOutboundRoute: typeof ApiPublicCronScheduledOutboundRoute
+  ApiPublicCronWeeklyDraftsRoute: typeof ApiPublicCronWeeklyDraftsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -648,6 +690,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBudgetAssumptionsRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
+    '/api/public/cron/weekly-drafts': {
+      id: '/api/public/cron/weekly-drafts'
+      path: '/api/public/cron/weekly-drafts'
+      fullPath: '/api/public/cron/weekly-drafts'
+      preLoaderRoute: typeof ApiPublicCronWeeklyDraftsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/scheduled-outbound': {
       id: '/api/public/cron/scheduled-outbound'
       path: '/api/public/cron/scheduled-outbound'
@@ -660,6 +709,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/cron/monday-board'
       fullPath: '/api/public/cron/monday-board'
       preLoaderRoute: typeof ApiPublicCronMondayBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/lead-reply-triage': {
+      id: '/api/public/cron/lead-reply-triage'
+      path: '/api/public/cron/lead-reply-triage'
+      fullPath: '/api/public/cron/lead-reply-triage'
+      preLoaderRoute: typeof ApiPublicCronLeadReplyTriageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/job-tick': {
@@ -681,6 +737,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/cron/daily-reminder'
       fullPath: '/api/public/cron/daily-reminder'
       preLoaderRoute: typeof ApiPublicCronDailyReminderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/approval-sweeper': {
+      id: '/api/public/cron/approval-sweeper'
+      path: '/api/public/cron/approval-sweeper'
+      fullPath: '/api/public/cron/approval-sweeper'
+      preLoaderRoute: typeof ApiPublicCronApprovalSweeperRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -767,11 +830,14 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPublicGenerateLinkedinImageRoute: ApiPublicGenerateLinkedinImageRoute,
+  ApiPublicCronApprovalSweeperRoute: ApiPublicCronApprovalSweeperRoute,
   ApiPublicCronDailyReminderRoute: ApiPublicCronDailyReminderRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
+  ApiPublicCronLeadReplyTriageRoute: ApiPublicCronLeadReplyTriageRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
   ApiPublicCronScheduledOutboundRoute: ApiPublicCronScheduledOutboundRoute,
+  ApiPublicCronWeeklyDraftsRoute: ApiPublicCronWeeklyDraftsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

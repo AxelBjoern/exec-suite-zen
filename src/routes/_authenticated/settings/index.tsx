@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
-import { getMySettings, updateMySettings, getConnectorStatus, ensureOwnerRole } from "@/lib/connections.functions";
+import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
+import { ensureOwnerRole } from "@/lib/outbound.functions";
 import {
   listAutoApproveRules,
   createAutoApproveRule,

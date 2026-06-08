@@ -38,12 +38,21 @@ type BaseModel = {
 function AgentsModelsShell() {
   const qc = useQueryClient();
 
+  const { data: me } = useQuery({
+    queryKey: ["am", "me"],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser();
+      return { id: data.user?.id ?? null, email: data.user?.email ?? null };
+    },
+    staleTime: Infinity,
+  });
+
   const { data: types = [] } = useQuery<AgentType[]>({
     queryKey: ["am", "agent_types"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("agent_types")
-        .select("id,name,industry,description,is_system,is_public")
+        .select("id,name,industry,description,is_system,is_public,owner_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];

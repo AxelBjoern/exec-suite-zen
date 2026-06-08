@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_knowledge: {
+        Row: {
+          agent_id: string
+          created_at: string
+          extracted_text: string | null
+          file_name: string
+          file_size: number
+          id: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          extracted_text?: string | null
+          file_name: string
+          file_size?: number
+          id?: string
+          mime_type: string
+          owner_id: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          extracted_text?: string | null
+          file_name?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          owner_id?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_knowledge_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agent_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_types: {
         Row: {
           created_at: string

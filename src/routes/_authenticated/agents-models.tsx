@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Cpu, Plus, Sparkles, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Check, Cpu, FileText, Pencil, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,10 @@ type ModelDraft = { slug: string; name: string; provider: string; description: s
 const agentDraftKey = (uid: string) => `am-wizard-draft-agent:${uid}`;
 const modelDraftKey = (uid: string) => `am-wizard-draft-model:${uid}`;
 const dismissKey = (uid: string) => `am-wizard-dismissed:${uid}`;
+const ALLOWED_KNOWLEDGE_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
 function readDraft<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -55,11 +59,7 @@ function readDraft<T>(key: string): T | null {
 }
 function writeDraft<T>(key: string, value: T) {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore */
-  }
+  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* noop */ }
 }
 function clearDraft(key: string) {
   if (typeof window === "undefined") return;
@@ -75,6 +75,8 @@ function AgentsModelsShell() {
   const [modelPrefill, setModelPrefill] = useState<ModelDraft | null>(null);
   const [highlightAgent, setHighlightAgent] = useState(false);
   const [highlightModel, setHighlightModel] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
 
   const { data: me } = useQuery({
     queryKey: ["am", "me"],
@@ -109,7 +111,6 @@ function AgentsModelsShell() {
     },
   });
 
-  // Hydrate drafts from localStorage on mount / when user resolves
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (!me?.id || hydratedRef.current) return;
@@ -126,9 +127,7 @@ function AgentsModelsShell() {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not signed in");
       const { error } = await (supabase as any).from("agent_types").insert({
-        owner_id: u.user.id,
-        is_system: false,
-        ...vars,
+        owner_id: u.user.id, is_system: false, ...vars,
       });
       if (error) throw error;
     },
@@ -140,14 +139,24 @@ function AgentsModelsShell() {
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
+  const updateAgent = useMutation({
+    mutationFn: async ({ id, vars }: { id: string; vars: AgentDraft }) => {
+      const { error } = await (supabase as any).from("agent_types").update(vars).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Agent updated");
+      qc.invalidateQueries({ queryKey: ["am", "agent_types"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
   const createModel = useMutation({
     mutationFn: async (vars: ModelDraft) => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not signed in");
       const { error } = await (supabase as any).from("base_models").insert({
-        owner_id: u.user.id,
-        is_system: false,
-        ...vars,
+        owner_id: u.user.id, is_system: false, ...vars,
       });
       if (error) throw error;
     },
@@ -159,27 +168,84 @@ function AgentsModelsShell() {
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
+  const updateModel = useMutation({
+    mutationFn: async ({ id, vars }: { id: string; vars: ModelDraft }) => {
+      const { error } = await (supabase as any).from("base_models").update(vars).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Model updated");
+      qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
   const remove = useMutation({
     mutationFn: async ({ table, id }: { table: "agent_types" | "base_models"; id: string }) => {
       const { error } = await (supabase as any).from(table).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ["am", v.table] });
-    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["am", v.table] }),
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
   function applyAgentPrefill(v: AgentDraft) {
     setAgentPrefill(v);
+    setEditingAgentId(null);
     setHighlightAgent(true);
     if (me?.id) writeDraft(agentDraftKey(me.id), v);
     setTimeout(() => agentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
   function applyModelPrefill(v: ModelDraft) {
     setModelPrefill(v);
+    setEditingModelId(null);
     setHighlightModel(true);
     if (me?.id) writeDraft(modelDraftKey(me.id), v);
+    setTimeout(() => modelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
+
+  async function handleEditAgent(row: AgentType) {
+    if (!me?.id) return;
+    // Clone VDNX/public into owned copy, then edit it
+    if (row.owner_id !== me.id) {
+      const draft: AgentDraft = {
+        name: `${row.name} (copy)`, industry: row.industry, description: row.description,
+      };
+      const { data, error } = await (supabase as any)
+        .from("agent_types")
+        .insert({ owner_id: me.id, is_system: false, ...draft })
+        .select("id").single();
+      if (error) { toast.error(error.message); return; }
+      toast.success("Cloned to your library");
+      qc.invalidateQueries({ queryKey: ["am", "agent_types"] });
+      setEditingAgentId(data.id);
+      setAgentPrefill(draft);
+    } else {
+      setEditingAgentId(row.id);
+      setAgentPrefill({ name: row.name, industry: row.industry, description: row.description });
+    }
+    setTimeout(() => agentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
+
+  async function handleEditModel(row: BaseModel) {
+    if (!me?.id) return;
+    if (row.owner_id !== me.id) {
+      const draft: ModelDraft = {
+        slug: row.slug, name: `${row.name} (copy)`, provider: row.provider, description: row.description,
+      };
+      const { data, error } = await (supabase as any)
+        .from("base_models")
+        .insert({ owner_id: me.id, is_system: false, ...draft })
+        .select("id").single();
+      if (error) { toast.error(error.message); return; }
+      toast.success("Cloned to your library");
+      qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+      setEditingModelId(data.id);
+      setModelPrefill(draft);
+    } else {
+      setEditingModelId(row.id);
+      setModelPrefill({ slug: row.slug, name: row.name, provider: row.provider, description: row.description });
+    }
     setTimeout(() => modelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
 
@@ -192,7 +258,7 @@ function AgentsModelsShell() {
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Module</p>
           <h1 className="font-serif text-3xl font-bold text-foreground">Agents &amp; Models</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your private agents and models. VDNX defaults are read-only.
+            Edit or delete your own rows. Editing a VDNX default creates an editable copy in your library.
           </p>
         </div>
       </div>
@@ -212,24 +278,34 @@ function AgentsModelsShell() {
           <Section
             title="Agents"
             count={types.length}
-            empty="No custom agents yet — VDNX defaults are read-only."
-            items={types.map((t) => ({
-              id: t.id,
-              primary: t.name,
-              secondary: `${t.industry}${t.description ? " · " + t.description : ""}`,
-              system: t.is_system,
-              isPublic: !!t.is_public,
-            }))}
-            onDelete={(id) => remove.mutate({ table: "agent_types", id })}
+            empty="No agents yet."
+            rows={types.map((t) => ({ row: t, isOwn: t.owner_id === me?.id }))}
+            renderRowExtras={(r) =>
+              r.isOwn && me?.id ? <AgentKnowledge agentId={r.row.id} userId={me.id} /> : null
+            }
+            describe={(t: AgentType) =>
+              `${t.industry}${t.description ? " · " + t.description : ""}`
+            }
+            primary={(t: AgentType) => t.name}
+            onEdit={(t: AgentType) => handleEditAgent(t)}
+            onDelete={(t: AgentType) => remove.mutate({ table: "agent_types", id: t.id })}
             form={
               <AgentForm
+                key={editingAgentId ?? "new"}
                 userId={me?.id ?? null}
+                editingId={editingAgentId}
+                onCancelEdit={() => { setEditingAgentId(null); setAgentPrefill(null); }}
                 onSubmit={(v) => {
-                  createAgent.mutate(v);
+                  if (editingAgentId) {
+                    updateAgent.mutate({ id: editingAgentId, vars: v });
+                    setEditingAgentId(null);
+                  } else {
+                    createAgent.mutate(v);
+                  }
                   setAgentPrefill(null);
                   setHighlightAgent(false);
                 }}
-                busy={createAgent.isPending}
+                busy={createAgent.isPending || updateAgent.isPending}
                 prefill={agentPrefill ?? undefined}
                 highlightRequired={highlightAgent}
                 onHighlightConsumed={() => setHighlightAgent(false)}
@@ -241,24 +317,29 @@ function AgentsModelsShell() {
           <Section
             title="Models"
             count={models.length}
-            empty="No custom models yet — VDNX defaults are read-only."
-            items={models.map((m) => ({
-              id: m.id,
-              primary: m.name,
-              secondary: `${m.provider} · ${m.slug}`,
-              system: m.is_system,
-              isPublic: !!m.is_public,
-            }))}
-            onDelete={(id) => remove.mutate({ table: "base_models", id })}
+            empty="No models yet."
+            rows={models.map((m) => ({ row: m, isOwn: m.owner_id === me?.id }))}
+            describe={(m: BaseModel) => `${m.provider} · ${m.slug}`}
+            primary={(m: BaseModel) => m.name}
+            onEdit={(m: BaseModel) => handleEditModel(m)}
+            onDelete={(m: BaseModel) => remove.mutate({ table: "base_models", id: m.id })}
             form={
               <ModelForm
+                key={editingModelId ?? "new"}
                 userId={me?.id ?? null}
+                editingId={editingModelId}
+                onCancelEdit={() => { setEditingModelId(null); setModelPrefill(null); }}
                 onSubmit={(v) => {
-                  createModel.mutate(v);
+                  if (editingModelId) {
+                    updateModel.mutate({ id: editingModelId, vars: v });
+                    setEditingModelId(null);
+                  } else {
+                    createModel.mutate(v);
+                  }
                   setModelPrefill(null);
                   setHighlightModel(false);
                 }}
-                busy={createModel.isPending}
+                busy={createModel.isPending || updateModel.isPending}
                 prefill={modelPrefill ?? undefined}
                 highlightRequired={highlightModel}
                 onHighlightConsumed={() => setHighlightModel(false)}
@@ -271,59 +352,67 @@ function AgentsModelsShell() {
   );
 }
 
-function Section(props: {
+function Section<T extends { id: string; is_system: boolean; is_public?: boolean }>(props: {
   title: string;
   count: number;
   empty: string;
-  items: { id: string; primary: string; secondary: string; system: boolean; isPublic: boolean }[];
-  onDelete: (id: string) => void;
+  rows: { row: T; isOwn: boolean }[];
+  primary: (row: T) => string;
+  describe: (row: T) => string;
+  onEdit: (row: T) => void;
+  onDelete: (row: T) => void;
+  renderRowExtras?: (r: { row: T; isOwn: boolean }) => React.ReactNode;
   form: React.ReactNode;
 }) {
   return (
     <section className="rounded-lg border border-border bg-panel p-5">
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
-          {props.title}
-        </h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">{props.title}</h2>
         <span className="text-xs text-muted-foreground">{props.count}</span>
       </div>
       <div className="mb-4">{props.form}</div>
-      {props.items.length === 0 ? (
+      {props.rows.length === 0 ? (
         <p className="rounded border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
           {props.empty}
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {props.items.map((it) => (
-            <li
-              key={it.id}
-              className="flex items-start justify-between gap-2 rounded border border-border bg-panel-2 px-3 py-2 text-sm"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{it.primary}</span>
-                  {it.system && (
-                    <span className="rounded-full border border-primary/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-primary">
-                      VDNX
-                    </span>
-                  )}
-                  {!it.system && it.isPublic && (
-                    <span className="rounded-full border border-muted-foreground/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
-                      Default
-                    </span>
+          {props.rows.map(({ row, isOwn }) => (
+            <li key={row.id} className="rounded border border-border bg-panel-2 px-3 py-2 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{props.primary(row)}</span>
+                    {row.is_system && (
+                      <span className="rounded-full border border-primary/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-primary">VDNX</span>
+                    )}
+                    {!row.is_system && row.is_public && (
+                      <span className="rounded-full border border-muted-foreground/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">Default</span>
+                    )}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">{props.describe(row)}</div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => props.onEdit(row)}
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={isOwn ? "Edit" : "Clone & edit"}
+                    title={isOwn ? "Edit" : "Clone & edit"}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  {isOwn && (
+                    <button
+                      onClick={() => props.onDelete(row)}
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   )}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">{it.secondary}</div>
               </div>
-              {!it.system && (
-                <button
-                  onClick={() => props.onDelete(it.id)}
-                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  aria-label="Delete"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
+              {props.renderRowExtras?.({ row, isOwn })}
             </li>
           ))}
         </ul>
@@ -333,14 +422,11 @@ function Section(props: {
 }
 
 function AgentForm({
-  userId,
-  onSubmit,
-  busy,
-  prefill,
-  highlightRequired,
-  onHighlightConsumed,
+  userId, editingId, onCancelEdit, onSubmit, busy, prefill, highlightRequired, onHighlightConsumed,
 }: {
   userId: string | null;
+  editingId: string | null;
+  onCancelEdit: () => void;
   onSubmit: (v: AgentDraft) => void;
   busy: boolean;
   prefill?: AgentDraft;
@@ -352,21 +438,15 @@ function AgentForm({
   const [description, setDescription] = useState(prefill?.description ?? "");
 
   useEffect(() => {
-    if (prefill) {
-      setName(prefill.name);
-      setIndustry(prefill.industry);
-      setDescription(prefill.description);
-    }
+    if (prefill) { setName(prefill.name); setIndustry(prefill.industry); setDescription(prefill.description); }
   }, [prefill]);
 
-  // Persist draft on edits (skip when nothing meaningful entered)
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || editingId) return;
     if (!name && !description && industry === "general") return;
     writeDraft(agentDraftKey(userId), { name, industry, description });
-  }, [userId, name, industry, description]);
+  }, [userId, editingId, name, industry, description]);
 
-  // Auto-clear highlight after 3s
   useEffect(() => {
     if (!highlightRequired) return;
     const t = setTimeout(() => onHighlightConsumed?.(), 3000);
@@ -381,6 +461,12 @@ function AgentForm({
   const reqRing = highlightRequired ? "ring-2 ring-primary/60 border-primary" : "";
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
+      {editingId && (
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-primary">
+          Editing
+          <button type="button" onClick={onCancelEdit} className="text-muted-foreground hover:text-foreground">Cancel</button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label htmlFor="ag-name" className="text-[10px] uppercase tracking-wider">Name</Label>
@@ -396,21 +482,18 @@ function AgentForm({
         <Textarea id="ag-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <Button type="submit" disabled={busy} size="sm" className="w-full">
-        <Plus className="mr-1 h-3.5 w-3.5" /> {busy ? "…" : "Create agent"}
+        <Plus className="mr-1 h-3.5 w-3.5" /> {busy ? "…" : editingId ? "Save changes" : "Create agent"}
       </Button>
     </form>
   );
 }
 
 function ModelForm({
-  userId,
-  onSubmit,
-  busy,
-  prefill,
-  highlightRequired,
-  onHighlightConsumed,
+  userId, editingId, onCancelEdit, onSubmit, busy, prefill, highlightRequired, onHighlightConsumed,
 }: {
   userId: string | null;
+  editingId: string | null;
+  onCancelEdit: () => void;
   onSubmit: (v: ModelDraft) => void;
   busy: boolean;
   prefill?: ModelDraft;
@@ -423,19 +506,14 @@ function ModelForm({
   const [description, setDescription] = useState(prefill?.description ?? "");
 
   useEffect(() => {
-    if (prefill) {
-      setSlug(prefill.slug);
-      setName(prefill.name);
-      setProvider(prefill.provider);
-      setDescription(prefill.description);
-    }
+    if (prefill) { setSlug(prefill.slug); setName(prefill.name); setProvider(prefill.provider); setDescription(prefill.description); }
   }, [prefill]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || editingId) return;
     if (!slug && !name && !description && provider === "openrouter") return;
     writeDraft(modelDraftKey(userId), { slug, name, provider, description });
-  }, [userId, slug, name, provider, description]);
+  }, [userId, editingId, slug, name, provider, description]);
 
   useEffect(() => {
     if (!highlightRequired) return;
@@ -451,6 +529,12 @@ function ModelForm({
   const reqRing = highlightRequired ? "ring-2 ring-primary/60 border-primary" : "";
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
+      {editingId && (
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-primary">
+          Editing
+          <button type="button" onClick={onCancelEdit} className="text-muted-foreground hover:text-foreground">Cancel</button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label htmlFor="md-name" className="text-[10px] uppercase tracking-wider">Display name</Label>
@@ -470,9 +554,133 @@ function ModelForm({
         <Textarea id="md-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <Button type="submit" disabled={busy} size="sm" className="w-full">
-        <Plus className="mr-1 h-3.5 w-3.5" /> {busy ? "…" : "Add model"}
+        <Plus className="mr-1 h-3.5 w-3.5" /> {busy ? "…" : editingId ? "Save changes" : "Add model"}
       </Button>
     </form>
+  );
+}
+
+type KnowledgeFile = {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  storage_path: string;
+};
+
+function AgentKnowledge({ agentId, userId }: { agentId: string; userId: string }) {
+  const qc = useQueryClient();
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const { data: files = [] } = useQuery<KnowledgeFile[]>({
+    queryKey: ["am", "agent_knowledge", agentId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("agent_knowledge")
+        .select("id,file_name,mime_type,file_size,storage_path")
+        .eq("agent_id", agentId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  async function handleFiles(list: FileList | File[]) {
+    const arr = Array.from(list).filter((f) => ALLOWED_KNOWLEDGE_TYPES.includes(f.type) || /\.(pdf|docx)$/i.test(f.name));
+    if (arr.length === 0) {
+      toast.error("Only .pdf and .docx files are accepted");
+      return;
+    }
+    setUploading(true);
+    try {
+      for (const file of arr) {
+        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+        const path = `${userId}/${agentId}/${Date.now()}_${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("agent-knowledge")
+          .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+        if (upErr) throw upErr;
+        const { error: insErr } = await (supabase as any).from("agent_knowledge").insert({
+          agent_id: agentId,
+          owner_id: userId,
+          file_name: file.name,
+          mime_type: file.type || "application/octet-stream",
+          file_size: file.size,
+          storage_path: path,
+        });
+        if (insErr) {
+          await supabase.storage.from("agent-knowledge").remove([path]);
+          throw insErr;
+        }
+      }
+      toast.success(`${arr.length} file${arr.length > 1 ? "s" : ""} added`);
+      qc.invalidateQueries({ queryKey: ["am", "agent_knowledge", agentId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeFile(f: KnowledgeFile) {
+    const { error: delErr } = await (supabase as any).from("agent_knowledge").delete().eq("id", f.id);
+    if (delErr) { toast.error(delErr.message); return; }
+    await supabase.storage.from("agent-knowledge").remove([f.storage_path]);
+    qc.invalidateQueries({ queryKey: ["am", "agent_knowledge", agentId] });
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault(); e.stopPropagation();
+    setDragOver(false);
+    if (e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files);
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => inputRef.current?.click()}
+        role="button"
+        className={`flex cursor-pointer items-center justify-center gap-2 rounded border border-dashed px-3 py-2 text-[11px] transition-colors ${
+          dragOver ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground"
+        }`}
+      >
+        <Upload className="h-3.5 w-3.5" />
+        {uploading ? "Uploading…" : dragOver ? "Drop to attach" : "Drag & drop .pdf or .docx (or click)"}
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          className="hidden"
+          onChange={(e) => { if (e.target.files) { handleFiles(e.target.files); e.target.value = ""; } }}
+        />
+      </div>
+      {files.length > 0 && (
+        <ul className="space-y-1">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center justify-between gap-2 rounded bg-panel px-2 py-1 text-[11px]">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="truncate text-foreground">{f.file_name}</span>
+                <span className="shrink-0 text-muted-foreground">{(f.file_size / 1024).toFixed(0)} KB</span>
+              </span>
+              <button
+                onClick={() => removeFile(f)}
+                className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                aria-label="Remove file"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -506,8 +714,6 @@ function SetupWizard(props: {
     }
   }, [props.hasOwnAgent, props.hasOwnModel, storageKey]);
 
-  // Auto-advance Step 1 → Step 2: when first agent gets created, prefill the
-  // default model preset and scroll to the model form. Fires once per mount.
   const autoAdvancedRef = useRef(false);
   const prevHasAgentRef = useRef(props.hasOwnAgent);
   useEffect(() => {
@@ -537,9 +743,7 @@ function SetupWizard(props: {
         <div className="flex items-start gap-3">
           <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
           <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-primary">
-              Setup · Step {step} of 2
-            </p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-primary">Setup · Step {step} of 2</p>
             <h2 className="mt-1 font-serif text-lg font-semibold text-foreground">
               {step === 1 ? "Create your first agent" : "Add a model to power your agents"}
             </h2>
@@ -550,11 +754,7 @@ function SetupWizard(props: {
             </p>
           </div>
         </div>
-        <button
-          onClick={dismiss}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Dismiss setup"
-        >
+        <button onClick={dismiss} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Dismiss setup">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -581,11 +781,7 @@ function SetupWizard(props: {
                 <div className="text-sm font-medium text-foreground">{p.name}</div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{p.provider} · {p.slug}</div>
               </div>
-              <Button
-                size="sm"
-                variant={i === 0 ? "default" : "outline"}
-                onClick={() => props.onPrefillModel(p)}
-              >
+              <Button size="sm" variant={i === 0 ? "default" : "outline"} onClick={() => props.onPrefillModel(p)}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 {i === 0 ? "Use preset (recommended)" : "Use preset"}
               </Button>

@@ -827,9 +827,16 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
     let items = await runParse();
     if (items.length === 0) items = await runParse();
     if (items.length === 0) {
-      throw new Error(
-        "Couldn't find a draft to file. Include the actual post/email/reminder text (subject + body, or LinkedIn copy) in the message.",
-      );
+      // Fallback: file the raw text as a single LinkedIn draft so the user can
+      // edit/route it in Outbound rather than losing the content to a parser error.
+      const text = data.plan.trim().slice(0, 3000);
+      if (text.length >= 20) {
+        items = [{ kind: "linkedin", text, label: "Draft from chat" }];
+      } else {
+        throw new Error(
+          "Couldn't find a draft to file. Include the actual post/email/reminder text (subject + body, or LinkedIn copy) in the message.",
+        );
+      }
     }
 
     const filed: Array<{ id?: string; status: string; label: string }> = [];

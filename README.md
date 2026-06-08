@@ -125,7 +125,7 @@ The built-in roster covers standard executive functions. Use `/agents-models` to
 | `/chat` | Free-form conversation with the executive board |
 | `/terminal` | Structured-verb command surface |
 | `/budget` | Scenario modeling, P&L, cash flow, sensitivity |
-| `/forge` | Train and deploy specialized agents |
+| `/agents-models` | Register custom agents and OpenRouter models |
 | `/outbound` | Email, self-reminders, LinkedIn posts |
 | `/approvals` | Owner review of outbound mail and posts |
 | `/settings` | Connections (Gmail / LinkedIn), models, guardrails |

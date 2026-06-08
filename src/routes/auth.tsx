@@ -11,9 +11,15 @@ export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in — VDNX" },
-      { name: "description", content: "Sign in to the VDNX workspace." },
+      { title: "Sign in — VDNX Terminal" },
+      { name: "description", content: "Sign in to the VDNX operations workspace." },
+      { property: "og:title", content: "Sign in — VDNX Terminal" },
+      { property: "og:description", content: "Sign in to the VDNX operations workspace." },
+      { property: "og:url", content: "https://exec-suite-zen.lovable.app/auth" },
+      { property: "og:type", content: "website" },
+      { name: "robots", content: "noindex,follow" },
     ],
+    links: [{ rel: "canonical", href: "https://exec-suite-zen.lovable.app/auth" }],
   }),
   component: AuthPage,
 });

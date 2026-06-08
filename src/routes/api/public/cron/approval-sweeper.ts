@@ -45,11 +45,8 @@ export const Route = createFileRoute("/api/public/cron/approval-sweeper")({
               decided_at: new Date().toISOString(),
               notes: decision.reason,
             }).eq("id", appr.id);
-            await supabaseAdmin.from("audit_log").insert({
-              kind: "auto_approval",
-              payload: { approval_id: appr.id, reason: decision.reason, ref_table: appr.ref_table, ref_id: appr.ref_id } as any,
-            } as any).then(() => {}, () => {});
             results.push({ id: appr.id, approved: true, reason: decision.reason });
+
           } else {
             results.push({ id: appr.id, approved: false, reason: decision.reason });
           }

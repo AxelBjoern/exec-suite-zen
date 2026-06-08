@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cpu, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { Check, Cpu, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { isVdnxOwnerEmail } from "@/lib/vdnx";
 
 export const Route = createFileRoute("/_authenticated/agents-models")({
   ssr: false,

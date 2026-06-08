@@ -1,33 +1,43 @@
 ## Goal
-Rename `/forge` → `/agents-models` with title "Agents & Models". Seed the 10 terminal agents and add Gemini 2.5 Flash. Show system content only to admin (axel) and expose DeepSeek V4 Flash + Gemini 2.5 Flash as public defaults visible to every user.
+
+Make the `/agents-models` setup wizard flow smoother for non-axel users:
+
+1. After creating the first agent (Step 1 → Step 2), auto-prefill the model form with a default preset and scroll to it.
+2. Add a clear "Use preset" CTA on the model step that prefills the form and visually highlights the required fields.
+3. Persist wizard selections (agent + model drafts) in `localStorage` so a refresh resumes with the same prefilled values.
+
+Scope is frontend-only — single file: `src/routes/_authenticated/agents-models.tsx`. No DB, no server fn, no schema changes.
 
 ## Changes
 
-### 1. Route rename
-- New file `src/routes/_authenticated/agents-models.tsx` — copy of current forge with updated heading ("Agents & Models"), title meta, and query keys (`["am", ...]`).
-- Delete `src/routes/_authenticated/forge.tsx`.
-- Add `src/routes/_authenticated/forge.tsx` shim that redirects to `/agents-models` (preserves existing links).
-- Update `src/components/ModuleSwitcher.tsx`: `{ to: "/agents-models", label: "Agents & Models", icon: Cpu }`.
-- Update `src/routes/_authenticated/index.tsx`: card link `to: "/agents-models"`, label "Agents & Models"; update description meta.
-- Update `README.md` references from Forge → Agents & Models.
+### 1. Auto-advance Step 1 → Step 2
+- Watch `hasOwnAgent`. When it flips from `false` → `true` and the wizard is still mounted, automatically:
+  - Call `onPrefillModel(MODEL_PRESETS[0])` (DeepSeek V4 Flash) so the model form is prefilled.
+  - Smooth-scroll to `modelFormRef`.
+- Guard with a ref flag so it only fires once per session (user can still pick a different preset).
 
-### 2. Schema migration (`is_public` flag for non-admin visibility)
-- `ALTER TABLE base_models ADD COLUMN is_public boolean NOT NULL DEFAULT false;`
-- `ALTER TABLE agent_types ADD COLUMN is_public boolean NOT NULL DEFAULT false;`
-- Replace the `select` policies on both tables so rows are visible when `owner_id = auth.uid()` OR `is_public` OR `(is_system AND has_role(auth.uid(),'admin'))`. Other policies unchanged.
+### 2. Model preset CTA + required-field highlight
+- `ModelForm` accepts a new `highlightRequired: boolean` prop (true when prefill was just applied).
+- When true, the required inputs (`name`, `slug`) get a ring/border-primary accent that fades after first edit or ~3s via `useEffect` timer.
+- Wizard model-step cards already have "Use preset" — keep behavior, but make the primary preset (DeepSeek) visually emphasized (filled button vs outline) since it's auto-selected on advance.
 
-### 3. Data seed (via insert tool)
-- Insert 10 system `agent_types` matching terminal IDs: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo (industry = executive/revenue/marketing/etc., short description from `agent-prompts.ts`), `is_system=true`, `is_public=false` — visible only to axel (alongside the 20 existing executives).
-- Insert system `base_model` row `google/gemini-2.5-flash` (provider `openrouter`, name "Gemini 2.5 Flash"), `is_system=true`, `is_public=true`.
-- Update existing `deepseek/deepseek-v4-flash` row to `is_public=true`.
+### 3. Draft persistence across refresh
+- New `localStorage` keys scoped to user: `am-wizard-draft-agent:${userId}` and `am-wizard-draft-model:${userId}`.
+- On `onPrefillAgent` / `onPrefillModel`, write JSON to the matching key.
+- On `AgentsModelsShell` mount, hydrate `agentPrefill` / `modelPrefill` from those keys (only when user is non-axel and doesn't already own one).
+- `AgentForm` / `ModelForm`: on every field change, update the draft in localStorage (debounced via simple `useEffect` on state).
+- On successful create (`onSuccess` of the mutation), clear the matching draft key.
+- On wizard dismiss, clear both draft keys alongside the existing dismissed flag.
 
-### 4. UI tweaks
-- In Agents & Models page, badge label shows "VDNX" for `is_system` rows and "Default" for `is_public && !is_system` rows.
-- Empty-state copy: "No custom agents yet — VDNX defaults are read-only."
+## Technical notes
 
-## Notes on memory rule
-The project memory restricts code to 8 OpenRouter models. Per your instruction we are adding `google/gemini-2.5-flash` as an exception for the Agents & Models catalog only. I will update `mem://index.md` Core to note "Gemini 2.5 Flash is permitted as a default user-selectable model in Agents & Models" so future sessions don't strip it. LLM calls in `src/server/llm.server.ts` are unchanged.
+- Keep the existing `AgentDraft` / `ModelDraft` types as the storage shape.
+- Hydration must be SSR-safe: guard `window` access (route already has `ssr: false`, so a simple `typeof window` check is enough).
+- Auto-advance effect lives inside `SetupWizard` and uses `useRef<boolean>` to avoid firing on the same render twice or after dismissal.
+- No new dependencies, no route changes, no migration.
 
 ## Out of scope
-- No changes to terminal routing logic or `llm.server.ts` model dispatch.
-- No new RLS for write paths (owners still write their own; admin still manages system rows).
+
+- Server-side draft sync.
+- Changes to axel's view (wizard already hidden for VDNX owner).
+- Changes to delete/list behavior or RLS.

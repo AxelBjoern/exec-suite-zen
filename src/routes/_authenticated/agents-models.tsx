@@ -37,6 +37,35 @@ type BaseModel = {
   owner_id?: string | null;
 };
 
+type AgentDraft = { name: string; industry: string; description: string };
+type ModelDraft = { slug: string; name: string; provider: string; description: string };
+
+const agentDraftKey = (uid: string) => `am-wizard-draft-agent:${uid}`;
+const modelDraftKey = (uid: string) => `am-wizard-draft-model:${uid}`;
+const dismissKey = (uid: string) => `am-wizard-dismissed:${uid}`;
+
+function readDraft<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function writeDraft<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+function clearDraft(key: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(key);
+}
+
 function AgentsModelsShell() {
   const qc = useQueryClient();
   const agentFormRef = useRef<HTMLDivElement | null>(null);
@@ -44,6 +73,8 @@ function AgentsModelsShell() {
 
   const [agentPrefill, setAgentPrefill] = useState<AgentDraft | null>(null);
   const [modelPrefill, setModelPrefill] = useState<ModelDraft | null>(null);
+  const [highlightAgent, setHighlightAgent] = useState(false);
+  const [highlightModel, setHighlightModel] = useState(false);
 
   const { data: me } = useQuery({
     queryKey: ["am", "me"],
@@ -78,8 +109,20 @@ function AgentsModelsShell() {
     },
   });
 
+  // Hydrate drafts from localStorage on mount / when user resolves
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!me?.id || hydratedRef.current) return;
+    if (isVdnxOwnerEmail(me.email)) return;
+    hydratedRef.current = true;
+    const a = readDraft<AgentDraft>(agentDraftKey(me.id));
+    const m = readDraft<ModelDraft>(modelDraftKey(me.id));
+    if (a) setAgentPrefill(a);
+    if (m) setModelPrefill(m);
+  }, [me?.id, me?.email]);
+
   const createAgent = useMutation({
-    mutationFn: async (vars: { name: string; industry: string; description: string }) => {
+    mutationFn: async (vars: AgentDraft) => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not signed in");
       const { error } = await (supabase as any).from("agent_types").insert({
@@ -91,13 +134,14 @@ function AgentsModelsShell() {
     },
     onSuccess: () => {
       toast.success("Agent created");
+      if (me?.id) clearDraft(agentDraftKey(me.id));
       qc.invalidateQueries({ queryKey: ["am", "agent_types"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
   const createModel = useMutation({
-    mutationFn: async (vars: { slug: string; name: string; provider: string; description: string }) => {
+    mutationFn: async (vars: ModelDraft) => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not signed in");
       const { error } = await (supabase as any).from("base_models").insert({
@@ -109,6 +153,7 @@ function AgentsModelsShell() {
     },
     onSuccess: () => {
       toast.success("Model added");
+      if (me?.id) clearDraft(modelDraftKey(me.id));
       qc.invalidateQueries({ queryKey: ["am", "base_models"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
@@ -124,6 +169,19 @@ function AgentsModelsShell() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
+
+  function applyAgentPrefill(v: AgentDraft) {
+    setAgentPrefill(v);
+    setHighlightAgent(true);
+    if (me?.id) writeDraft(agentDraftKey(me.id), v);
+    setTimeout(() => agentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
+  function applyModelPrefill(v: ModelDraft) {
+    setModelPrefill(v);
+    setHighlightModel(true);
+    if (me?.id) writeDraft(modelDraftKey(me.id), v);
+    setTimeout(() => modelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-12">
@@ -144,14 +202,8 @@ function AgentsModelsShell() {
           userId={me.id}
           hasOwnAgent={types.some((t) => t.owner_id === me.id)}
           hasOwnModel={models.some((m) => m.owner_id === me.id)}
-          onPrefillAgent={(v) => {
-            setAgentPrefill(v);
-            setTimeout(() => agentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-          }}
-          onPrefillModel={(v) => {
-            setModelPrefill(v);
-            setTimeout(() => modelFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-          }}
+          onPrefillAgent={applyAgentPrefill}
+          onPrefillModel={applyModelPrefill}
         />
       )}
 
@@ -171,12 +223,16 @@ function AgentsModelsShell() {
             onDelete={(id) => remove.mutate({ table: "agent_types", id })}
             form={
               <AgentForm
+                userId={me?.id ?? null}
                 onSubmit={(v) => {
                   createAgent.mutate(v);
                   setAgentPrefill(null);
+                  setHighlightAgent(false);
                 }}
                 busy={createAgent.isPending}
                 prefill={agentPrefill ?? undefined}
+                highlightRequired={highlightAgent}
+                onHighlightConsumed={() => setHighlightAgent(false)}
               />
             }
           />
@@ -196,12 +252,16 @@ function AgentsModelsShell() {
             onDelete={(id) => remove.mutate({ table: "base_models", id })}
             form={
               <ModelForm
+                userId={me?.id ?? null}
                 onSubmit={(v) => {
                   createModel.mutate(v);
                   setModelPrefill(null);
+                  setHighlightModel(false);
                 }}
                 busy={createModel.isPending}
                 prefill={modelPrefill ?? undefined}
+                highlightRequired={highlightModel}
+                onHighlightConsumed={() => setHighlightModel(false)}
               />
             }
           />
@@ -273,13 +333,19 @@ function Section(props: {
 }
 
 function AgentForm({
+  userId,
   onSubmit,
   busy,
   prefill,
+  highlightRequired,
+  onHighlightConsumed,
 }: {
-  onSubmit: (v: { name: string; industry: string; description: string }) => void;
+  userId: string | null;
+  onSubmit: (v: AgentDraft) => void;
   busy: boolean;
   prefill?: AgentDraft;
+  highlightRequired?: boolean;
+  onHighlightConsumed?: () => void;
 }) {
   const [name, setName] = useState(prefill?.name ?? "");
   const [industry, setIndustry] = useState(prefill?.industry ?? "general");
@@ -293,17 +359,32 @@ function AgentForm({
     }
   }, [prefill]);
 
+  // Persist draft on edits (skip when nothing meaningful entered)
+  useEffect(() => {
+    if (!userId) return;
+    if (!name && !description && industry === "general") return;
+    writeDraft(agentDraftKey(userId), { name, industry, description });
+  }, [userId, name, industry, description]);
+
+  // Auto-clear highlight after 3s
+  useEffect(() => {
+    if (!highlightRequired) return;
+    const t = setTimeout(() => onHighlightConsumed?.(), 3000);
+    return () => clearTimeout(t);
+  }, [highlightRequired, onHighlightConsumed]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     onSubmit({ name: name.trim(), industry: industry.trim() || "general", description: description.trim() });
   }
+  const reqRing = highlightRequired ? "ring-2 ring-primary/60 border-primary" : "";
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label htmlFor="ag-name" className="text-[10px] uppercase tracking-wider">Name</Label>
-          <Input id="ag-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input id="ag-name" value={name} onChange={(e) => { setName(e.target.value); onHighlightConsumed?.(); }} required className={reqRing} />
         </div>
         <div>
           <Label htmlFor="ag-ind" className="text-[10px] uppercase tracking-wider">Industry</Label>
@@ -322,13 +403,19 @@ function AgentForm({
 }
 
 function ModelForm({
+  userId,
   onSubmit,
   busy,
   prefill,
+  highlightRequired,
+  onHighlightConsumed,
 }: {
-  onSubmit: (v: { slug: string; name: string; provider: string; description: string }) => void;
+  userId: string | null;
+  onSubmit: (v: ModelDraft) => void;
   busy: boolean;
   prefill?: ModelDraft;
+  highlightRequired?: boolean;
+  onHighlightConsumed?: () => void;
 }) {
   const [slug, setSlug] = useState(prefill?.slug ?? "");
   const [name, setName] = useState(prefill?.name ?? "");
@@ -344,17 +431,30 @@ function ModelForm({
     }
   }, [prefill]);
 
+  useEffect(() => {
+    if (!userId) return;
+    if (!slug && !name && !description && provider === "openrouter") return;
+    writeDraft(modelDraftKey(userId), { slug, name, provider, description });
+  }, [userId, slug, name, provider, description]);
+
+  useEffect(() => {
+    if (!highlightRequired) return;
+    const t = setTimeout(() => onHighlightConsumed?.(), 3000);
+    return () => clearTimeout(t);
+  }, [highlightRequired, onHighlightConsumed]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!slug.trim() || !name.trim()) return;
     onSubmit({ slug: slug.trim(), name: name.trim(), provider: provider.trim() || "openrouter", description: description.trim() });
   }
+  const reqRing = highlightRequired ? "ring-2 ring-primary/60 border-primary" : "";
   return (
     <form onSubmit={submit} className="space-y-2 rounded border border-border bg-panel-2 p-3">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label htmlFor="md-name" className="text-[10px] uppercase tracking-wider">Display name</Label>
-          <Input id="md-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input id="md-name" value={name} onChange={(e) => { setName(e.target.value); onHighlightConsumed?.(); }} required className={reqRing} />
         </div>
         <div>
           <Label htmlFor="md-prov" className="text-[10px] uppercase tracking-wider">Provider</Label>
@@ -363,7 +463,7 @@ function ModelForm({
       </div>
       <div>
         <Label htmlFor="md-slug" className="text-[10px] uppercase tracking-wider">Slug</Label>
-        <Input id="md-slug" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="vendor/model-id" required />
+        <Input id="md-slug" value={slug} onChange={(e) => { setSlug(e.target.value); onHighlightConsumed?.(); }} placeholder="vendor/model-id" required className={reqRing} />
       </div>
       <div>
         <Label htmlFor="md-desc" className="text-[10px] uppercase tracking-wider">Description</Label>
@@ -375,9 +475,6 @@ function ModelForm({
     </form>
   );
 }
-
-type AgentDraft = { name: string; industry: string; description: string };
-type ModelDraft = { slug: string; name: string; provider: string; description: string };
 
 const AGENT_PRESETS: AgentDraft[] = [
   { name: "Strategist", industry: "executive", description: "High-level planning, prioritization, and decision framing." },
@@ -397,7 +494,7 @@ function SetupWizard(props: {
   onPrefillAgent: (v: AgentDraft) => void;
   onPrefillModel: (v: ModelDraft) => void;
 }) {
-  const storageKey = `am-wizard-dismissed:${props.userId}`;
+  const storageKey = dismissKey(props.userId);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(storageKey) === "1";
@@ -409,12 +506,28 @@ function SetupWizard(props: {
     }
   }, [props.hasOwnAgent, props.hasOwnModel, storageKey]);
 
+  // Auto-advance Step 1 → Step 2: when first agent gets created, prefill the
+  // default model preset and scroll to the model form. Fires once per mount.
+  const autoAdvancedRef = useRef(false);
+  const prevHasAgentRef = useRef(props.hasOwnAgent);
+  useEffect(() => {
+    const prev = prevHasAgentRef.current;
+    prevHasAgentRef.current = props.hasOwnAgent;
+    if (autoAdvancedRef.current) return;
+    if (!prev && props.hasOwnAgent && !props.hasOwnModel) {
+      autoAdvancedRef.current = true;
+      props.onPrefillModel(MODEL_PRESETS[0]);
+    }
+  }, [props.hasOwnAgent, props.hasOwnModel, props]);
+
   if (dismissed || (props.hasOwnAgent && props.hasOwnModel)) return null;
 
   const step = !props.hasOwnAgent ? 1 : 2;
 
   function dismiss() {
     window.localStorage.setItem(storageKey, "1");
+    clearDraft(agentDraftKey(props.userId));
+    clearDraft(modelDraftKey(props.userId));
     setDismissed(true);
   }
 
@@ -433,7 +546,7 @@ function SetupWizard(props: {
             <p className="mt-1 text-xs text-muted-foreground">
               {step === 1
                 ? "Agents define a role and tone. Pick a preset to prefill the form below — edit before creating."
-                : "Models are the LLMs behind your agents. Pick a preset to prefill the form below — edit before adding."}
+                : "Models are the LLMs behind your agents. We prefilled DeepSeek V4 Flash — edit or pick another, then add."}
             </p>
           </div>
         </div>
@@ -462,14 +575,19 @@ function SetupWizard(props: {
         </ul>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
-          {MODEL_PRESETS.map((p) => (
+          {MODEL_PRESETS.map((p, i) => (
             <li key={p.slug} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
               <div>
                 <div className="text-sm font-medium text-foreground">{p.name}</div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{p.provider} · {p.slug}</div>
               </div>
-              <Button size="sm" variant="outline" onClick={() => props.onPrefillModel(p)}>
-                <Plus className="mr-1 h-3.5 w-3.5" />Use preset
+              <Button
+                size="sm"
+                variant={i === 0 ? "default" : "outline"}
+                onClick={() => props.onPrefillModel(p)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                {i === 0 ? "Use preset (recommended)" : "Use preset"}
               </Button>
             </li>
           ))}

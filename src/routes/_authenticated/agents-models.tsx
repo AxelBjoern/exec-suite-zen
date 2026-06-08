@@ -134,7 +134,18 @@ function AgentsModelsShell() {
         </div>
       </div>
 
+      {me?.id && !isVdnxOwnerEmail(me.email) && (
+        <SetupWizard
+          userId={me.id}
+          hasOwnAgent={types.some((t) => t.owner_id === me.id)}
+          hasOwnModel={models.some((m) => m.owner_id === me.id)}
+          onCreateAgent={(v) => createAgent.mutateAsync(v)}
+          onCreateModel={(v) => createModel.mutateAsync(v)}
+        />
+      )}
+
       <div className="grid gap-8 md:grid-cols-2">
+
         <Section
           title="Agents"
           count={types.length}

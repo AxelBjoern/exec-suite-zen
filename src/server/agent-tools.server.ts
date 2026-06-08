@@ -249,17 +249,17 @@ const db_draft_lead_reply = def({
 
 // ─── Registry & executor ─────────────────────────────────────────────────
 
-export const TOOL_REGISTRY: ToolDef[] = [
-  knowledge_list_docs,
-  knowledge_read_doc,
-  web_search_tool,
-  web_fetch_tool,
-  db_read_tasks,
-  db_read_recent_decisions,
-  db_create_reminder,
-  outbound_draft_linkedin,
-  outbound_draft_email,
-  db_draft_lead_reply,
+export const TOOL_REGISTRY: ToolDef<any>[] = [
+  knowledge_list_docs as ToolDef<any>,
+  knowledge_read_doc as ToolDef<any>,
+  web_search_tool as ToolDef<any>,
+  web_fetch_tool as ToolDef<any>,
+  db_read_tasks as ToolDef<any>,
+  db_read_recent_decisions as ToolDef<any>,
+  db_create_reminder as ToolDef<any>,
+  outbound_draft_linkedin as ToolDef<any>,
+  outbound_draft_email as ToolDef<any>,
+  db_draft_lead_reply as ToolDef<any>,
 ];
 
 export const READ_ONLY_TOOL_NAMES = TOOL_REGISTRY.filter(t => t.readOnly).map(t => t.name);

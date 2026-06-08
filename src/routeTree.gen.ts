@@ -20,6 +20,7 @@ import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
+import { Route as AuthenticatedAgentsModelsRouteImport } from './routes/_authenticated/agents-models'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenticated/budget.index'
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
@@ -96,6 +97,12 @@ const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAgentsModelsRoute =
+  AuthenticatedAgentsModelsRouteImport.update({
+    id: '/agents-models',
+    path: '/agents-models',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
     id: '/settings/',
@@ -227,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/chat': typeof AuthenticatedChatRoute
@@ -259,6 +267,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/chat': typeof AuthenticatedChatRoute
   '/forge': typeof AuthenticatedForgeRoute
@@ -293,6 +302,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/_authenticated/chat': typeof AuthenticatedChatRoute
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/agents-models'
     | '/approvals'
     | '/budget'
     | '/chat'
@@ -361,6 +372,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/agents-models'
     | '/approvals'
     | '/chat'
     | '/forge'
@@ -394,6 +406,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/sitemap.xml'
+    | '/_authenticated/agents-models'
     | '/_authenticated/approvals'
     | '/_authenticated/budget'
     | '/_authenticated/chat'
@@ -514,6 +527,13 @@ declare module '@tanstack/react-router' {
       path: '/approvals'
       fullPath: '/approvals'
       preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/agents-models': {
+      id: '/_authenticated/agents-models'
+      path: '/agents-models'
+      fullPath: '/agents-models'
+      preLoaderRoute: typeof AuthenticatedAgentsModelsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings/': {
@@ -711,6 +731,7 @@ const AuthenticatedOutboundRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAgentsModelsRoute: typeof AuthenticatedAgentsModelsRoute
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRouteWithChildren
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
@@ -724,6 +745,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAgentsModelsRoute: AuthenticatedAgentsModelsRoute,
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedBudgetRoute: AuthenticatedBudgetRouteWithChildren,
   AuthenticatedChatRoute: AuthenticatedChatRoute,

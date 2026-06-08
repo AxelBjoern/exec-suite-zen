@@ -330,7 +330,7 @@ export async function executeToolCall(
   }
   const parsed = tool.parameters.safeParse(rawArgs ?? {});
   if (!parsed.success) {
-    const err = parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; ");
+    const err = parsed.error.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join("; ");
     await logCall(name, ctx, rawArgs, null, "error", err);
     return { ok: false, error: `invalid args: ${err}` };
   }

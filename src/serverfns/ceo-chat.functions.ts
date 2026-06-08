@@ -1191,13 +1191,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         .update({ updated_at: new Date().toISOString() })
         .eq("id", conversationId!);
 
-    const saveAssistant = async (markdown: string) => {
+    const saveAssistant = async (markdown: string, modelOverride?: string | null) => {
       const { data: saved, conversationId: finalConversationId } = await insertCeoChatMessage({
         role: "assistant",
         content: markdown,
         conversationId,
         title: data.content || "New conversation",
-        select: "id, role, content, created_at",
+        modelUsed: modelOverride ?? resolvedModel ?? null,
+        select: "id, role, content, created_at, model_used",
       });
       conversationId = finalConversationId;
       await bump();

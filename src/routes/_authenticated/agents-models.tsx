@@ -66,7 +66,7 @@ function AgentsModelsShell() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("base_models")
-        .select("id,slug,name,provider,description,is_system,is_public")
+        .select("id,slug,name,provider,description,is_system,is_public,owner_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];

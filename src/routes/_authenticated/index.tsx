@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, Settings as SettingsIcon, ArrowRight } from "lucide-react";
+import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, Settings as SettingsIcon, ArrowRight, BellRing, Check } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ensureOwnerRole } from "@/lib/outbound.functions";
+import { listReminders, completeReminder } from "@/lib/automation.functions";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({

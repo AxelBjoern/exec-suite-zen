@@ -139,8 +139,8 @@ function AgentsModelsShell() {
           userId={me.id}
           hasOwnAgent={types.some((t) => t.owner_id === me.id)}
           hasOwnModel={models.some((m) => m.owner_id === me.id)}
-          onCreateAgent={(v) => createAgent.mutateAsync(v)}
-          onCreateModel={(v) => createModel.mutateAsync(v)}
+          onCreateAgent={(v: AgentDraft) => createAgent.mutateAsync(v)}
+          onCreateModel={(v: ModelDraft) => createModel.mutateAsync(v)}
         />
       )}
 

@@ -90,7 +90,7 @@ function Hub() {
   ];
 
   return (
-    <main className="mx-auto flex h-[calc(100vh-3.25rem)] max-w-[1200px] flex-col px-4 py-4 md:py-6">
+    <main className="mx-auto max-w-[1200px] px-4 py-4 md:py-6 overflow-y-auto h-[calc(100vh-3.25rem)]">
       <div className="mb-4 md:mb-6 shrink-0">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
           VDNX Workspace

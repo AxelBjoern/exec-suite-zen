@@ -148,6 +148,8 @@ export type Database = {
           kind: string
           notes: string | null
           payload: Json | null
+          ref_id: string | null
+          ref_table: string | null
           requester_id: string | null
           reviewer: string | null
           status: string
@@ -161,6 +163,8 @@ export type Database = {
           kind?: string
           notes?: string | null
           payload?: Json | null
+          ref_id?: string | null
+          ref_table?: string | null
           requester_id?: string | null
           reviewer?: string | null
           status?: string
@@ -174,6 +178,8 @@ export type Database = {
           kind?: string
           notes?: string | null
           payload?: Json | null
+          ref_id?: string | null
+          ref_table?: string | null
           requester_id?: string | null
           reviewer?: string | null
           status?: string
@@ -222,6 +228,36 @@ export type Database = {
           payload?: Json
           prev_hash?: string | null
           target?: string | null
+        }
+        Relationships: []
+      }
+      auto_approve_rules: {
+        Row: {
+          agent_slug: string | null
+          created_at: string
+          enabled: boolean
+          id: string
+          kind: string
+          match: Json
+          owner_id: string
+        }
+        Insert: {
+          agent_slug?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind: string
+          match?: Json
+          owner_id: string
+        }
+        Update: {
+          agent_slug?: string | null
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind?: string
+          match?: Json
+          owner_id?: string
         }
         Relationships: []
       }
@@ -439,6 +475,57 @@ export type Database = {
         }
         Relationships: []
       }
+      content_drafts: {
+        Row: {
+          agent_id: string | null
+          approval_id: string | null
+          body_md: string
+          created_at: string
+          id: string
+          kind: string
+          metadata: Json
+          owner_id: string | null
+          status: string
+        }
+        Insert: {
+          agent_id?: string | null
+          approval_id?: string | null
+          body_md: string
+          created_at?: string
+          id?: string
+          kind: string
+          metadata?: Json
+          owner_id?: string | null
+          status?: string
+        }
+        Update: {
+          agent_id?: string | null
+          approval_id?: string | null
+          body_md?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          metadata?: Json
+          owner_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_drafts_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "approvals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       decision_log: {
         Row: {
           agent_slug: string | null
@@ -650,6 +737,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          model_used: string | null
           role: string
           summary: string | null
           thread_id: string
@@ -660,6 +748,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          model_used?: string | null
           role: string
           summary?: string | null
           thread_id: string
@@ -670,6 +759,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          model_used?: string | null
           role?: string
           summary?: string | null
           thread_id?: string

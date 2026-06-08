@@ -264,17 +264,17 @@ export const TOOL_REGISTRY: ToolDef<any>[] = [
 
 export const READ_ONLY_TOOL_NAMES = TOOL_REGISTRY.filter(t => t.readOnly).map(t => t.name);
 
-export function getTool(name: string): ToolDef | undefined {
+export function getTool(name: string): ToolDef<any> | undefined {
   return TOOL_REGISTRY.find(t => t.name === name);
 }
 
-export function toolsForAgent(agent_slug: string, names?: string[]): ToolDef[] {
-  const pool = names ? names.map(getTool).filter(Boolean) as ToolDef[] : TOOL_REGISTRY;
+export function toolsForAgent(agent_slug: string, names?: string[]): ToolDef<any>[] {
+  const pool = names ? names.map(getTool).filter(Boolean) as ToolDef<any>[] : TOOL_REGISTRY;
   return pool.filter(t => t.allowedAgents === "*" || t.allowedAgents.includes(agent_slug));
 }
 
 /** OpenRouter `tools` array for native tool-calling models. */
-export function toOpenRouterTools(tools: ToolDef[]) {
+export function toOpenRouterTools(tools: ToolDef<any>[]) {
   return tools.map(t => ({
     type: "function" as const,
     function: {

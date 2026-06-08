@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cpu, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { Check, Cpu, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { isVdnxOwnerEmail } from "@/lib/vdnx";
 
 export const Route = createFileRoute("/_authenticated/agents-models")({
   ssr: false,
@@ -23,6 +24,7 @@ type AgentType = {
   description: string;
   is_system: boolean;
   is_public?: boolean;
+  owner_id?: string | null;
 };
 type BaseModel = {
   id: string;
@@ -32,17 +34,27 @@ type BaseModel = {
   description: string;
   is_system: boolean;
   is_public?: boolean;
+  owner_id?: string | null;
 };
 
 function AgentsModelsShell() {
   const qc = useQueryClient();
+
+  const { data: me } = useQuery({
+    queryKey: ["am", "me"],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser();
+      return { id: data.user?.id ?? null, email: data.user?.email ?? null };
+    },
+    staleTime: Infinity,
+  });
 
   const { data: types = [] } = useQuery<AgentType[]>({
     queryKey: ["am", "agent_types"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("agent_types")
-        .select("id,name,industry,description,is_system,is_public")
+        .select("id,name,industry,description,is_system,is_public,owner_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -54,7 +66,7 @@ function AgentsModelsShell() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("base_models")
-        .select("id,slug,name,provider,description,is_system,is_public")
+        .select("id,slug,name,provider,description,is_system,is_public,owner_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -122,7 +134,18 @@ function AgentsModelsShell() {
         </div>
       </div>
 
+      {me?.id && !isVdnxOwnerEmail(me.email) && (
+        <SetupWizard
+          userId={me.id}
+          hasOwnAgent={types.some((t) => t.owner_id === me.id)}
+          hasOwnModel={models.some((m) => m.owner_id === me.id)}
+          onCreateAgent={(v: AgentDraft) => createAgent.mutateAsync(v)}
+          onCreateModel={(v: ModelDraft) => createModel.mutateAsync(v)}
+        />
+      )}
+
       <div className="grid gap-8 md:grid-cols-2">
+
         <Section
           title="Agents"
           count={types.length}
@@ -289,5 +312,136 @@ function ModelForm({ onSubmit, busy }: { onSubmit: (v: { slug: string; name: str
         <Plus className="mr-1 h-3.5 w-3.5" /> {busy ? "…" : "Add model"}
       </Button>
     </form>
+  );
+}
+
+type AgentDraft = { name: string; industry: string; description: string };
+type ModelDraft = { slug: string; name: string; provider: string; description: string };
+
+const AGENT_PRESETS: AgentDraft[] = [
+  { name: "Strategist", industry: "executive", description: "High-level planning, prioritization, and decision framing." },
+  { name: "Operator", industry: "operations", description: "Turns plans into concrete tasks, owners, and deadlines." },
+  { name: "Researcher", industry: "research", description: "Gathers, summarizes, and cites sources for any topic." },
+];
+
+const MODEL_PRESETS: ModelDraft[] = [
+  { slug: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", provider: "openrouter", description: "Fast, cheap default for most work." },
+  { slug: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "openrouter", description: "Balanced multimodal + reasoning." },
+];
+
+function SetupWizard(props: {
+  userId: string;
+  hasOwnAgent: boolean;
+  hasOwnModel: boolean;
+  onCreateAgent: (v: AgentDraft) => Promise<unknown>;
+  onCreateModel: (v: ModelDraft) => Promise<unknown>;
+}) {
+  const storageKey = `am-wizard-dismissed:${props.userId}`;
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(storageKey) === "1";
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (props.hasOwnAgent && props.hasOwnModel) {
+      window.localStorage.setItem(storageKey, "1");
+    }
+  }, [props.hasOwnAgent, props.hasOwnModel, storageKey]);
+
+  if (dismissed || (props.hasOwnAgent && props.hasOwnModel)) return null;
+
+  const step = !props.hasOwnAgent ? 1 : 2;
+
+  function dismiss() {
+    window.localStorage.setItem(storageKey, "1");
+    setDismissed(true);
+  }
+
+  async function add(kind: "agent" | "model", preset: AgentDraft | ModelDraft) {
+    const key = `${kind}:${(preset as AgentDraft).name ?? (preset as ModelDraft).slug}`;
+    setBusy(key);
+    try {
+      if (kind === "agent") {
+        await props.onCreateAgent(preset as AgentDraft);
+      } else {
+        await props.onCreateModel(preset as ModelDraft);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="mb-8 rounded-lg border border-primary/30 bg-primary/5 p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-primary">
+              Setup · Step {step} of 2
+            </p>
+            <h2 className="mt-1 font-serif text-lg font-semibold text-foreground">
+              {step === 1 ? "Create your first agent" : "Add a model to power your agents"}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {step === 1
+                ? "Agents define a role and tone. Pick a preset or build one from scratch in the Agents panel below."
+                : "Models are the LLMs behind your agents. The two defaults below are public; you can add any OpenRouter slug."}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={dismiss}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Dismiss setup"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {step === 1 ? (
+        <ul className="grid gap-2 sm:grid-cols-3">
+          {AGENT_PRESETS.map((p) => {
+            const key = `agent:${p.name}`;
+            return (
+              <li key={p.name} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{p.name}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">{p.description}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy === key} onClick={() => add("agent", p)}>
+                  {busy === key ? "Adding…" : (<><Plus className="mr-1 h-3.5 w-3.5" />Use preset</>)}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {MODEL_PRESETS.map((p) => {
+            const key = `model:${p.slug}`;
+            return (
+              <li key={p.slug} className="flex flex-col gap-2 rounded border border-border bg-panel p-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{p.name}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">{p.provider} · {p.slug}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy === key} onClick={() => add("model", p)}>
+                  {busy === key ? "Adding…" : (<><Plus className="mr-1 h-3.5 w-3.5" />Add model</>)}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Check className={`h-3.5 w-3.5 ${props.hasOwnAgent ? "text-primary" : "opacity-30"}`} />
+        Agent
+        <Check className={`h-3.5 w-3.5 ${props.hasOwnModel ? "text-primary" : "opacity-30"}`} />
+        Model
+      </div>
+    </section>
   );
 }

@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /$
+Allow: /auth
+Disallow: /chat
+Disallow: /terminal
+Disallow: /budget
+Disallow: /forge
+Disallow: /outbound
+Disallow: /approvals
+Disallow: /settings
+Disallow: /api/
+Disallow: /reset-password
+
+Sitemap: https://exec-suite-zen.lovable.app/sitemap.xml

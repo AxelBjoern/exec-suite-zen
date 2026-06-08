@@ -795,27 +795,42 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
     const userEmail = claims?.email;
 
     const sys =
-      "You extract outbound publishing items from a plan. Return ONLY JSON, no markdown fences:\n" +
+      "You extract outbound publishing items from the user's text. Return ONLY JSON, no markdown fences:\n" +
       '{"items":[{"kind":"linkedin"|"email"|"reminder","text"?:"...","to"?:"...","subject"?:"...","body"?:"...","scheduled_at"?:"YYYY-MM-DD HH:mm TZ","label"?:"short title"}]}.\n' +
-      "For LinkedIn posts: include the FULL post text (hook + body + hashtags) in `text`. If the plan references copy without quoting it, use the strongest available reconstruction from hooks/themes in the plan.\n" +
-      "For emails: require `to`, `subject`, `body`. For reminders: require `subject`, `body`.\n" +
-      "If items are scheduled, put the human-readable date/time in `scheduled_at`. Order items chronologically. Skip metadata sections (metrics, risks, action items).";
+      "ALWAYS return at least one item if the text contains ANY draft, post, email, or reminder — even a single, loosely-structured one.\n" +
+      "For LinkedIn posts: include the FULL post text (hook + body + hashtags) in `text`. Reconstruct from hooks/themes if copy is referenced but not quoted.\n" +
+      "For emails: require `to`, `subject`, `body`. If `to` is missing but the text is clearly an email draft, return kind 'reminder' so the owner can fill in the recipient later.\n" +
+      "For reminders: require `subject`, `body`.\n" +
+      "Put any human-readable date/time in `scheduled_at`. Order chronologically. Skip pure metadata (metrics, risks, action-item bullets).\n" +
+      "If the entire input is one post/email/reminder, return exactly one item. Never return an empty items array unless the text is purely analysis with no draftable content.";
 
-    const json = await chatCompletion({
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: `Plan:\n\n${data.plan}` },
-      ],
-      model: "x-ai/grok-4.3",
-      temperature: 0.3,
-      max_tokens: 8000,
-    });
-    const content: string = json?.choices?.[0]?.message?.content ?? "";
-    const stripped = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-    let parsed: { items?: any[] } = {};
-    try { parsed = JSON.parse(stripped); } catch { throw new Error("Could not parse plan into items"); }
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-    if (items.length === 0) throw new Error("No publishable items found in plan");
+    const runParse = async () => {
+      const json = await chatCompletion({
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: `Input:\n\n${data.plan}` },
+        ],
+        model: "x-ai/grok-4.3",
+        temperature: 0.3,
+        max_tokens: 8000,
+      });
+      const content: string = json?.choices?.[0]?.message?.content ?? "";
+      const stripped = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+      try {
+        const parsed = JSON.parse(stripped) as { items?: any[] };
+        return Array.isArray(parsed.items) ? parsed.items : [];
+      } catch {
+        return [];
+      }
+    };
+
+    let items = await runParse();
+    if (items.length === 0) items = await runParse();
+    if (items.length === 0) {
+      throw new Error(
+        "Couldn't find a draft to file. Include the actual post/email/reminder text (subject + body, or LinkedIn copy) in the message.",
+      );
+    }
 
     const filed: Array<{ id?: string; status: string; label: string }> = [];
     const errors: string[] = [];

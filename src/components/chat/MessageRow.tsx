@@ -196,8 +196,8 @@ function SendPlanButton({ content }: { content: string }) {
   const filePlan = useServerFn(filePlanFromChat);
   const [busy, setBusy] = useState(false);
   const looksLikePlan =
-    /\b(linkedin|outbound|post\s*\d|publishing plan|email\s+sequence|reminder)\b/i.test(content) &&
-    content.length > 200;
+    /\b(linkedin|outbound|post\s*\d|publishing plan|email\s+sequence|reminder|subject\s*:|hook\s*:|hashtag)\b/i.test(content) &&
+    content.length > 80;
   if (!looksLikePlan) return null;
 
   async function handleClick() {

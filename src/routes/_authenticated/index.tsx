@@ -7,9 +7,14 @@ import { ensureOwnerRole } from "@/lib/outbound.functions";
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
-      { title: "VDNX — Workspace" },
-      { name: "description", content: "Neutral start hub for the VDNX workspace." },
+      { title: "VDNX Terminal — Workspace" },
+      { name: "description", content: "VDNX operations workspace: chat, terminal, budget, forge, outbound, approvals." },
+      { property: "og:title", content: "VDNX Terminal — Workspace" },
+      { property: "og:description", content: "Institutional Company Operating System." },
+      { property: "og:url", content: "https://exec-suite-zen.lovable.app/" },
+      { property: "og:type", content: "website" },
     ],
+    links: [{ rel: "canonical", href: "https://exec-suite-zen.lovable.app/" }],
   }),
   component: Hub,
 });

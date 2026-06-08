@@ -173,6 +173,7 @@ export function MessageRow({
             )}
           </button>
           <SendPlanButton content={content} />
+          {modelUsed && <ModelPill model={modelUsed} />}
         </div>
       </div>
     </div>

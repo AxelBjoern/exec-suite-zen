@@ -1,47 +1,33 @@
 ## Goal
-Make LinkedIn video generation on `/outbound` actually finish, remove the hard 7-minute cutoff, and surface real failures instead of silently spinning until nothing is attached.
+Rename `/forge` → `/agents-models` with title "Agents & Models". Seed the 10 terminal agents and add Gemini 2.5 Flash. Show system content only to admin (axel) and expose DeepSeek V4 Flash + Gemini 2.5 Flash as public defaults visible to every user.
 
-## What I’ll change
+## Changes
 
-### 1) Remove the client-side time limit
-- Replace the hardcoded `7:00` timeout in `src/routes/_authenticated/outbound.tsx`.
-- Keep polling until the job reaches a terminal state: `completed`, `failed`, or user-cancelled.
-- Change the progress UI from `elapsed / 7:00` to an open-ended elapsed timer plus status text.
+### 1. Route rename
+- New file `src/routes/_authenticated/agents-models.tsx` — copy of current forge with updated heading ("Agents & Models"), title meta, and query keys (`["am", ...]`).
+- Delete `src/routes/_authenticated/forge.tsx`.
+- Add `src/routes/_authenticated/forge.tsx` shim that redirects to `/agents-models` (preserves existing links).
+- Update `src/components/ModuleSwitcher.tsx`: `{ to: "/agents-models", label: "Agents & Models", icon: Cpu }`.
+- Update `src/routes/_authenticated/index.tsx`: card link `to: "/agents-models"`, label "Agents & Models"; update description meta.
+- Update `README.md` references from Forge → Agents & Models.
 
-### 2) Stop hiding backend poll errors
-- Fix `pollKlingJob` in `src/lib/outbound.functions.ts` so non-OK poll responses are not treated as `processing`.
-- Return explicit failure details when OpenRouter polling fails, when download fails, or when storage upload/signing fails.
-- Make the UI show the real error immediately instead of timing out later.
+### 2. Schema migration (`is_public` flag for non-admin visibility)
+- `ALTER TABLE base_models ADD COLUMN is_public boolean NOT NULL DEFAULT false;`
+- `ALTER TABLE agent_types ADD COLUMN is_public boolean NOT NULL DEFAULT false;`
+- Replace the `select` policies on both tables so rows are visible when `owner_id = auth.uid()` OR `is_public` OR `(is_system AND has_role(auth.uid(),'admin'))`. Other policies unchanged.
 
-### 3) Make completed videos reliably reusable
-- Ensure completed jobs don’t depend on a single successful client poll to become visible.
-- Reuse an already-uploaded stored video path if the same job was completed earlier.
-- Keep the generated video attached as `mediaPath` so preview/edit/send all use the stored asset consistently.
+### 3. Data seed (via insert tool)
+- Insert 10 system `agent_types` matching terminal IDs: ceo, cfo, coo, cto, cmo, cco, sales, linkedin, social, seo (industry = executive/revenue/marketing/etc., short description from `agent-prompts.ts`), `is_system=true`, `is_public=false` — visible only to axel (alongside the 20 existing executives).
+- Insert system `base_model` row `google/gemini-2.5-flash` (provider `openrouter`, name "Gemini 2.5 Flash"), `is_system=true`, `is_public=true`.
+- Update existing `deepseek/deepseek-v4-flash` row to `is_public=true`.
 
-### 4) Fix the edit/preview flow for generated video
-- Ensure the edit modal hydrates generated video from storage every time.
-- Keep native `<video controls>` visible in both the edit popup and the row preview modal.
-- If a job failed or never attached media, show a clear inline status instead of an empty media area.
+### 4. UI tweaks
+- In Agents & Models page, badge label shows "VDNX" for `is_system` rows and "Default" for `is_public && !is_system` rows.
+- Empty-state copy: "No custom agents yet — VDNX defaults are read-only."
 
-### 5) Tighten the outbound submit path
-- Verify the LinkedIn request payload always prefers `mediaPath` for generated clips.
-- Preserve existing media during draft saves unless the user explicitly replaces/removes it.
-- Keep image/PDF behavior unchanged.
-
-## Validation
-- Generate a new clip from the main LinkedIn card.
-- Confirm the timer runs without a fixed cap.
-- Confirm the finished clip appears inline with video controls.
-- Save the draft, reopen it, and verify the video still previews in the popup.
-- Confirm the row Preview button opens the stored clip.
-
-## Technical details
-- Files: `src/lib/outbound.functions.ts`, `src/routes/_authenticated/outbound.tsx`
-- Main bug sources found in code:
-  - `runKlingFlow()` still hard-stops after 7 minutes.
-  - `pollKlingJob()` currently converts non-OK poll responses into fake `processing`, which can hide the actual failure.
-  - If polling never reaches a successful attach, no `mediaPath` is saved, so the UI has nothing to preview later.
+## Notes on memory rule
+The project memory restricts code to 8 OpenRouter models. Per your instruction we are adding `google/gemini-2.5-flash` as an exception for the Agents & Models catalog only. I will update `mem://index.md` Core to note "Gemini 2.5 Flash is permitted as a default user-selectable model in Agents & Models" so future sessions don't strip it. LLM calls in `src/server/llm.server.ts` are unchanged.
 
 ## Out of scope
-- Muxing ElevenLabs audio into the MP4.
-- Reworking the rest of outbound/email/reminder flows.
+- No changes to terminal routing logic or `llm.server.ts` model dispatch.
+- No new RLS for write paths (owners still write their own; admin still manages system rows).

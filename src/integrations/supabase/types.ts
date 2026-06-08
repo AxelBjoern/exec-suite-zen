@@ -20,6 +20,7 @@ export type Database = {
           description: string
           id: string
           industry: string
+          is_public: boolean
           is_system: boolean
           name: string
           owner_id: string | null
@@ -31,6 +32,7 @@ export type Database = {
           description?: string
           id?: string
           industry?: string
+          is_public?: boolean
           is_system?: boolean
           name: string
           owner_id?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           description?: string
           id?: string
           industry?: string
+          is_public?: boolean
           is_system?: boolean
           name?: string
           owner_id?: string | null
@@ -180,6 +183,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          is_public: boolean
           is_system: boolean
           name: string
           owner_id: string | null
@@ -191,6 +195,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          is_public?: boolean
           is_system?: boolean
           name: string
           owner_id?: string | null
@@ -202,6 +207,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          is_public?: boolean
           is_system?: boolean
           name?: string
           owner_id?: string | null

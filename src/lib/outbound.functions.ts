@@ -465,7 +465,7 @@ export const listMyRequests = createServerFn({ method: "GET" })
       .in("kind", ["outbound_email", "outbound_linkedin", "outbound_reminder"])
       .is("archived_at", null)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(100);
     if (error) throw new Error(error.message);
     const rows = (data ?? []).map((r: any) => {
       const p = { ...(r.payload ?? {}) };
@@ -826,12 +826,24 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
 
     let items = await runParse();
     if (items.length === 0) items = await runParse();
+
+    // Stable hash of the raw input — used for fallback metadata,
+    // audit trail, and grouping repeated bad inputs in the review queue.
+    const textHash = await sha256Hex(data.plan);
+    let parserFallback = false;
+
     if (items.length === 0) {
       // Fallback: file the raw text as a single LinkedIn draft so the user can
       // edit/route it in Outbound rather than losing the content to a parser error.
       const text = data.plan.trim().slice(0, 3000);
       if (text.length >= 20) {
-        items = [{ kind: "linkedin", text, label: "Draft from chat" }];
+        parserFallback = true;
+        items = [{
+          kind: "linkedin",
+          text,
+          label: "Draft from chat (parser fallback)",
+          __fallback: true,
+        }];
       } else {
         throw new Error(
           "Couldn't find a draft to file. Include the actual post/email/reminder text (subject + body, or LinkedIn copy) in the message.",
@@ -841,6 +853,7 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
 
     const filed: Array<{ id?: string; status: string; label: string }> = [];
     const errors: string[] = [];
+    let fallbackId: string | undefined;
     for (const it of items) {
       try {
         let kind: "outbound_email" | "outbound_reminder" | "outbound_linkedin";
@@ -875,15 +888,66 @@ export const filePlanFromChat = createServerFn({ method: "POST" })
           errors.push(`Unknown kind: ${it.kind}`);
           continue;
         }
+        if (it.__fallback) {
+          payload.parser_fallback = true;
+          payload.fallback_reason = "parser_returned_no_items";
+          payload.text_hash = textHash;
+          payload.text_length = data.plan.length;
+          payload.text_preview = data.plan.trim().slice(0, 240);
+          payload.filed_from = "chat";
+        }
         const res = await fileOutboundFromChat({ userId, userEmail, kind, payload });
         filed.push({ id: res.id, status: res.status, label });
+        if (it.__fallback && res.id) fallbackId = res.id;
       } catch (e: any) {
         errors.push(`${it.label ?? it.kind}: ${e?.message ?? "failed"}`);
       }
     }
 
-    return { filed, errors, total: items.length };
+    // Best-effort audit trail. An audit failure must never block the user.
+    if (parserFallback) {
+      try {
+        const auditPayload = {
+          text_hash: textHash,
+          text_length: data.plan.length,
+          text_preview: data.plan.trim().slice(0, 240),
+          attempts: 2,
+          model: "x-ai/grok-4.3",
+          requester_id: userId,
+          fallback_id: fallbackId ?? null,
+          created_at: new Date().toISOString(),
+        };
+        const hashSelf = await sha256Hex(JSON.stringify(auditPayload));
+        await supabaseAdmin.from("audit_log").insert({
+          actor: "system",
+          agent_slug: "outbound-parser",
+          action: "outbound.parser_fallback",
+          target: fallbackId ?? null,
+          payload: auditPayload,
+          hash_self: hashSelf,
+        });
+      } catch {
+        // non-fatal
+      }
+    }
+
+    return {
+      filed,
+      errors,
+      total: items.length,
+      parserFallback,
+      textHash: parserFallback ? textHash : null,
+      fallbackId: fallbackId ?? null,
+    };
   });
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 
 export async function sendOwnerDigestEmail(to: string, subject: string, body: string) {

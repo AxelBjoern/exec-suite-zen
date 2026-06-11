@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive,
+  Mail, BellRing, Linkedin, Clock, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive, AlertTriangle, Check,
 } from "lucide-react";
 import {
   requestEmail,
@@ -51,7 +51,10 @@ const authHeader = async (): Promise<Record<string, string>> => {
 };
 
 export const Route = createFileRoute("/_authenticated/outbound")({
-  validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    draft: typeof s.draft === "string" ? s.draft : undefined,
+    queue: s.queue === "fallbacks" ? ("fallbacks" as const) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "VDNX — Outbound" },
@@ -616,6 +619,32 @@ function OutboundPage() {
       </p>
 
       <div className="mt-8 grid gap-4">
+        <FallbacksQueue
+          rows={data?.rows ?? []}
+          isOwner={owner.data?.isOwner === true}
+          openWhen={search.queue === "fallbacks"}
+          onEdit={openEdit}
+          onArchive={archiveItem}
+          onApproveAll={async (ids) => {
+            for (const id of ids) {
+              try { await approveReq({ data: { id } }); } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Approve failed");
+              }
+            }
+            toast.success(`${ids.length} fallback${ids.length === 1 ? "" : "s"} approved & sent`);
+            qc.invalidateQueries({ queryKey: ["my-outbound"] });
+          }}
+          onArchiveAll={async (ids) => {
+            for (const id of ids) {
+              try { await archiveRow({ data: { id, archived: true } }); } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Archive failed");
+              }
+            }
+            toast.success(`${ids.length} fallback${ids.length === 1 ? "" : "s"} archived`);
+            qc.invalidateQueries({ queryKey: ["my-outbound"] });
+            qc.invalidateQueries({ queryKey: ["outbound", "archive"] });
+          }}
+        />
         <section className="rounded-lg border border-border bg-panel p-5">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="font-serif text-lg font-semibold">My recent requests</h2>
@@ -1292,5 +1321,175 @@ function OutboundPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function FallbacksQueue(props: {
+  rows: any[];
+  isOwner: boolean;
+  openWhen?: boolean;
+  onEdit: (r: any) => void;
+  onArchive: (id: string) => void;
+  onApproveAll: (ids: string[]) => Promise<void>;
+  onArchiveAll: (ids: string[]) => Promise<void>;
+}) {
+  const fallbacks = props.rows.filter(
+    (r) =>
+      r.kind === "outbound_linkedin" &&
+      r.payload?.parser_fallback === true &&
+      r.archived_at == null &&
+      r.status === "pending",
+  );
+  const [open, setOpen] = useState<boolean>(props.openWhen ?? false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState<"approve" | "archive" | null>(null);
+
+  useEffect(() => {
+    if (props.openWhen) setOpen(true);
+  }, [props.openWhen]);
+
+  if (fallbacks.length === 0 && !props.openWhen) return null;
+
+  const selectedIds = fallbacks.filter((r) => selected[r.id]).map((r) => r.id);
+  const targetIds = selectedIds.length > 0 ? selectedIds : fallbacks.map((r) => r.id);
+
+  async function runBulk(action: "approve" | "archive") {
+    if (targetIds.length === 0) return;
+    const verb = action === "approve" ? "approve & send" : "archive";
+    const scope = selectedIds.length > 0 ? `${targetIds.length} selected` : `all ${targetIds.length}`;
+    if (!confirm(`${verb} ${scope} fallback draft${targetIds.length === 1 ? "" : "s"}?`)) return;
+    setBusy(action);
+    try {
+      if (action === "approve") await props.onApproveAll(targetIds);
+      else await props.onArchiveAll(targetIds);
+      setSelected({});
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        <h2 className="font-serif text-lg font-semibold">Parser Fallbacks</h2>
+        <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+          {fallbacks.length}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+          aria-expanded={open}
+        >
+          <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      {open && (
+        <>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Drafts the parser couldn't structure. Each was filed as a single LinkedIn draft from the
+            raw chat text. Edit individually, or batch-approve/archive below.
+          </p>
+          {fallbacks.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No pending fallback drafts.</p>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {props.isOwner && (
+                  <button
+                    type="button"
+                    disabled={busy !== null || targetIds.length === 0}
+                    onClick={() => runBulk("approve")}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  >
+                    {busy === "approve" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    Approve {selectedIds.length > 0 ? `${selectedIds.length} selected` : "all"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={busy !== null || targetIds.length === 0}
+                  onClick={() => runBulk("archive")}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted disabled:opacity-50"
+                >
+                  {busy === "archive" ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
+                  Archive {selectedIds.length > 0 ? `${selectedIds.length} selected` : "all"}
+                </button>
+                {selectedIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelected({})}
+                    className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+              <ul className="divide-y divide-border">
+                {fallbacks.map((r) => {
+                  const p = (r.payload ?? {}) as Record<string, any>;
+                  const hashShort = typeof p.text_hash === "string" ? p.text_hash.slice(0, 10) : "";
+                  const preview = (p.text_preview ?? p.text ?? "").slice(0, 240);
+                  const isSel = !!selected[r.id];
+                  return (
+                    <li key={r.id} className="py-3">
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={(e) => setSelected((s) => ({ ...s, [r.id]: e.target.checked }))}
+                          className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                          aria-label="Select fallback"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-300">
+                              Fallback
+                            </span>
+                            <span>{new Date(r.created_at).toLocaleString()}</span>
+                            {hashShort && (
+                              <span title={p.text_hash} className="font-mono normal-case tracking-normal text-muted-foreground">
+                                #{hashShort}
+                              </span>
+                            )}
+                            {typeof p.text_length === "number" && (
+                              <span className="normal-case tracking-normal">{p.text_length} chars</span>
+                            )}
+                          </div>
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+                            {preview}
+                            {p.text_length > preview.length ? "…" : ""}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => props.onEdit(r)}
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                          >
+                            <Wand2 className="h-3 w-3" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => props.onArchive(r.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+                          >
+                            <Archive className="h-3 w-3" />
+                            Archive
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </section>
   );
 }

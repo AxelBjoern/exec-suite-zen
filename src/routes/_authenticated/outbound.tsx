@@ -619,6 +619,32 @@ function OutboundPage() {
       </p>
 
       <div className="mt-8 grid gap-4">
+        <FallbacksQueue
+          rows={data?.rows ?? []}
+          isOwner={owner.data?.isOwner === true}
+          openWhen={search.queue === "fallbacks"}
+          onEdit={openEdit}
+          onArchive={archiveItem}
+          onApproveAll={async (ids) => {
+            for (const id of ids) {
+              try { await approveReq({ data: { id } }); } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Approve failed");
+              }
+            }
+            toast.success(`${ids.length} fallback${ids.length === 1 ? "" : "s"} approved & sent`);
+            qc.invalidateQueries({ queryKey: ["my-outbound"] });
+          }}
+          onArchiveAll={async (ids) => {
+            for (const id of ids) {
+              try { await archiveRow({ data: { id, archived: true } }); } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Archive failed");
+              }
+            }
+            toast.success(`${ids.length} fallback${ids.length === 1 ? "" : "s"} archived`);
+            qc.invalidateQueries({ queryKey: ["my-outbound"] });
+            qc.invalidateQueries({ queryKey: ["outbound", "archive"] });
+          }}
+        />
         <section className="rounded-lg border border-border bg-panel p-5">
           <div className="mb-3 flex items-center gap-2">
             <h2 className="font-serif text-lg font-semibold">My recent requests</h2>

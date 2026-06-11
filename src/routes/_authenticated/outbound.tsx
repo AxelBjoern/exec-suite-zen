@@ -51,7 +51,10 @@ const authHeader = async (): Promise<Record<string, string>> => {
 };
 
 export const Route = createFileRoute("/_authenticated/outbound")({
-  validateSearch: (s: Record<string, unknown>) => ({ draft: typeof s.draft === "string" ? s.draft : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    draft: typeof s.draft === "string" ? s.draft : undefined,
+    queue: s.queue === "fallbacks" ? ("fallbacks" as const) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "VDNX — Outbound" },

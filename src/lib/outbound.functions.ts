@@ -465,7 +465,7 @@ export const listMyRequests = createServerFn({ method: "GET" })
       .in("kind", ["outbound_email", "outbound_linkedin", "outbound_reminder"])
       .is("archived_at", null)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(100);
     if (error) throw new Error(error.message);
     const rows = (data ?? []).map((r: any) => {
       const p = { ...(r.payload ?? {}) };

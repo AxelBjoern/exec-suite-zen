@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail, BellRing, Linkedin, Clock, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive,
+  Mail, BellRing, Linkedin, Clock, Image as ImageIcon, Sparkles, RefreshCw, Wand2, Trash2, Upload, Layers, FileText, Film, ChevronDown, Archive, AlertTriangle, Check,
 } from "lucide-react";
 import {
   requestEmail,

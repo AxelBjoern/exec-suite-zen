@@ -208,8 +208,24 @@ function SendPlanButton({ content }: { content: string }) {
       const res: any = await filePlan({ data: { plan: content } });
       const count = res?.filed?.length ?? 0;
       const errCount = res?.errors?.length ?? 0;
+      const fallback = res?.parserFallback === true;
       toast.dismiss(t);
-      if (count > 0) {
+      if (fallback && count > 0) {
+        toast.warning(
+          "Parser couldn't structure your plan — filed as 1 LinkedIn draft for review.",
+          {
+            description: res?.textHash
+              ? `Logged with hash ${String(res.textHash).slice(0, 10)}…`
+              : undefined,
+            action: {
+              label: "Review fallbacks",
+              onClick: () => {
+                window.location.href = "/outbound?queue=fallbacks";
+              },
+            },
+          },
+        );
+      } else if (count > 0) {
         toast.success(
           `${count} draft${count === 1 ? "" : "s"} filed to Outbound${errCount ? ` (${errCount} skipped)` : ""}`,
           {

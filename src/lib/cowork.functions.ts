@@ -62,6 +62,12 @@ export const updateSession = createServerFn({ method: "POST" })
     return row;
   });
 
+async function sha256Hex(s: string): Promise<string> {
+  const bytes = new TextEncoder().encode(s);
+  const buf = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export const applyPreview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
@@ -72,9 +78,11 @@ export const applyPreview = createServerFn({ method: "POST" })
     const { error: upErr } = await context.supabase
       .from("cowork_sessions").update({ applied_content: row.preview_content }).eq("id", data.id).select().single();
     if (upErr) throw new Error(upErr.message);
+    const payload = { session_id: data.id, preview_type: row.preview_type, title: row.title, length: row.preview_content?.length ?? 0 };
+    const hash_self = await sha256Hex(JSON.stringify(payload));
     await context.supabase.from("audit_log").insert({
       actor: context.userId, agent_slug: "vibe-coder", action: "cowork.preview_applied",
-      payload: { session_id: data.id, preview_type: row.preview_type, title: row.title, length: row.preview_content?.length ?? 0 },
+      target: data.id, payload, hash_self,
     });
     return { ok: true };
   });

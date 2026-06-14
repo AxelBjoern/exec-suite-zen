@@ -7,6 +7,12 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
 import { VIBE_CODER_AUTOMATOR_PROMPT } from "@/lib/vibe-coder-prompt";
 
+async function sha256Hex(s: string): Promise<string> {
+  const bytes = new TextEncoder().encode(s);
+  const buf = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 type LogEntry = { ts: string; node_id: string; level: "info" | "warn" | "error"; message: string; data?: any };
 
 async function appendLog(runId: string, entry: LogEntry, existing: any[]) {
@@ -83,20 +89,23 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
         const action = node.config?.action ?? "noop";
         // Sovereignty-first: actions are recorded as audit + (when applicable)
         // routed through the existing approvals flow rather than firing live.
+        const auditPayload = { run_id: payload.run_id, node_id: node.id, config: node.config };
+        const hash_self = await sha256Hex(JSON.stringify(auditPayload));
         await supabaseAdmin.from("audit_log").insert({
           actor: "system", agent_slug: "workflow-runner",
           action: `workflow.action.${action}`,
-          payload: { run_id: payload.run_id, node_id: node.id, config: node.config },
+          target: payload.run_id, payload: auditPayload, hash_self,
         }).select();
         log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "info", message: `Action recorded: ${action}` }, log);
         break;
       }
       case "output": {
         await supabaseAdmin.from("decision_log").insert({
-          actor: "workflow-runner",
-          action: `workflow.output.${node.id}`,
-          rationale: node.config?.summary ?? node.label,
-          payload: { run_id: payload.run_id, node },
+          agent_slug: "workflow-runner",
+          title: `Workflow output: ${node.label}`,
+          decision: node.config?.summary ?? node.label,
+          rationale: `From workflow run ${payload.run_id}`,
+          amendments: [{ run_id: payload.run_id, node }],
         }).select();
         log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "info", message: `Output written: ${node.label}` }, log);
         break;

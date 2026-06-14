@@ -170,9 +170,11 @@ export const decideRunApproval = createServerFn({ method: "POST" })
     }
 
     // Resume: advance past the current human_review node.
-    const log = Array.isArray(run.log) ? run.log : [];
-    const lastIdx = log.findLastIndex?.((e: any) => e?.node_id === run.current_node_id);
-    const nextIndex = (lastIdx >= 0 ? lastIdx : log.length - 1) + 1;
+    const { data: wfRow } = await context.supabase
+      .from("workflows").select("nodes").eq("id", run.workflow_id).single();
+    const nodes = Array.isArray(wfRow?.nodes) ? (wfRow!.nodes as any[]) : [];
+    const currentIdx = nodes.findIndex((n: any) => n?.id === run.current_node_id);
+    const nextIndex = (currentIdx >= 0 ? currentIdx : -1) + 1;
     await context.supabase.from("workflow_runs").update({ status: "running" }).eq("id", run.id).select();
     await context.supabase.from("job_queue").insert({
       kind: "workflow_step",

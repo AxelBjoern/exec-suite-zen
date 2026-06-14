@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { runTask } from "@/server/cadence.server";
+import { runWorkflowStep } from "@/server/workflow-runner.server";
 import { checkCronAuth } from "@/server/cron-auth.server";
 
 const BATCH = 5;
@@ -31,6 +32,10 @@ export const Route = createFileRoute("/api/public/cron/job-tick")({
               const taskId = (job.payload as any)?.task_id;
               if (!taskId) throw new Error("missing task_id");
               await runTask(taskId);
+            } else if (job.kind === "workflow_step") {
+              const p = job.payload as any;
+              if (!p?.run_id || typeof p?.node_index !== "number") throw new Error("missing run_id/node_index");
+              await runWorkflowStep({ run_id: p.run_id, node_index: p.node_index });
             } else {
               throw new Error(`unknown job kind: ${job.kind}`);
             }

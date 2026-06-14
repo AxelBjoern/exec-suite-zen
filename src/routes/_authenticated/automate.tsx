@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Play, Save, Zap, Trash2, FileTemplate } from "lucide-react";
+import { ArrowLeft, Plus, Play, Save, Zap, Trash2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -124,7 +124,7 @@ function AutomatePage() {
         <div className="px-2 space-y-1">
           {WORKFLOW_TEMPLATES.map((t) => (
             <button key={t.slug} onClick={() => loadTemplate(t.slug)} className="w-full text-left rounded-md px-2 py-1.5 text-xs hover:bg-panel-2 text-foreground">
-              <FileTemplate className="inline h-3 w-3 mr-1 text-primary" /> {t.name}
+              <FileText className="inline h-3 w-3 mr-1 text-primary" /> {t.name}
             </button>
           ))}
         </div>

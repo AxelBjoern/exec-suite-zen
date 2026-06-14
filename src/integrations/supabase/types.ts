@@ -529,6 +529,42 @@ export type Database = {
           },
         ]
       }
+      cowork_sessions: {
+        Row: {
+          applied_content: string | null
+          created_at: string
+          id: string
+          messages: Json
+          preview_content: string
+          preview_type: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applied_content?: string | null
+          created_at?: string
+          id?: string
+          messages?: Json
+          preview_content?: string
+          preview_type?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applied_content?: string | null
+          created_at?: string
+          id?: string
+          messages?: Json
+          preview_content?: string
+          preview_type?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       decision_log: {
         Row: {
           agent_slug: string | null
@@ -1152,6 +1188,104 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      workflow_runs: {
+        Row: {
+          approval_id: string | null
+          created_at: string
+          current_node_id: string | null
+          finished_at: string | null
+          id: string
+          log: Json
+          started_at: string
+          status: string
+          user_id: string
+          workflow_id: string
+        }
+        Insert: {
+          approval_id?: string | null
+          created_at?: string
+          current_node_id?: string | null
+          finished_at?: string | null
+          id?: string
+          log?: Json
+          started_at?: string
+          status?: string
+          user_id: string
+          workflow_id: string
+        }
+        Update: {
+          approval_id?: string | null
+          created_at?: string
+          current_node_id?: string | null
+          finished_at?: string | null
+          id?: string
+          log?: Json
+          started_at?: string
+          status?: string
+          user_id?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_runs_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "approvals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_runs_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflows: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          nodes: Json
+          schedule_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          nodes?: Json
+          schedule_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          nodes?: Json
+          schedule_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflows_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, Settings as SettingsIcon, ArrowRight, BellRing, Check } from "lucide-react";
+import { MessageSquare, TerminalSquare, LineChart, Cpu, Send, ShieldCheck, Settings as SettingsIcon, ArrowRight, BellRing, Check, Wand2, Zap } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,6 +28,20 @@ const TILES = [
     desc: "Free-form conversation with the executive board.",
     icon: MessageSquare,
     badge: "Live",
+  },
+  {
+    to: "/cowork",
+    label: "Cowork",
+    desc: "Live AI cowork: chat with Vibe Coder, preview markdown, code, JSON, and Mermaid side-by-side.",
+    icon: Wand2,
+    badge: "Live",
+  },
+  {
+    to: "/automate",
+    label: "Automate",
+    desc: "Visual workflow builder with sovereignty gates and human approvals.",
+    icon: Zap,
+    badge: "Module",
   },
   {
     to: "/terminal",

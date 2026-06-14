@@ -17,8 +17,10 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
 import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
 import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
+import { Route as AuthenticatedCoworkRouteImport } from './routes/_authenticated/cowork'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
+import { Route as AuthenticatedAutomateRouteImport } from './routes/_authenticated/automate'
 import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedAgentsModelsRouteImport } from './routes/_authenticated/agents-models'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
@@ -85,6 +87,11 @@ const AuthenticatedForgeRoute = AuthenticatedForgeRouteImport.update({
   path: '/forge',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCoworkRoute = AuthenticatedCoworkRouteImport.update({
+  id: '/cowork',
+  path: '/cowork',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -93,6 +100,11 @@ const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
 const AuthenticatedBudgetRoute = AuthenticatedBudgetRouteImport.update({
   id: '/budget',
   path: '/budget',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAutomateRoute = AuthenticatedAutomateRouteImport.update({
+  id: '/automate',
+  path: '/automate',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
@@ -257,8 +269,10 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
+  '/automate': typeof AuthenticatedAutomateRoute
   '/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/chat': typeof AuthenticatedChatRoute
+  '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/terminal': typeof AuthenticatedTerminalRoute
@@ -293,7 +307,9 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
+  '/automate': typeof AuthenticatedAutomateRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/terminal': typeof AuthenticatedTerminalRoute
@@ -331,8 +347,10 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
+  '/_authenticated/automate': typeof AuthenticatedAutomateRoute
   '/_authenticated/budget': typeof AuthenticatedBudgetRouteWithChildren
   '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/cowork': typeof AuthenticatedCoworkRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
   '/_authenticated/outbound': typeof AuthenticatedOutboundRouteWithChildren
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
@@ -371,8 +389,10 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/agents-models'
     | '/approvals'
+    | '/automate'
     | '/budget'
     | '/chat'
+    | '/cowork'
     | '/forge'
     | '/outbound'
     | '/terminal'
@@ -407,7 +427,9 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/agents-models'
     | '/approvals'
+    | '/automate'
     | '/chat'
+    | '/cowork'
     | '/forge'
     | '/outbound'
     | '/terminal'
@@ -444,8 +466,10 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/_authenticated/agents-models'
     | '/_authenticated/approvals'
+    | '/_authenticated/automate'
     | '/_authenticated/budget'
     | '/_authenticated/chat'
+    | '/_authenticated/cowork'
     | '/_authenticated/forge'
     | '/_authenticated/outbound'
     | '/_authenticated/terminal'
@@ -550,6 +574,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedForgeRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/cowork': {
+      id: '/_authenticated/cowork'
+      path: '/cowork'
+      fullPath: '/cowork'
+      preLoaderRoute: typeof AuthenticatedCoworkRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/chat': {
       id: '/_authenticated/chat'
       path: '/chat'
@@ -562,6 +593,13 @@ declare module '@tanstack/react-router' {
       path: '/budget'
       fullPath: '/budget'
       preLoaderRoute: typeof AuthenticatedBudgetRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/automate': {
+      id: '/_authenticated/automate'
+      path: '/automate'
+      fullPath: '/automate'
+      preLoaderRoute: typeof AuthenticatedAutomateRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/approvals': {
@@ -796,8 +834,10 @@ const AuthenticatedOutboundRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAgentsModelsRoute: typeof AuthenticatedAgentsModelsRoute
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
+  AuthenticatedAutomateRoute: typeof AuthenticatedAutomateRoute
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRouteWithChildren
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedCoworkRoute: typeof AuthenticatedCoworkRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
   AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRouteWithChildren
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
@@ -810,8 +850,10 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAgentsModelsRoute: AuthenticatedAgentsModelsRoute,
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
+  AuthenticatedAutomateRoute: AuthenticatedAutomateRoute,
   AuthenticatedBudgetRoute: AuthenticatedBudgetRouteWithChildren,
   AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedCoworkRoute: AuthenticatedCoworkRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
   AuthenticatedOutboundRoute: AuthenticatedOutboundRouteWithChildren,
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
@@ -842,13 +884,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

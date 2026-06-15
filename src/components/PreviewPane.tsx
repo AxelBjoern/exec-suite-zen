@@ -1,18 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import mermaid from "mermaid";
 import { diffLines } from "diff";
-import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye } from "lucide-react";
+import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export type PreviewType = "markdown" | "tsx" | "ts" | "json" | "mermaid" | "text";
+export type PreviewType = "markdown" | "tsx" | "ts" | "json" | "mermaid" | "text" | "html" | "image";
 
 type Props = {
   content: string;
   type: PreviewType;
   originalContent?: string;
+  iterationOriginal?: string;
   onApply?: () => void;
   onRegenerate?: () => void;
   onChange?: (next: string) => void;
@@ -23,18 +25,28 @@ type Props = {
 mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
 
 export function PreviewPane({
-  content, type, originalContent, onApply, onRegenerate, onChange, applying, regenerating,
+  content, type, originalContent, iterationOriginal,
+  onApply, onRegenerate, onChange, applying, regenerating,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const canDiff = !!(originalContent && originalContent !== content);
+  const [runTsx, setRunTsx] = useState(false);
+  const canDiff = !!((originalContent && originalContent !== content) || (iterationOriginal && iterationOriginal !== content));
+  const isCodeLike = type === "tsx" || type === "ts" || type === "json" || type === "markdown" || type === "html";
+  const canRun = type === "tsx" || type === "ts";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-panel px-3 py-2">
         <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Preview · {type}</span>
         <div className="flex items-center gap-1.5">
-          {(type === "tsx" || type === "ts" || type === "json" || type === "markdown") && onChange && (
+          {canRun && !editing && (
+            <Button size="sm" variant="ghost" onClick={() => setRunTsx((r) => !r)} className="h-7 text-xs">
+              {runTsx ? <Eye className="mr-1 h-3 w-3" /> : <Play className="mr-1 h-3 w-3" />}
+              {runTsx ? "Source" : "Run"}
+            </Button>
+          )}
+          {isCodeLike && onChange && (
             <Button size="sm" variant="ghost" onClick={() => setEditing((e) => !e)} className="h-7 text-xs">
               {editing ? <Eye className="mr-1 h-3 w-3" /> : <Edit3 className="mr-1 h-3 w-3" />}
               {editing ? "Preview" : "Edit"}
@@ -61,7 +73,7 @@ export function PreviewPane({
       <div className="min-h-0 flex-1 overflow-auto bg-background">
         {!content.trim() ? (
           <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
-            Ask Vibe Coder to draft a brief, a workflow JSON, a Mermaid diagram, or some code — it'll render here.
+            Ask Vibe Coder to draft a brief, a workflow JSON, a Mermaid diagram, HTML, a React component, or some code — it'll render here.
           </div>
         ) : editing ? (
           <Textarea
@@ -75,6 +87,12 @@ export function PreviewPane({
           </div>
         ) : type === "mermaid" ? (
           <MermaidBlock chart={content} />
+        ) : type === "html" ? (
+          <HtmlPreview html={content} />
+        ) : type === "image" ? (
+          <ImagePreview src={content} />
+        ) : canRun && runTsx ? (
+          <TsxRunner code={content} />
         ) : (
           <pre className="m-0 overflow-auto bg-panel-2 p-4 text-xs text-foreground"><code>{content}</code></pre>
         )}
@@ -82,8 +100,15 @@ export function PreviewPane({
 
       <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>Changes since last apply</DialogTitle></DialogHeader>
-          <DiffView original={originalContent ?? ""} updated={content} />
+          <DialogHeader><DialogTitle>Changes</DialogTitle></DialogHeader>
+          <Tabs defaultValue={iterationOriginal && iterationOriginal !== content ? "iter" : "apply"}>
+            <TabsList>
+              <TabsTrigger value="apply" disabled={!(originalContent && originalContent !== content)}>Since last save</TabsTrigger>
+              <TabsTrigger value="iter" disabled={!(iterationOriginal && iterationOriginal !== content)}>Since previous iteration</TabsTrigger>
+            </TabsList>
+            <TabsContent value="apply"><DiffView original={originalContent ?? ""} updated={content} /></TabsContent>
+            <TabsContent value="iter"><DiffView original={iterationOriginal ?? ""} updated={content} /></TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>
@@ -105,6 +130,74 @@ function MermaidBlock({ chart }: { chart: string }) {
   if (err) return <pre className="m-0 p-4 text-xs text-destructive whitespace-pre-wrap">{err}</pre>;
   if (!svg) return <div className="flex items-center justify-center p-6 text-xs text-muted-foreground"><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Rendering…</div>;
   return <div className="p-4 [&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+function HtmlPreview({ html }: { html: string }) {
+  const doc = useMemo(() => {
+    if (/<html[\s>]/i.test(html)) return html;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;margin:1rem;color:#111;background:#fff}</style></head><body>${html}</body></html>`;
+  }, [html]);
+  return (
+    <iframe
+      title="HTML preview"
+      sandbox="allow-scripts"
+      srcDoc={doc}
+      className="h-full w-full border-0 bg-white"
+    />
+  );
+}
+
+function ImagePreview({ src }: { src: string }) {
+  const ok = /^(https:\/\/|data:image\/)/i.test(src.trim());
+  if (!ok) return <pre className="m-0 p-4 text-xs text-destructive whitespace-pre-wrap">Image URL must use https:// or data:image/…</pre>;
+  return (
+    <div className="flex h-full w-full items-center justify-center p-4">
+      <img src={src.trim()} alt="Preview" className="max-h-full max-w-full object-contain rounded-md border border-border" />
+    </div>
+  );
+}
+
+function TsxRunner({ code }: { code: string }) {
+  const doc = useMemo(() => buildTsxRunnerDoc(code), [code]);
+  return (
+    <iframe
+      title="React preview"
+      sandbox="allow-scripts"
+      srcDoc={doc}
+      className="h-full w-full border-0 bg-white"
+    />
+  );
+}
+
+function buildTsxRunnerDoc(code: string): string {
+  const escaped = code.replace(/<\/script>/gi, "<\\/script>");
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body{font-family:system-ui,sans-serif;margin:0;padding:1rem;color:#111;background:#fff}
+    #__err{position:fixed;left:0;right:0;bottom:0;max-height:50%;overflow:auto;background:#fee;color:#900;font-family:ui-monospace,monospace;font-size:12px;padding:8px;border-top:1px solid #f00;white-space:pre-wrap;display:none}
+  </style></head><body>
+  <div id="root"></div>
+  <div id="__err"></div>
+  <script type="module">
+    const showErr = (msg) => { const el = document.getElementById('__err'); el.textContent = String(msg); el.style.display='block'; };
+    window.addEventListener('error', (e) => showErr(e.error?.stack || e.message));
+    window.addEventListener('unhandledrejection', (e) => showErr(e.reason?.stack || e.reason));
+    try {
+      const React = await import('https://esm.sh/react@18');
+      const ReactDOM = await import('https://esm.sh/react-dom@18/client');
+      const Babel = (await import('https://esm.sh/@babel/standalone@7.25.6')).default || (await import('https://esm.sh/@babel/standalone@7.25.6'));
+      const src = ${JSON.stringify(escaped)};
+      const out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }], 'typescript'], filename: 'snippet.tsx' }).code;
+      const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nreturn (module.exports && module.exports.default) || exports.default || (typeof App !== 'undefined' ? App : null);";
+      const factory = new Function('React', wrapped);
+      const Comp = factory(React);
+      if (!Comp) { showErr('Snippet must export default a React component (or define `App`).'); }
+      else {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(Comp));
+      }
+    } catch (e) { showErr(e?.stack || e?.message || String(e)); }
+  </script>
+  </body></html>`;
 }
 
 function DiffView({ original, updated }: { original: string; updated: string }) {

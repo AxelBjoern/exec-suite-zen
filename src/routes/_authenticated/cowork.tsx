@@ -23,16 +23,26 @@ const MODEL_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const FENCE = /```(\w+)?\n([\s\S]*?)```/g;
-const PREVIEWABLE = new Set(["markdown", "md", "tsx", "ts", "json", "mermaid"]);
+const PREVIEWABLE = new Set(["markdown", "md", "tsx", "ts", "json", "mermaid", "html"]);
+const IMAGE_RE = /(data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+|https?:\/\/\S+\.(?:png|jpe?g|webp|gif|svg)(?:\?\S*)?)/gi;
 
-function lastFencedBlock(text: string): { lang: string; code: string } | null {
+type Detected = { lang: string; code: string };
+
+function detectPreview(text: string): Detected | null {
   let m: RegExpExecArray | null;
-  let last: { lang: string; code: string } | null = null;
+  let last: Detected | null = null;
+  FENCE.lastIndex = 0;
   while ((m = FENCE.exec(text)) !== null) {
     const lang = (m[1] ?? "").toLowerCase();
     if (PREVIEWABLE.has(lang)) last = { lang: lang === "md" ? "markdown" : lang, code: m[2] };
   }
-  return last;
+  if (last) return last;
+  IMAGE_RE.lastIndex = 0;
+  let imgMatch: RegExpExecArray | null;
+  let lastImg: string | null = null;
+  while ((imgMatch = IMAGE_RE.exec(text)) !== null) lastImg = imgMatch[1];
+  if (lastImg) return { lang: "image", code: lastImg };
+  return null;
 }
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -71,6 +81,7 @@ function CoworkPage() {
   const [loopRunning, setLoopRunning] = useState(false);
   const [loopStep, setLoopStep] = useState(0);
   const loopAbort = useRef(false);
+  const [prevIter, setPrevIter] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];
@@ -121,7 +132,7 @@ function CoworkPage() {
       const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...next, { role: "assistant", content: reply }];
-      const block = lastFencedBlock(reply);
+      const block = detectPreview(reply);
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }
@@ -143,7 +154,7 @@ function CoworkPage() {
       const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
-      const block = lastFencedBlock(reply);
+      const block = detectPreview(reply);
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       await updateFn({ data: { id: session!, ...patch } });
@@ -174,8 +185,9 @@ function CoworkPage() {
         const res = await chatFn({ data: { messages: convo, model } });
         const reply = (res as any).text ?? "";
         convo = [...convo, { role: "assistant", content: reply }];
-        const block = lastFencedBlock(reply);
+        const block = detectPreview(reply);
         if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
+        setPrevIter(curContent);
         curContent = block.code;
         curType = block.lang as PreviewType;
         await updateFn({ data: { id: session, messages: convo, preview_content: curContent, preview_type: curType } });
@@ -269,6 +281,7 @@ function CoworkPage() {
         <PreviewPane
           content={previewContent} type={previewType}
           originalContent={appliedContent ?? undefined}
+          iterationOriginal={prevIter ?? undefined}
           onApply={session ? () => apply.mutate() : undefined}
           onRegenerate={session && messages.length ? regenerate : undefined}
           onChange={(v) => update.mutate({ preview_content: v })}

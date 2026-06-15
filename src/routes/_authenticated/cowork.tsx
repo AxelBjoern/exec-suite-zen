@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
+import { Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip, Pencil, Check, X } from "lucide-react";
 import { VdnxLoader } from "@/components/VdnxLoader";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PreviewPane, type PreviewType } from "@/components/PreviewPane";
 import {
-  listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat,
+  listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat, autoTitleSession,
 } from "@/lib/cowork.functions";
 
 const MODEL_OPTIONS: { value: string; label: string }[] = [
@@ -79,6 +79,7 @@ function CoworkPage() {
   const applyFn = useServerFn(applyPreview);
   const deleteFn = useServerFn(deleteSession);
   const chatFn = useServerFn(vibeChat);
+  const autoTitleFn = useServerFn(autoTitleSession);
 
   const sessions = useQuery({ queryKey: ["cowork-sessions"], queryFn: () => listFn(), staleTime: 60_000 });
   const current = useQuery({
@@ -99,6 +100,8 @@ function CoworkPage() {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const TEXT_EXT = /\.(txt|md|markdown|json|jsonc|ya?ml|toml|csv|tsv|tsx?|jsx?|mjs|cjs|html?|css|scss|less|py|rb|go|rs|java|kt|swift|php|sh|bash|zsh|sql|env|ini|conf|xml|svg|graphql|gql|vue|svelte|astro|mermaid|mmd|log)$/i;
   const LANG_MAP: Record<string, string> = { md: "markdown", markdown: "markdown", tsx: "tsx", ts: "ts", jsx: "tsx", js: "ts", json: "json", jsonc: "json", html: "html", htm: "html", mermaid: "mermaid", mmd: "mermaid", yml: "yaml", yaml: "yaml", csv: "csv", py: "python", sh: "bash", bash: "bash", sql: "sql", css: "css" };
@@ -185,6 +188,15 @@ function CoworkPage() {
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }
       await updateFn({ data: { id: sid!, ...patch } });
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
+      const currentTitle: string = (current.data as any)?.title ?? "Untitled session";
+      if (currentTitle === "Untitled session" && final.length >= 2) {
+        autoTitleFn({ data: { id: sid!, messages: final.slice(0, 4) } })
+          .then(() => {
+            qc.invalidateQueries({ queryKey: ["cowork-sessions"] });
+            qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
+          })
+          .catch(() => {});
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Chat failed");
     } finally {
@@ -264,12 +276,51 @@ function CoworkPage() {
           <Plus className="h-3 w-3 mr-1" /> New session
         </Button>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {sessions.data?.rows.map((s: any) => (
-            <div key={s.id} className={`group flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-panel-2 ${session === s.id ? "bg-panel-2 border border-border" : ""}`}>
-              <button onClick={() => navigate({ search: { session: s.id } })} className="flex-1 text-left truncate text-foreground">{s.title}</button>
-              <button onClick={() => del.mutate(s.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" aria-label="Delete"><Trash2 className="h-3 w-3" /></button>
-            </div>
-          ))}
+          {sessions.data?.rows.map((s: any) => {
+            const isRenaming = renamingId === s.id;
+            const commitRename = async () => {
+              const t = renameDraft.trim();
+              setRenamingId(null);
+              if (!t || t === s.title) return;
+              try {
+                await updateFn({ data: { id: s.id, title: t.slice(0, 200) } });
+                qc.invalidateQueries({ queryKey: ["cowork-sessions"] });
+                qc.invalidateQueries({ queryKey: ["cowork-session", s.id] });
+              } catch (e: any) { toast.error(e?.message ?? "Rename failed"); }
+            };
+            return (
+              <div key={s.id} className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs hover:bg-panel-2 ${session === s.id ? "bg-panel-2 border border-border" : ""}`}>
+                {isRenaming ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                        if (e.key === "Escape") { e.preventDefault(); setRenamingId(null); }
+                      }}
+                      onBlur={commitRename}
+                      className="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs outline-none focus:border-primary/60"
+                    />
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={commitRename} className="text-muted-foreground hover:text-foreground" aria-label="Save"><Check className="h-3 w-3" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => setRenamingId(null)} className="text-muted-foreground hover:text-destructive" aria-label="Cancel"><X className="h-3 w-3" /></button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => navigate({ search: { session: s.id } })}
+                      onDoubleClick={() => { setRenameDraft(s.title); setRenamingId(s.id); }}
+                      className="flex-1 text-left truncate text-foreground"
+                      title="Double-click to rename"
+                    >{s.title}</button>
+                    <button onClick={() => { setRenameDraft(s.title); setRenamingId(s.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground" aria-label="Rename"><Pencil className="h-3 w-3" /></button>
+                    <button onClick={() => del.mutate(s.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" aria-label="Delete"><Trash2 className="h-3 w-3" /></button>
+                  </>
+                )}
+              </div>
+            );
+          })}
           {sessions.data?.rows.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">No sessions yet.</p>}
         </div>
       </aside>

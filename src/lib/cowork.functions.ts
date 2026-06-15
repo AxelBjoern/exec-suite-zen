@@ -115,3 +115,34 @@ export const vibeChat = createServerFn({ method: "POST" })
     const text: string = res?.choices?.[0]?.message?.content ?? "";
     return { text, model };
   });
+
+export const autoTitleSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    messages: z.array(MessageSchema).min(1).max(20),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const convo = data.messages
+      .filter((m) => m.role !== "system")
+      .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 1200)}`)
+      .join("\n\n")
+      .slice(0, 4000);
+    const model = resolveTextChatModel("deepseek-flash");
+    const res = await chatCompletion({
+      model,
+      messages: [
+        { role: "system", content: "You name chat sessions. Reply with ONLY a concise 2-5 word title in Title Case. No quotes, no punctuation, no trailing period." },
+        { role: "user", content: `Title this session:\n\n${convo}` },
+      ],
+      temperature: 0.3,
+    });
+    let title: string = (res?.choices?.[0]?.message?.content ?? "").trim();
+    title = title.replace(/^["'`]+|["'`]+$/g, "").replace(/\.$/, "").slice(0, 80);
+    if (!title) title = "Untitled session";
+    const { error } = await context.supabase
+      .from("cowork_sessions").update({ title }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { title };
+  });
+

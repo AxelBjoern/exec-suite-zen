@@ -231,8 +231,9 @@ function CoworkPage() {
         convo = [...convo, userMsg];
         const res = await chatFn({ data: { messages: convo, model } });
         const reply = (res as any).text ?? "";
-        convo = [...convo, { role: "assistant", content: reply }];
         const block = detectPreview(reply);
+        const chatText = stripPreviewBlocks(reply, block);
+        convo = [...convo, { role: "assistant", content: chatText }];
         if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
         setPrevIter(curContent);
         curContent = block.code;

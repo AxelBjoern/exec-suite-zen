@@ -23,10 +23,12 @@ const MODEL_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const FENCE = /```(\w+)?\n([\s\S]*?)```/g;
+const FENCE_ANY = /```(\w+)?\n[\s\S]*?```/g;
 const PREVIEWABLE = new Set(["markdown", "md", "tsx", "ts", "json", "mermaid", "html"]);
 const IMAGE_RE = /(data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+|https?:\/\/\S+\.(?:png|jpe?g|webp|gif|svg)(?:\?\S*)?)/gi;
+const HTML_DOC_RE = /(<!doctype\s+html[\s\S]*?<\/html>|<html[\s>][\s\S]*?<\/html>)/i;
 
-type Detected = { lang: string; code: string };
+type Detected = { lang: string; code: string; raw?: string };
 
 function detectPreview(text: string): Detected | null {
   let m: RegExpExecArray | null;
@@ -34,15 +36,26 @@ function detectPreview(text: string): Detected | null {
   FENCE.lastIndex = 0;
   while ((m = FENCE.exec(text)) !== null) {
     const lang = (m[1] ?? "").toLowerCase();
-    if (PREVIEWABLE.has(lang)) last = { lang: lang === "md" ? "markdown" : lang, code: m[2] };
+    if (PREVIEWABLE.has(lang)) last = { lang: lang === "md" ? "markdown" : lang, code: m[2], raw: m[0] };
   }
   if (last) return last;
+  const htmlMatch = text.match(HTML_DOC_RE);
+  if (htmlMatch) return { lang: "html", code: htmlMatch[1], raw: htmlMatch[1] };
   IMAGE_RE.lastIndex = 0;
   let imgMatch: RegExpExecArray | null;
   let lastImg: string | null = null;
   while ((imgMatch = IMAGE_RE.exec(text)) !== null) lastImg = imgMatch[1];
   if (lastImg) return { lang: "image", code: lastImg };
   return null;
+}
+
+function stripPreviewBlocks(reply: string, detected: Detected | null): string {
+  let out = reply.replace(FENCE_ANY, "");
+  if (detected?.raw && detected.lang === "html") {
+    out = out.replace(detected.raw, "");
+  }
+  out = out.replace(/\n{3,}/g, "\n\n").trim();
+  return out || "Updated preview →";
 }
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -163,8 +176,9 @@ function CoworkPage() {
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
       const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
-      const final: Msg[] = [...next, { role: "assistant", content: reply }];
       const block = detectPreview(reply);
+      const chatText = stripPreviewBlocks(reply, block);
+      const final: Msg[] = [...next, { role: "assistant", content: chatText }];
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }
@@ -185,8 +199,9 @@ function CoworkPage() {
     try {
       const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
-      const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
       const block = detectPreview(reply);
+      const chatText = stripPreviewBlocks(reply, block);
+      const final: Msg[] = [...trimmed, { role: "assistant", content: chatText }];
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       await updateFn({ data: { id: session!, ...patch } });
@@ -216,8 +231,9 @@ function CoworkPage() {
         convo = [...convo, userMsg];
         const res = await chatFn({ data: { messages: convo, model } });
         const reply = (res as any).text ?? "";
-        convo = [...convo, { role: "assistant", content: reply }];
         const block = detectPreview(reply);
+        const chatText = stripPreviewBlocks(reply, block);
+        convo = [...convo, { role: "assistant", content: chatText }];
         if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
         setPrevIter(curContent);
         curContent = block.code;

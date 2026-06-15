@@ -81,6 +81,7 @@ function CoworkPage() {
   const [loopRunning, setLoopRunning] = useState(false);
   const [loopStep, setLoopStep] = useState(0);
   const loopAbort = useRef(false);
+  const [prevIter, setPrevIter] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];

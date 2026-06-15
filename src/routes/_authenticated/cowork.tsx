@@ -83,6 +83,38 @@ function CoworkPage() {
   const loopAbort = useRef(false);
   const [prevIter, setPrevIter] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const TEXT_EXT = /\.(txt|md|markdown|json|jsonc|ya?ml|toml|csv|tsv|tsx?|jsx?|mjs|cjs|html?|css|scss|less|py|rb|go|rs|java|kt|swift|php|sh|bash|zsh|sql|env|ini|conf|xml|svg|graphql|gql|vue|svelte|astro|mermaid|mmd|log)$/i;
+  const LANG_MAP: Record<string, string> = { md: "markdown", markdown: "markdown", tsx: "tsx", ts: "ts", jsx: "tsx", js: "ts", json: "json", jsonc: "json", html: "html", htm: "html", mermaid: "mermaid", mmd: "mermaid", yml: "yaml", yaml: "yaml", csv: "csv", py: "python", sh: "bash", bash: "bash", sql: "sql", css: "css" };
+
+  async function ingestFiles(files: FileList | File[]) {
+    const list = Array.from(files).slice(0, 10);
+    const chunks: string[] = [];
+    for (const f of list) {
+      if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name}: too large (max 5MB)`); continue; }
+      const isText = f.type.startsWith("text/") || TEXT_EXT.test(f.name) || f.type === "application/json";
+      const isImage = f.type.startsWith("image/");
+      if (isText) {
+        const text = await f.text();
+        const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+        const lang = LANG_MAP[ext] ?? ext ?? "";
+        chunks.push(`\n\n**${f.name}**\n\`\`\`${lang}\n${text}\n\`\`\``);
+      } else if (isImage) {
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = () => rej(r.error);
+          r.readAsDataURL(f);
+        });
+        chunks.push(`\n\n![${f.name}](${dataUrl})`);
+      } else {
+        toast.error(`${f.name}: unsupported file type`);
+      }
+    }
+    if (chunks.length) setInput((cur) => (cur + chunks.join("")).trimStart());
+  }
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];
   const previewContent: string = current.data?.preview_content ?? "";

@@ -33,8 +33,10 @@ export function PreviewPane({
   const [runTsx, setRunTsx] = useState(true);
   const [copied, setCopied] = useState(false);
   const canDiff = !!((originalContent && originalContent !== content) || (iterationOriginal && iterationOriginal !== content));
-  const isCodeLike = type === "tsx" || type === "ts" || type === "json" || type === "markdown" || type === "html";
-  const canRun = type === "tsx" || type === "ts";
+  const looksLikeHtml = /^\s*(<!doctype\s+html|<html[\s>])/i.test(content);
+  const effectiveType: PreviewType = (type === "markdown" || type === "text") && looksLikeHtml ? "html" : type;
+  const isCodeLike = effectiveType === "tsx" || effectiveType === "ts" || effectiveType === "json" || effectiveType === "markdown" || effectiveType === "html";
+  const canRun = effectiveType === "tsx" || effectiveType === "ts";
 
   async function handleCopy() {
     try {

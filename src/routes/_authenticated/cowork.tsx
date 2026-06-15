@@ -294,16 +294,37 @@ function CoworkPage() {
               )}
               {loopRunning && <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> iter {loopStep}/{loopIters}…</span>}
             </div>
-            <div className="relative">
+            <div
+              className={`relative rounded-md ${dragOver ? "ring-2 ring-primary/60" : ""}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files?.length) ingestFiles(e.dataTransfer.files); }}
+            >
               <textarea
                 ref={taRef} value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Ask for a brief, a workflow JSON, a diagram, or some code…"
+                onPaste={(e) => {
+                  const files = Array.from(e.clipboardData.files ?? []);
+                  if (files.length) { e.preventDefault(); ingestFiles(files); }
+                }}
+                placeholder="Ask for a brief, a workflow JSON, a diagram, code — or drop files here…"
                 disabled={pendingMsg || loopRunning}
-                className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pr-10 text-sm outline-none focus:border-primary/60"
+                className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pl-9 pr-10 text-sm outline-none focus:border-primary/60"
                 rows={3}
               />
+              <input
+                ref={fileRef} type="file" multiple hidden
+                onChange={(e) => { if (e.target.files?.length) ingestFiles(e.target.files); e.target.value = ""; }}
+              />
+              <Button size="icon" variant="ghost" onClick={() => fileRef.current?.click()} disabled={pendingMsg || loopRunning} className="absolute left-1 bottom-2 h-7 w-7" title="Attach files">
+                <Paperclip className="h-3 w-3" />
+              </Button>
               <Button size="icon" onClick={send} disabled={pendingMsg || loopRunning || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
+              {dragOver && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-primary/10 text-xs font-medium text-primary">
+                  Drop files to attach
+                </div>
+              )}
             </div>
           </div>
         </div>

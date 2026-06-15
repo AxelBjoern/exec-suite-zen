@@ -131,7 +131,7 @@ function CoworkPage() {
       const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...next, { role: "assistant", content: reply }];
-      const block = lastFencedBlock(reply);
+      const block = detectPreview(reply);
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }
@@ -153,7 +153,7 @@ function CoworkPage() {
       const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
-      const block = lastFencedBlock(reply);
+      const block = detectPreview(reply);
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       await updateFn({ data: { id: session!, ...patch } });
@@ -184,7 +184,7 @@ function CoworkPage() {
         const res = await chatFn({ data: { messages: convo, model } });
         const reply = (res as any).text ?? "";
         convo = [...convo, { role: "assistant", content: reply }];
-        const block = lastFencedBlock(reply);
+        const block = detectPreview(reply);
         if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
         curContent = block.code;
         curType = block.lang as PreviewType;

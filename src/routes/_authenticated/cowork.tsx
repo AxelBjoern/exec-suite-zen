@@ -199,8 +199,9 @@ function CoworkPage() {
     try {
       const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
-      const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
       const block = detectPreview(reply);
+      const chatText = stripPreviewBlocks(reply, block);
+      const final: Msg[] = [...trimmed, { role: "assistant", content: chatText }];
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       await updateFn({ data: { id: session!, ...patch } });

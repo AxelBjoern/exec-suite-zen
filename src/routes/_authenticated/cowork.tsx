@@ -3,13 +3,24 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PreviewPane, type PreviewType } from "@/components/PreviewPane";
 import {
   listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat,
 } from "@/lib/cowork.functions";
+
+const MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "grok", label: "Grok 4.3" },
+  { value: "hermes", label: "Hermes 4 405B" },
+  { value: "gpt", label: "ChatGPT 5.3" },
+  { value: "claude", label: "Claude Opus 4.7" },
+  { value: "deepseek", label: "DeepSeek V4 Pro" },
+  { value: "deepseek-flash", label: "DeepSeek V4 Flash" },
+  { value: "nemotron", label: "Nemotron 3 Nano Omni 30B" },
+];
 
 const FENCE = /```(\w+)?\n([\s\S]*?)```/g;
 const PREVIEWABLE = new Set(["markdown", "md", "tsx", "ts", "json", "mermaid"]);
@@ -54,6 +65,12 @@ function CoworkPage() {
 
   const [input, setInput] = useState("");
   const [pendingMsg, setPendingMsg] = useState(false);
+  const [model, setModel] = useState<string>("grok");
+  const [loopIters, setLoopIters] = useState(5);
+  const [loopDelay, setLoopDelay] = useState(2);
+  const [loopRunning, setLoopRunning] = useState(false);
+  const [loopStep, setLoopStep] = useState(0);
+  const loopAbort = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];
@@ -101,7 +118,7 @@ function CoworkPage() {
     try {
       await updateFn({ data: { id: sid!, messages: next } });
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
-      const res = await chatFn({ data: { messages: next } });
+      const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...next, { role: "assistant", content: reply }];
       const block = lastFencedBlock(reply);
@@ -123,7 +140,7 @@ function CoworkPage() {
     const trimmed = messages[messages.length - 1].role === "assistant" ? messages.slice(0, -1) : messages;
     setPendingMsg(true);
     try {
-      const res = await chatFn({ data: { messages: trimmed } });
+      const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
       const block = lastFencedBlock(reply);
@@ -132,6 +149,47 @@ function CoworkPage() {
       await updateFn({ data: { id: session!, ...patch } });
       qc.invalidateQueries({ queryKey: ["cowork-session", session] });
     } finally { setPendingMsg(false); }
+  }
+
+  function stopLoop() { loopAbort.current = true; }
+
+  async function startLoop() {
+    if (!session) { toast.error("Open or create a session first"); return; }
+    let convo: Msg[] = messages.slice();
+    let curContent = previewContent;
+    let curType: PreviewType = previewType;
+    if (!curContent.trim()) { toast.error("Generate something first, then auto-improve it"); return; }
+    loopAbort.current = false;
+    setLoopRunning(true);
+    setLoopStep(0);
+    try {
+      for (let i = 1; i <= loopIters; i++) {
+        if (loopAbort.current) break;
+        setLoopStep(i);
+        const userMsg: Msg = {
+          role: "user",
+          content: `Here is the current draft:\n\n\`\`\`${curType}\n${curContent}\n\`\`\`\n\nSuggest the single most impactful improvement and return the FULL improved version in one fenced \`\`\`${curType}\`\`\` block. Be concrete; briefly note what you changed above the block.`,
+        };
+        convo = [...convo, userMsg];
+        const res = await chatFn({ data: { messages: convo, model } });
+        const reply = (res as any).text ?? "";
+        convo = [...convo, { role: "assistant", content: reply }];
+        const block = lastFencedBlock(reply);
+        if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
+        curContent = block.code;
+        curType = block.lang as PreviewType;
+        await updateFn({ data: { id: session, messages: convo, preview_content: curContent, preview_type: curType } });
+        qc.invalidateQueries({ queryKey: ["cowork-session", session] });
+        if (loopAbort.current || i === loopIters) break;
+        await new Promise((r) => setTimeout(r, loopDelay * 1000));
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Loop failed");
+    } finally {
+      setLoopRunning(false);
+      setLoopStep(0);
+      loopAbort.current = false;
+    }
   }
 
   return (
@@ -170,17 +228,38 @@ function CoworkPage() {
             ))}
             {pendingMsg && <div className="text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Vibe Coder is thinking…</div>}
           </div>
-          <div className="border-t border-border p-3">
+          <div className="border-t border-border p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <Select value={model} onValueChange={setModel} disabled={pendingMsg || loopRunning}>
+                <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((m) => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <span>Loop</span>
+                <input type="number" min={1} max={20} value={loopIters} onChange={(e) => setLoopIters(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} disabled={loopRunning} className="w-12 h-7 rounded border border-border bg-background px-1 text-center" />
+                <span>×</span>
+                <input type="number" min={0} max={10} value={loopDelay} onChange={(e) => setLoopDelay(Math.max(0, Math.min(10, Number(e.target.value) || 0)))} disabled={loopRunning} className="w-12 h-7 rounded border border-border bg-background px-1 text-center" />
+                <span>s</span>
+              </div>
+              {loopRunning ? (
+                <Button size="sm" variant="destructive" onClick={stopLoop} className="h-7 text-xs"><Square className="h-3 w-3 mr-1" /> Stop ({loopStep}/{loopIters})</Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={startLoop} disabled={pendingMsg || !session || !previewContent.trim()} className="h-7 text-xs"><Sparkles className="h-3 w-3 mr-1" /> Auto-improve</Button>
+              )}
+              {loopRunning && <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> iter {loopStep}/{loopIters}…</span>}
+            </div>
             <div className="relative">
               <textarea
                 ref={taRef} value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder="Ask for a brief, a workflow JSON, a diagram, or some code…"
-                disabled={pendingMsg}
+                disabled={pendingMsg || loopRunning}
                 className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pr-10 text-sm outline-none focus:border-primary/60"
                 rows={3}
               />
-              <Button size="icon" onClick={send} disabled={pendingMsg || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
+              <Button size="icon" onClick={send} disabled={pendingMsg || loopRunning || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
             </div>
           </div>
         </div>

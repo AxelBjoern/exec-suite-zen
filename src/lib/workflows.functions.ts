@@ -118,13 +118,21 @@ export const runWorkflowNow = createServerFn({ method: "POST" })
       .select().single();
     if (runErr) throw new Error(runErr.message);
 
-    const { error: jobErr } = await context.supabase.from("job_queue").insert({
-      kind: "workflow_step",
-      payload: { run_id: run.id, node_index: 0 },
-    }).select();
-    if (jobErr) throw new Error(jobErr.message);
+    // Execute the first step inline so the user gets immediate feedback.
+    // Subsequent steps are enqueued into job_queue by the runner and picked
+    // up by the /api/public/cron/job-tick cron.
+    try {
+      const { runWorkflowStep } = await import("@/server/workflow-runner.server");
+      await runWorkflowStep({ run_id: run.id, node_index: 0 });
+    } catch (e: any) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("workflow_runs").update({
+        status: "failed", finished_at: new Date().toISOString(),
+      }).eq("id", run.id).select();
+      throw new Error(e?.message ?? "Workflow run failed");
+    }
 
-    return { run_id: run.id };
+    return { run_id: run.id, status: "running" as const };
   });
 
 export const listRuns = createServerFn({ method: "POST" })

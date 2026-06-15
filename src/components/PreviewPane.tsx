@@ -194,13 +194,15 @@ function buildTsxRunnerDoc(code: string): string {
         if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return React;
         throw new Error('Module not available in preview: ' + id);
       };
-      const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nreturn (module.exports && module.exports.default) || exports.default || module.exports || (typeof App !== 'undefined' ? App : null);";
+      const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nconst __keys = Object.keys(module.exports); const __fn = __keys.find(k => typeof module.exports[k] === 'function'); return (module.exports && module.exports.default) || exports.default || (typeof App !== 'undefined' ? App : null) || (typeof Component !== 'undefined' ? Component : null) || (__fn ? module.exports[__fn] : null);";
       const factory = new Function('React', 'ReactDOM', 'require', wrapped);
-      const Comp = factory(React, ReactDOM, require);
-      if (!Comp || (typeof Comp !== 'function' && typeof Comp !== 'object')) { showErr('Snippet must export default a React component (or define App).'); }
-      else {
+      let Comp = factory(React, ReactDOM, require);
+      if (Comp && typeof Comp === 'object' && typeof Comp.default === 'function') Comp = Comp.default;
+      if (typeof Comp !== 'function') {
+        showErr('Snippet must export default a React component function (or define App). Got: ' + (Comp === null ? 'null' : typeof Comp));
+      } else {
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(typeof Comp === 'function' ? Comp : (Comp.default || Comp)));
+        root.render(React.createElement(Comp));
       }
 
     } catch (e) { showErr(e?.stack || e?.message || String(e)); }

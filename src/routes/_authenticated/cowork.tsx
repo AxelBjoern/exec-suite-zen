@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -83,6 +83,38 @@ function CoworkPage() {
   const loopAbort = useRef(false);
   const [prevIter, setPrevIter] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const TEXT_EXT = /\.(txt|md|markdown|json|jsonc|ya?ml|toml|csv|tsv|tsx?|jsx?|mjs|cjs|html?|css|scss|less|py|rb|go|rs|java|kt|swift|php|sh|bash|zsh|sql|env|ini|conf|xml|svg|graphql|gql|vue|svelte|astro|mermaid|mmd|log)$/i;
+  const LANG_MAP: Record<string, string> = { md: "markdown", markdown: "markdown", tsx: "tsx", ts: "ts", jsx: "tsx", js: "ts", json: "json", jsonc: "json", html: "html", htm: "html", mermaid: "mermaid", mmd: "mermaid", yml: "yaml", yaml: "yaml", csv: "csv", py: "python", sh: "bash", bash: "bash", sql: "sql", css: "css" };
+
+  async function ingestFiles(files: FileList | File[]) {
+    const list = Array.from(files).slice(0, 10);
+    const chunks: string[] = [];
+    for (const f of list) {
+      if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name}: too large (max 5MB)`); continue; }
+      const isText = f.type.startsWith("text/") || TEXT_EXT.test(f.name) || f.type === "application/json";
+      const isImage = f.type.startsWith("image/");
+      if (isText) {
+        const text = await f.text();
+        const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+        const lang = LANG_MAP[ext] ?? ext ?? "";
+        chunks.push(`\n\n**${f.name}**\n\`\`\`${lang}\n${text}\n\`\`\``);
+      } else if (isImage) {
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = () => rej(r.error);
+          r.readAsDataURL(f);
+        });
+        chunks.push(`\n\n![${f.name}](${dataUrl})`);
+      } else {
+        toast.error(`${f.name}: unsupported file type`);
+      }
+    }
+    if (chunks.length) setInput((cur) => (cur + chunks.join("")).trimStart());
+  }
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];
   const previewContent: string = current.data?.preview_content ?? "";
@@ -262,16 +294,37 @@ function CoworkPage() {
               )}
               {loopRunning && <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> iter {loopStep}/{loopIters}…</span>}
             </div>
-            <div className="relative">
+            <div
+              className={`relative rounded-md ${dragOver ? "ring-2 ring-primary/60" : ""}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files?.length) ingestFiles(e.dataTransfer.files); }}
+            >
               <textarea
                 ref={taRef} value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Ask for a brief, a workflow JSON, a diagram, or some code…"
+                onPaste={(e) => {
+                  const files = Array.from(e.clipboardData.files ?? []);
+                  if (files.length) { e.preventDefault(); ingestFiles(files); }
+                }}
+                placeholder="Ask for a brief, a workflow JSON, a diagram, code — or drop files here…"
                 disabled={pendingMsg || loopRunning}
-                className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pr-10 text-sm outline-none focus:border-primary/60"
+                className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pl-9 pr-10 text-sm outline-none focus:border-primary/60"
                 rows={3}
               />
+              <input
+                ref={fileRef} type="file" multiple hidden
+                onChange={(e) => { if (e.target.files?.length) ingestFiles(e.target.files); e.target.value = ""; }}
+              />
+              <Button size="icon" variant="ghost" onClick={() => fileRef.current?.click()} disabled={pendingMsg || loopRunning} className="absolute left-1 bottom-2 h-7 w-7" title="Attach files">
+                <Paperclip className="h-3 w-3" />
+              </Button>
               <Button size="icon" onClick={send} disabled={pendingMsg || loopRunning || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
+              {dragOver && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-primary/10 text-xs font-medium text-primary">
+                  Drop files to attach
+                </div>
+              )}
             </div>
           </div>
         </div>

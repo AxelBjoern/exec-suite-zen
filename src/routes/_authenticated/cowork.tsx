@@ -276,12 +276,51 @@ function CoworkPage() {
           <Plus className="h-3 w-3 mr-1" /> New session
         </Button>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {sessions.data?.rows.map((s: any) => (
-            <div key={s.id} className={`group flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-panel-2 ${session === s.id ? "bg-panel-2 border border-border" : ""}`}>
-              <button onClick={() => navigate({ search: { session: s.id } })} className="flex-1 text-left truncate text-foreground">{s.title}</button>
-              <button onClick={() => del.mutate(s.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" aria-label="Delete"><Trash2 className="h-3 w-3" /></button>
-            </div>
-          ))}
+          {sessions.data?.rows.map((s: any) => {
+            const isRenaming = renamingId === s.id;
+            const commitRename = async () => {
+              const t = renameDraft.trim();
+              setRenamingId(null);
+              if (!t || t === s.title) return;
+              try {
+                await updateFn({ data: { id: s.id, title: t.slice(0, 200) } });
+                qc.invalidateQueries({ queryKey: ["cowork-sessions"] });
+                qc.invalidateQueries({ queryKey: ["cowork-session", s.id] });
+              } catch (e: any) { toast.error(e?.message ?? "Rename failed"); }
+            };
+            return (
+              <div key={s.id} className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs hover:bg-panel-2 ${session === s.id ? "bg-panel-2 border border-border" : ""}`}>
+                {isRenaming ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                        if (e.key === "Escape") { e.preventDefault(); setRenamingId(null); }
+                      }}
+                      onBlur={commitRename}
+                      className="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs outline-none focus:border-primary/60"
+                    />
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={commitRename} className="text-muted-foreground hover:text-foreground" aria-label="Save"><Check className="h-3 w-3" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => setRenamingId(null)} className="text-muted-foreground hover:text-destructive" aria-label="Cancel"><X className="h-3 w-3" /></button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => navigate({ search: { session: s.id } })}
+                      onDoubleClick={() => { setRenameDraft(s.title); setRenamingId(s.id); }}
+                      className="flex-1 text-left truncate text-foreground"
+                      title="Double-click to rename"
+                    >{s.title}</button>
+                    <button onClick={() => { setRenameDraft(s.title); setRenamingId(s.id); }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground" aria-label="Rename"><Pencil className="h-3 w-3" /></button>
+                    <button onClick={() => del.mutate(s.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" aria-label="Delete"><Trash2 className="h-3 w-3" /></button>
+                  </>
+                )}
+              </div>
+            );
+          })}
           {sessions.data?.rows.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">No sessions yet.</p>}
         </div>
       </aside>

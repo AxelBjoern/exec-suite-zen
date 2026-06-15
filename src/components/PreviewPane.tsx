@@ -96,15 +96,15 @@ export function PreviewPane({
             onChange={(e) => onChange?.(e.target.value)}
             className="h-full min-h-full resize-none border-0 rounded-none font-mono text-xs"
           />
-        ) : type === "markdown" ? (
+        ) : effectiveType === "markdown" ? (
           <div className="p-4">
             <MarkdownPreview source={content} style={{ background: "transparent", color: "inherit" }} />
           </div>
-        ) : type === "mermaid" ? (
+        ) : effectiveType === "mermaid" ? (
           <MermaidBlock chart={content} />
-        ) : type === "html" ? (
+        ) : effectiveType === "html" ? (
           <HtmlPreview html={content} />
-        ) : type === "image" ? (
+        ) : effectiveType === "image" ? (
           <ImagePreview src={content} />
         ) : canRun && runTsx ? (
           <TsxRunner code={content} />

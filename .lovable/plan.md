@@ -1,17 +1,23 @@
-Problem
--------
-The preview shows the raw HTML source as code instead of rendering it. The session's `preview_type` is `"markdown"` but the AI returned a full HTML document (`<!DOCTYPE html>...`) without a fenced code block, so `detectPreview` did not catch it and fell back to markdown. `MarkdownPreview` then displays the HTML as text.
+Goal
+----
+Match the behavior of the two existing untitled sessions (code rendered in the preview pane) but strip ALL code/HTML out of the chat column so only prose remains.
 
 Fix
 ---
-In `src/components/PreviewPane.tsx`, auto-detect HTML content regardless of declared type:
+Edit `src/routes/_authenticated/cowork.tsx`:
 
-1. Compute `looksLikeHtml = /^\s*(<!doctype\s+html|<html[\s>])/i.test(content)`.
-2. Derive `effectiveType`: if declared type is `markdown` or `text` and `looksLikeHtml`, use `"html"` instead.
-3. Use `effectiveType` everywhere in the render switch and for `isCodeLike` / `canRun` checks.
+1. Extend `detectPreview` to also catch an unfenced full HTML document (`<!doctype html...>` or `<html ...>...</html>`) when no previewable fenced block exists, returning `{ lang: "html", code }`.
 
-Result: the existing `HtmlPreview` iframe renders the page properly, with no other behavior changes.
+2. Add helper `stripPreviewBlocks(reply, detected)`:
+   - Remove every fenced ```` ``` ```` block from the reply (any language).
+   - If an unfenced HTML doc was detected, remove that slice too.
+   - Collapse extra blank lines; trim. If nothing remains, return `"Updated preview →"`.
+
+3. In `send`, `regenerate`, and `startLoop`: store `stripPreviewBlocks(reply, block)` as the assistant message in `messages`, while still saving the extracted code into `preview_content` / `preview_type` exactly as today.
+
+4. Revert the `effectiveType` auto-detect added last turn in `src/components/PreviewPane.tsx` — detection now happens upstream so the preview can trust the stored `type`.
 
 Files
 -----
-- src/components/PreviewPane.tsx (single small edit)
+- src/routes/_authenticated/cowork.tsx
+- src/components/PreviewPane.tsx

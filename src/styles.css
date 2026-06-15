@@ -188,3 +188,24 @@
 
 .scrollbar-hide{scrollbar-width:none;-ms-overflow-style:none}
 .scrollbar-hide::-webkit-scrollbar{display:none}
+
+@keyframes vdnx-logo-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015); }
+}
+@keyframes vdnx-neural-pulse {
+  0%, 100% { transform: scale(0.6); opacity: 0.7; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+@keyframes vdnx-dash {
+  to { stroke-dashoffset: -20; }
+}
+@keyframes vdnx-progress {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(380%); }
+}
+@keyframes vdnx-gradient-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+

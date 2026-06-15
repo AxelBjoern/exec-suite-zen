@@ -50,9 +50,9 @@ export function PreviewPane({
             <GitCompare className="mr-1 h-3 w-3" /> Diff
           </Button>
           {onApply && (
-            <Button size="sm" onClick={onApply} disabled={applying || !content.trim()} className="h-7 text-xs">
+            <Button size="sm" onClick={onApply} disabled={applying || !content.trim()} title="Save this preview as the accepted snapshot for this session" className="h-7 text-xs">
               {applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-              Apply
+              Save
             </Button>
           )}
         </div>

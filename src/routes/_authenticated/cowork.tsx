@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

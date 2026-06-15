@@ -187,6 +187,7 @@ function CoworkPage() {
         convo = [...convo, { role: "assistant", content: reply }];
         const block = detectPreview(reply);
         if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
+        setPrevIter(curContent);
         curContent = block.code;
         curType = block.lang as PreviewType;
         await updateFn({ data: { id: session, messages: convo, preview_content: curContent, preview_type: curType } });

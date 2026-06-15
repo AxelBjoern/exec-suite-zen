@@ -186,15 +186,23 @@ function buildTsxRunnerDoc(code: string): string {
       const ReactDOM = await import('https://esm.sh/react-dom@18/client');
       const Babel = (await import('https://esm.sh/@babel/standalone@7.25.6')).default || (await import('https://esm.sh/@babel/standalone@7.25.6'));
       const src = ${JSON.stringify(escaped)};
-      const out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }], 'typescript'], filename: 'snippet.tsx' }).code;
-      const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nreturn (module.exports && module.exports.default) || exports.default || (typeof App !== 'undefined' ? App : null);";
-      const factory = new Function('React', wrapped);
-      const Comp = factory(React);
-      if (!Comp) { showErr('Snippet must export default a React component (or define App).'); }
+      const out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }], 'typescript'], plugins: ['transform-modules-commonjs'], filename: 'snippet.tsx' }).code;
+      const require = (id) => {
+        if (id === 'react') return React;
+        if (id === 'react-dom') return ReactDOM;
+        if (id === 'react-dom/client') return ReactDOM;
+        if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return React;
+        throw new Error('Module not available in preview: ' + id);
+      };
+      const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nreturn (module.exports && module.exports.default) || exports.default || module.exports || (typeof App !== 'undefined' ? App : null);";
+      const factory = new Function('React', 'ReactDOM', 'require', wrapped);
+      const Comp = factory(React, ReactDOM, require);
+      if (!Comp || (typeof Comp !== 'function' && typeof Comp !== 'object')) { showErr('Snippet must export default a React component (or define App).'); }
       else {
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(Comp));
+        root.render(React.createElement(typeof Comp === 'function' ? Comp : (Comp.default || Comp)));
       }
+
     } catch (e) { showErr(e?.stack || e?.message || String(e)); }
   </script>
   </body></html>`;

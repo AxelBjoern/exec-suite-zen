@@ -177,16 +177,22 @@ export const decideRunApproval = createServerFn({ method: "POST" })
       return { ok: true, status: "cancelled" };
     }
 
-    // Resume: advance past the current human_review node.
+    // Resume: advance past the current human_review node, inline.
     const { data: wfRow } = await context.supabase
       .from("workflows").select("nodes").eq("id", run.workflow_id).single();
     const nodes = Array.isArray(wfRow?.nodes) ? (wfRow!.nodes as any[]) : [];
     const currentIdx = nodes.findIndex((n: any) => n?.id === run.current_node_id);
     const nextIndex = (currentIdx >= 0 ? currentIdx : -1) + 1;
     await context.supabase.from("workflow_runs").update({ status: "running" }).eq("id", run.id).select();
-    await context.supabase.from("job_queue").insert({
-      kind: "workflow_step",
-      payload: { run_id: run.id, node_index: nextIndex },
-    }).select();
+    try {
+      const { runWorkflowStep } = await import("@/server/workflow-runner.server");
+      await runWorkflowStep({ run_id: run.id, node_index: nextIndex });
+    } catch (e: any) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("workflow_runs").update({
+        status: "failed", finished_at: new Date().toISOString(),
+      }).eq("id", run.id).select();
+      throw new Error(e?.message ?? "Workflow resume failed");
+    }
     return { ok: true, status: "running" };
   });

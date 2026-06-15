@@ -281,6 +281,7 @@ function CoworkPage() {
         <PreviewPane
           content={previewContent} type={previewType}
           originalContent={appliedContent ?? undefined}
+          iterationOriginal={prevIter ?? undefined}
           onApply={session ? () => apply.mutate() : undefined}
           onRegenerate={session && messages.length ? regenerate : undefined}
           onChange={(v) => update.mutate({ preview_content: v })}

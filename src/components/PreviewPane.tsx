@@ -69,6 +69,10 @@ export function PreviewPane({
               Regenerate
             </Button>
           )}
+          <Button size="sm" variant="ghost" onClick={handleCopy} disabled={!content.trim()} className="h-7 text-xs" title="Copy preview content">
+            {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setDiffOpen(true)} disabled={!canDiff} className="h-7 text-xs">
             <GitCompare className="mr-1 h-3 w-3" /> Diff
           </Button>

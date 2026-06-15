@@ -33,8 +33,10 @@ export function PreviewPane({
   const [runTsx, setRunTsx] = useState(true);
   const [copied, setCopied] = useState(false);
   const canDiff = !!((originalContent && originalContent !== content) || (iterationOriginal && iterationOriginal !== content));
-  const isCodeLike = type === "tsx" || type === "ts" || type === "json" || type === "markdown" || type === "html";
-  const canRun = type === "tsx" || type === "ts";
+  const looksLikeHtml = /^\s*(<!doctype\s+html|<html[\s>])/i.test(content);
+  const effectiveType: PreviewType = (type === "markdown" || type === "text") && looksLikeHtml ? "html" : type;
+  const isCodeLike = effectiveType === "tsx" || effectiveType === "ts" || effectiveType === "json" || effectiveType === "markdown" || effectiveType === "html";
+  const canRun = effectiveType === "tsx" || effectiveType === "ts";
 
   async function handleCopy() {
     try {
@@ -94,15 +96,15 @@ export function PreviewPane({
             onChange={(e) => onChange?.(e.target.value)}
             className="h-full min-h-full resize-none border-0 rounded-none font-mono text-xs"
           />
-        ) : type === "markdown" ? (
+        ) : effectiveType === "markdown" ? (
           <div className="p-4">
             <MarkdownPreview source={content} style={{ background: "transparent", color: "inherit" }} />
           </div>
-        ) : type === "mermaid" ? (
+        ) : effectiveType === "mermaid" ? (
           <MermaidBlock chart={content} />
-        ) : type === "html" ? (
+        ) : effectiveType === "html" ? (
           <HtmlPreview html={content} />
-        ) : type === "image" ? (
+        ) : effectiveType === "image" ? (
           <ImagePreview src={content} />
         ) : canRun && runTsx ? (
           <TsxRunner code={content} />

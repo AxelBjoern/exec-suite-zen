@@ -3,13 +3,24 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PreviewPane, type PreviewType } from "@/components/PreviewPane";
 import {
   listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat,
 } from "@/lib/cowork.functions";
+
+const MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "grok", label: "Grok 4.3" },
+  { value: "hermes", label: "Hermes 4 405B" },
+  { value: "gpt", label: "ChatGPT 5.3" },
+  { value: "claude", label: "Claude Opus 4.7" },
+  { value: "deepseek", label: "DeepSeek V4 Pro" },
+  { value: "deepseek-flash", label: "DeepSeek V4 Flash" },
+  { value: "nemotron", label: "Nemotron 3 Nano Omni 30B" },
+];
 
 const FENCE = /```(\w+)?\n([\s\S]*?)```/g;
 const PREVIEWABLE = new Set(["markdown", "md", "tsx", "ts", "json", "mermaid"]);

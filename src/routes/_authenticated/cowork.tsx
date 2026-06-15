@@ -79,6 +79,7 @@ function CoworkPage() {
   const applyFn = useServerFn(applyPreview);
   const deleteFn = useServerFn(deleteSession);
   const chatFn = useServerFn(vibeChat);
+  const autoTitleFn = useServerFn(autoTitleSession);
 
   const sessions = useQuery({ queryKey: ["cowork-sessions"], queryFn: () => listFn(), staleTime: 60_000 });
   const current = useQuery({

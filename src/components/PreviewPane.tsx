@@ -31,9 +31,20 @@ export function PreviewPane({
   const [editing, setEditing] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [runTsx, setRunTsx] = useState(false);
+  const [copied, setCopied] = useState(false);
   const canDiff = !!((originalContent && originalContent !== content) || (iterationOriginal && iterationOriginal !== content));
   const isCodeLike = type === "tsx" || type === "ts" || type === "json" || type === "markdown" || type === "html";
   const canRun = type === "tsx" || type === "ts";
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">

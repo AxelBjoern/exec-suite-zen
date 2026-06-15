@@ -67,7 +67,11 @@ function AutomatePage() {
 
   const run = useMutation({
     mutationFn: () => runFn({ data: { id: activeId! } }),
-    onSuccess: () => { toast.success("Run started"); qc.invalidateQueries({ queryKey: ["workflow-runs"] }); },
+    onSuccess: () => {
+      toast.success("Run executing");
+      qc.invalidateQueries({ queryKey: ["workflow-runs"] });
+      qc.invalidateQueries({ queryKey: ["workflow-runs", activeId] });
+    },
     onError: (e: any) => toast.error(e?.message ?? "Run failed"),
   });
 

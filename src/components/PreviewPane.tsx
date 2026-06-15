@@ -190,7 +190,7 @@ function buildTsxRunnerDoc(code: string): string {
       const wrapped = "const exports = {}; const module = { exports }; " + out + "\\nreturn (module.exports && module.exports.default) || exports.default || (typeof App !== 'undefined' ? App : null);";
       const factory = new Function('React', wrapped);
       const Comp = factory(React);
-      if (!Comp) { showErr('Snippet must export default a React component (or define `App`).'); }
+      if (!Comp) { showErr('Snippet must export default a React component (or define App).'); }
       else {
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(React.createElement(Comp));

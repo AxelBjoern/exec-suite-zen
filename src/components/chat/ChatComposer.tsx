@@ -2,7 +2,6 @@ import { RefObject } from "react";
 import { toast } from "sonner";
 import {
   Send,
-  Loader2,
   Paperclip,
   X,
   FileText,
@@ -10,6 +9,7 @@ import {
   FileType,
   ClipboardPaste,
 } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { Button } from "@/components/ui/button";
 import { ACCEPTED_TYPES, formatBytes, type Attachment } from "@/lib/chat-helpers";
 
@@ -74,9 +74,9 @@ export function ChatComposer({
               </div>
             ))}
             {uploading && (
-              <div className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Extracting…
+              <div className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1">
+                <VdnxLoader size="xs" />
+                <span className="text-xs text-muted-foreground">Extracting…</span>
               </div>
             )}
           </div>

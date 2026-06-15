@@ -34,7 +34,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Loader2, Menu, Square, Upload } from "lucide-react";
+import { Trash2, Menu, Square, Upload } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 
 import {
   readFileAsBase64,
@@ -650,17 +651,11 @@ function ChatPage() {
             )}
 
             {showThinking && (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                CEO is thinking…
-              </div>
+              <div className="pl-1"><VdnxLoader size="sm" label="CEO THINKING" /></div>
             )}
 
             {showGenerating && (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm pl-1">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Generating document…
-              </div>
+              <div className="pl-1"><VdnxLoader size="sm" label="GENERATING" /></div>
             )}
           </div>
         </div>

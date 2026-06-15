@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Lock, Plus, Star, Trash2, Copy, Loader2 } from "lucide-react";
+import { ChevronDown, Lock, Plus, Star, Trash2, Copy } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { useBudgetStore, useActiveScenario, useBudgetUi } from "@/lib/budget/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,7 +185,7 @@ export function BudgetTopbar() {
           </div>
         )}
 
-        {loading && <Loader2 className="ml-2 h-4 w-4 animate-spin text-muted-foreground" />}
+        {loading && <span className="ml-2"><VdnxLoader size="xs" /></span>}
 
         {/* Nav */}
         <nav className="ml-auto flex flex-wrap items-center gap-1">

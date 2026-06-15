@@ -1,6 +1,7 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, X, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Check, X, ChevronDown, ChevronRight } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +66,7 @@ function RunRow({ run, onDecide, deciding }: { run: any; onDecide: (approve: boo
                 <X className="h-3 w-3 mr-1" /> Reject
               </Button>
               <Button size="sm" onClick={() => onDecide(true)} disabled={deciding} className="h-6 px-2 text-[11px]">
-                {deciding ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />} Approve
+                {deciding ? <span className="mr-1"><VdnxLoader size="xs" /></span> : <Check className="h-3 w-3 mr-1" />} Approve
               </Button>
             </>
           )}

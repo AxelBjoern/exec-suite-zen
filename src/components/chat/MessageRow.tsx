@@ -3,7 +3,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { FileText, Copy, Check, Loader2, Send as SendIcon } from "lucide-react";
+import { FileText, Copy, Check, Send as SendIcon } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { ArtifactPill, type DocArtifact } from "@/components/ArtifactDrawer";
 import { filePlanFromChat } from "@/lib/outbound.functions";
 import { copyToClipboard, formatBytes, type Attachment } from "@/lib/chat-helpers";
@@ -256,7 +257,7 @@ function SendPlanButton({ content }: { content: string }) {
       className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
       title="Parse this plan and file every post/email as a pending draft in Outbound"
     >
-      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <SendIcon className="h-3 w-3" />}
+      {busy ? <VdnxLoader size="xs" /> : <SendIcon className="h-3 w-3" />}
       {busy ? "Filing…" : "Send plan to Outbound"}
     </button>
   );

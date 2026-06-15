@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
+import { Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -286,7 +287,7 @@ function CoworkPage() {
                 <div className={m.role === "user" ? "max-w-[80%] rounded-lg bg-primary text-primary-foreground px-3 py-2 text-sm" : "max-w-[80%] text-sm text-foreground whitespace-pre-wrap"}>{m.content}</div>
               </div>
             ))}
-            {pendingMsg && <div className="text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Vibe Coder is thinking…</div>}
+            {pendingMsg && <div className="pl-1"><VdnxLoader size="sm" label={loopRunning ? "AUTO-IMPROVING" : "THINKING"} /></div>}
           </div>
           <div className="border-t border-border p-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -308,7 +309,7 @@ function CoworkPage() {
               ) : (
                 <Button size="sm" variant="outline" onClick={startLoop} disabled={pendingMsg || !session || !previewContent.trim()} className="h-7 text-xs"><Sparkles className="h-3 w-3 mr-1" /> Auto-improve</Button>
               )}
-              {loopRunning && <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> iter {loopStep}/{loopIters}…</span>}
+              {loopRunning && <VdnxLoader size="xs" label={`ITER ${loopStep}/${loopIters}`} />}
             </div>
             <div
               className={`relative rounded-md ${dragOver ? "ring-2 ring-primary/60" : ""}`}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import mermaid from "mermaid";
 import { diffLines } from "diff";
-import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play } from "lucide-react";
+import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

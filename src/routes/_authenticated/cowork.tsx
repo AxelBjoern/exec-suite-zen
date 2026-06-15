@@ -176,8 +176,9 @@ function CoworkPage() {
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
       const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
-      const final: Msg[] = [...next, { role: "assistant", content: reply }];
       const block = detectPreview(reply);
+      const chatText = stripPreviewBlocks(reply, block);
+      const final: Msg[] = [...next, { role: "assistant", content: chatText }];
       const patch: any = { messages: final };
       if (block) { patch.preview_content = block.code; patch.preview_type = block.lang; }
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }

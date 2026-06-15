@@ -9,7 +9,7 @@ const MessageSchema = z.object({
   content: z.string().max(50_000),
 });
 
-const PreviewType = z.enum(["markdown", "tsx", "ts", "json", "mermaid", "text"]);
+const PreviewType = z.enum(["markdown", "tsx", "ts", "json", "mermaid", "text", "html", "image"]);
 
 export const listSessions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

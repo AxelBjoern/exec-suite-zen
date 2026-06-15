@@ -48,19 +48,18 @@ export function PreviewPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-panel px-3 py-2">
-        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Preview · {type}</span>
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-panel px-3 py-2">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground shrink-0">Preview · {type}</span>
+        <div className="flex items-center gap-1">
           {canRun && !editing && (
-            <Button size="sm" variant="ghost" onClick={() => setRunTsx((r) => !r)} className="h-7 text-xs">
+            <Button size="sm" variant={runTsx ? "secondary" : "ghost"} onClick={() => setRunTsx((r) => !r)} className="h-7 text-xs">
               {runTsx ? <Eye className="mr-1 h-3 w-3" /> : <Play className="mr-1 h-3 w-3" />}
               {runTsx ? "Source" : "Run"}
             </Button>
           )}
           {isCodeLike && onChange && (
-            <Button size="sm" variant="ghost" onClick={() => setEditing((e) => !e)} className="h-7 text-xs">
-              {editing ? <Eye className="mr-1 h-3 w-3" /> : <Edit3 className="mr-1 h-3 w-3" />}
-              {editing ? "Preview" : "Edit"}
+            <Button size="sm" variant={editing ? "secondary" : "ghost"} onClick={() => setEditing((e) => !e)} className="h-7 text-xs">
+              {editing ? <><Eye className="mr-1 h-3 w-3" />Preview</> : <><Edit3 className="mr-1 h-3 w-3" />Edit</>}
             </Button>
           )}
           {onRegenerate && (
@@ -70,8 +69,7 @@ export function PreviewPane({
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={handleCopy} disabled={!content.trim()} className="h-7 text-xs" title="Copy preview content">
-            {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
-            {copied ? "Copied" : "Copy"}
+            {copied ? <><Check className="mr-1 h-3 w-3" />Copied</> : <><Copy className="mr-1 h-3 w-3" />Copy</>}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setDiffOpen(true)} disabled={!canDiff} className="h-7 text-xs">
             <GitCompare className="mr-1 h-3 w-3" /> Diff

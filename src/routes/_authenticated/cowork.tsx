@@ -65,6 +65,12 @@ function CoworkPage() {
 
   const [input, setInput] = useState("");
   const [pendingMsg, setPendingMsg] = useState(false);
+  const [model, setModel] = useState<string>("grok");
+  const [loopIters, setLoopIters] = useState(5);
+  const [loopDelay, setLoopDelay] = useState(2);
+  const [loopRunning, setLoopRunning] = useState(false);
+  const [loopStep, setLoopStep] = useState(0);
+  const loopAbort = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const messages: Msg[] = (current.data?.messages as Msg[] | undefined) ?? [];

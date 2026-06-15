@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PreviewPane, type PreviewType } from "@/components/PreviewPane";
 import {
-  listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat,
+  listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat, autoTitleSession,
 } from "@/lib/cowork.functions";
 
 const MODEL_OPTIONS: { value: string; label: string }[] = [

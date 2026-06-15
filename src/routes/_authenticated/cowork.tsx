@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip } from "lucide-react";
+import { Plus, Send, Trash2, ArrowLeft, MessagesSquare, Sparkles, Square, Paperclip, Pencil, Check, X } from "lucide-react";
 import { VdnxLoader } from "@/components/VdnxLoader";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,8 @@ function CoworkPage() {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const TEXT_EXT = /\.(txt|md|markdown|json|jsonc|ya?ml|toml|csv|tsv|tsx?|jsx?|mjs|cjs|html?|css|scss|less|py|rb|go|rs|java|kt|swift|php|sh|bash|zsh|sql|env|ini|conf|xml|svg|graphql|gql|vue|svelte|astro|mermaid|mmd|log)$/i;
   const LANG_MAP: Record<string, string> = { md: "markdown", markdown: "markdown", tsx: "tsx", ts: "ts", jsx: "tsx", js: "ts", json: "json", jsonc: "json", html: "html", htm: "html", mermaid: "mermaid", mmd: "mermaid", yml: "yaml", yaml: "yaml", csv: "csv", py: "python", sh: "bash", bash: "bash", sql: "sql", css: "css" };

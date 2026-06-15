@@ -186,6 +186,15 @@ function CoworkPage() {
       else if (!previewContent) { patch.preview_content = reply; patch.preview_type = "markdown"; }
       await updateFn({ data: { id: sid!, ...patch } });
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
+      const currentTitle: string = (current.data as any)?.title ?? "Untitled session";
+      if (currentTitle === "Untitled session" && final.length >= 2) {
+        autoTitleFn({ data: { id: sid!, messages: final.slice(0, 4) } })
+          .then(() => {
+            qc.invalidateQueries({ queryKey: ["cowork-sessions"] });
+            qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
+          })
+          .catch(() => {});
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Chat failed");
     } finally {

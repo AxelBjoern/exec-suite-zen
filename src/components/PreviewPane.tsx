@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import mermaid from "mermaid";
 import { diffLines } from "diff";
-import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play } from "lucide-react";
+import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,9 +31,20 @@ export function PreviewPane({
   const [editing, setEditing] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [runTsx, setRunTsx] = useState(false);
+  const [copied, setCopied] = useState(false);
   const canDiff = !!((originalContent && originalContent !== content) || (iterationOriginal && iterationOriginal !== content));
   const isCodeLike = type === "tsx" || type === "ts" || type === "json" || type === "markdown" || type === "html";
   const canRun = type === "tsx" || type === "ts";
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -58,6 +69,10 @@ export function PreviewPane({
               Regenerate
             </Button>
           )}
+          <Button size="sm" variant="ghost" onClick={handleCopy} disabled={!content.trim()} className="h-7 text-xs" title="Copy preview content">
+            {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setDiffOpen(true)} disabled={!canDiff} className="h-7 text-xs">
             <GitCompare className="mr-1 h-3 w-3" /> Diff
           </Button>

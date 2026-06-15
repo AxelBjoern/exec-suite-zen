@@ -228,17 +228,38 @@ function CoworkPage() {
             ))}
             {pendingMsg && <div className="text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Vibe Coder is thinking…</div>}
           </div>
-          <div className="border-t border-border p-3">
+          <div className="border-t border-border p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <Select value={model} onValueChange={setModel} disabled={pendingMsg || loopRunning}>
+                <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((m) => <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <span>Loop</span>
+                <input type="number" min={1} max={20} value={loopIters} onChange={(e) => setLoopIters(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} disabled={loopRunning} className="w-12 h-7 rounded border border-border bg-background px-1 text-center" />
+                <span>×</span>
+                <input type="number" min={0} max={10} value={loopDelay} onChange={(e) => setLoopDelay(Math.max(0, Math.min(10, Number(e.target.value) || 0)))} disabled={loopRunning} className="w-12 h-7 rounded border border-border bg-background px-1 text-center" />
+                <span>s</span>
+              </div>
+              {loopRunning ? (
+                <Button size="sm" variant="destructive" onClick={stopLoop} className="h-7 text-xs"><Square className="h-3 w-3 mr-1" /> Stop ({loopStep}/{loopIters})</Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={startLoop} disabled={pendingMsg || !session || !previewContent.trim()} className="h-7 text-xs"><Sparkles className="h-3 w-3 mr-1" /> Auto-improve</Button>
+              )}
+              {loopRunning && <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> iter {loopStep}/{loopIters}…</span>}
+            </div>
             <div className="relative">
               <textarea
                 ref={taRef} value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 placeholder="Ask for a brief, a workflow JSON, a diagram, or some code…"
-                disabled={pendingMsg}
+                disabled={pendingMsg || loopRunning}
                 className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 pr-10 text-sm outline-none focus:border-primary/60"
                 rows={3}
               />
-              <Button size="icon" onClick={send} disabled={pendingMsg || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
+              <Button size="icon" onClick={send} disabled={pendingMsg || loopRunning || !input.trim()} className="absolute right-2 bottom-2 h-7 w-7"><Send className="h-3 w-3" /></Button>
             </div>
           </div>
         </div>

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MarkdownPreview from "@uiw/react-markdown-preview";
 import mermaid from "mermaid";
 import { diffLines } from "diff";
-import { Loader2, GitCompare, Check, RotateCcw, Edit3, Eye, Play, Copy } from "lucide-react";
+import { GitCompare, Check, RotateCcw, Edit3, Eye, Play, Copy } from "lucide-react";
+import { VdnxLoader } from "@/components/VdnxLoader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -66,7 +67,7 @@ export function PreviewPane({
           )}
           {onRegenerate && (
             <Button size="sm" variant="ghost" onClick={onRegenerate} disabled={regenerating} className="h-7 text-xs">
-              {regenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RotateCcw className="mr-1 h-3 w-3" />}
+              {regenerating ? <span className="mr-1"><VdnxLoader size="xs" /></span> : <RotateCcw className="mr-1 h-3 w-3" />}
               Regenerate
             </Button>
           )}
@@ -78,7 +79,7 @@ export function PreviewPane({
           </Button>
           {onApply && (
             <Button size="sm" onClick={onApply} disabled={applying || !content.trim()} title="Save this preview as the accepted snapshot for this session" className="h-7 text-xs">
-              {applying ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+              {applying ? <span className="mr-1"><VdnxLoader size="xs" /></span> : <Check className="mr-1 h-3 w-3" />}
               Save
             </Button>
           )}
@@ -143,7 +144,7 @@ function MermaidBlock({ chart }: { chart: string }) {
     return () => { cancelled = true; };
   }, [chart]);
   if (err) return <pre className="m-0 p-4 text-xs text-destructive whitespace-pre-wrap">{err}</pre>;
-  if (!svg) return <div className="flex items-center justify-center p-6 text-xs text-muted-foreground"><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Rendering…</div>;
+  if (!svg) return <div className="flex items-center justify-center p-6"><VdnxLoader size="sm" label="RENDERING" /></div>;
   return <div className="p-4 [&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 

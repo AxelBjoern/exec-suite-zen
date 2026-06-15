@@ -118,7 +118,7 @@ function CoworkPage() {
     try {
       await updateFn({ data: { id: sid!, messages: next } });
       qc.invalidateQueries({ queryKey: ["cowork-session", sid] });
-      const res = await chatFn({ data: { messages: next } });
+      const res = await chatFn({ data: { messages: next, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...next, { role: "assistant", content: reply }];
       const block = lastFencedBlock(reply);
@@ -140,7 +140,7 @@ function CoworkPage() {
     const trimmed = messages[messages.length - 1].role === "assistant" ? messages.slice(0, -1) : messages;
     setPendingMsg(true);
     try {
-      const res = await chatFn({ data: { messages: trimmed } });
+      const res = await chatFn({ data: { messages: trimmed, model } });
       const reply = (res as any).text ?? "";
       const final: Msg[] = [...trimmed, { role: "assistant", content: reply }];
       const block = lastFencedBlock(reply);
@@ -149,6 +149,47 @@ function CoworkPage() {
       await updateFn({ data: { id: session!, ...patch } });
       qc.invalidateQueries({ queryKey: ["cowork-session", session] });
     } finally { setPendingMsg(false); }
+  }
+
+  function stopLoop() { loopAbort.current = true; }
+
+  async function startLoop() {
+    if (!session) { toast.error("Open or create a session first"); return; }
+    let convo: Msg[] = messages.slice();
+    let curContent = previewContent;
+    let curType: PreviewType = previewType;
+    if (!curContent.trim()) { toast.error("Generate something first, then auto-improve it"); return; }
+    loopAbort.current = false;
+    setLoopRunning(true);
+    setLoopStep(0);
+    try {
+      for (let i = 1; i <= loopIters; i++) {
+        if (loopAbort.current) break;
+        setLoopStep(i);
+        const userMsg: Msg = {
+          role: "user",
+          content: `Here is the current draft:\n\n\`\`\`${curType}\n${curContent}\n\`\`\`\n\nSuggest the single most impactful improvement and return the FULL improved version in one fenced \`\`\`${curType}\`\`\` block. Be concrete; briefly note what you changed above the block.`,
+        };
+        convo = [...convo, userMsg];
+        const res = await chatFn({ data: { messages: convo, model } });
+        const reply = (res as any).text ?? "";
+        convo = [...convo, { role: "assistant", content: reply }];
+        const block = lastFencedBlock(reply);
+        if (!block) { toast.warning(`Iteration ${i}: no code block returned — stopping`); break; }
+        curContent = block.code;
+        curType = block.lang as PreviewType;
+        await updateFn({ data: { id: session, messages: convo, preview_content: curContent, preview_type: curType } });
+        qc.invalidateQueries({ queryKey: ["cowork-session", session] });
+        if (loopAbort.current || i === loopIters) break;
+        await new Promise((r) => setTimeout(r, loopDelay * 1000));
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Loop failed");
+    } finally {
+      setLoopRunning(false);
+      setLoopStep(0);
+      loopAbort.current = false;
+    }
   }
 
   return (

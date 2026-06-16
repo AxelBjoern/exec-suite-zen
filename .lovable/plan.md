@@ -1,60 +1,50 @@
-# VDNX Probe Harness
+# First VDNX Probe Run
 
-Add a sandbox-only probing capability to this project so executive agents can sign into VDNX (no passkey, MFA pre-bypassed) and exercise routes/verbs, then persist structured reports here.
+Sandbox operator is provisioned. Plan is to execute one probe run end-to-end against `ahb+sandbox@vdnx.app`, confirm auth + report persistence work, then iterate.
 
-## 1. Secret
-- Add runtime secret `VDNX_AGENT_HMAC_SECRET` (64-char HMAC string, supplied by VDNX edge function config).
-- Reuses existing `VITE_SUPABASE_PUBLISHABLE_KEY` pattern for VDNX anon? No — VDNX is a separate Supabase project. Hardcode the VDNX Supabase URL + anon key as constants in the probe module (they are public anon, doc says so).
+## Step 1 — Preflight (sanity checks)
+- Confirm `VDNX_AGENT_HMAC_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` are set (already in secrets list ✅).
+- Confirm Chromium is installed for Playwright: `bunx playwright install chromium` (run once).
+- Confirm `vdnx_probe_reports` table + `vdnx-probe-screenshots` bucket exist (already migrated ✅).
 
-## 2. Server-only signin helper
-`src/server/vdnx-probe.server.ts`
-- `signAgentJwt(targetEmail, agentId)`: HS256 JWT, 2 min exp, fresh `randomUUID()` nonce, sub = email, payload `{ agent_id, nonce }`. Uses `jose`.
-- `signInAsAgent(targetEmail, agentId)`: POSTs JWT to `https://qumqodukmflucvivblqx.supabase.co/functions/v1/agent-signin`, calls `verifyOtp({ type: 'magiclink', token_hash })` on a fresh `createClient(VDNX_URL, VDNX_ANON)`, returns `{ supabase, session }`.
-- Throws clear errors on non-2xx (do not retry — endpoint refuses prod users and replays).
-- Add `jose` dependency.
+## Step 2 — Smoke probe (browser-only, minimal verbs)
+Run the harness against one safe read-only route to validate the full flow:
 
-## 3. Probe harness (Playwright)
-`src/server/vdnx-probe-runner.server.ts`
-- Input: `{ agentId, targetEmail, routes: string[], verbs?: {path,body}[] }`.
-- Flow:
-  1. `signInAsAgent` to get session tokens.
-  2. Launch Chromium headless (use existing browser tooling — Playwright via `playwright` npm; add dep).
-  3. For each route: navigate to `https://vdnx.app`, `page.evaluate` to write `sb-qumqodukmflucvivblqx-auth-token` localStorage with `{access_token, refresh_token}`, navigate to route, collect `console` + `requestfailed` events, screenshot to `/tmp`, upload screenshot to existing `chat-uploads` bucket (or new `vdnx-probe-screenshots` bucket — see Q below).
-  4. For each verb: HTTP POST through authed supabase client (no browser).
-- Returns structured `ProbeReport[]`: `{agent_id, target_email, route, verb_or_action, status, latency_ms, console_errors, network_failures, screenshot_url}`.
+```bash
+bun scripts/probe-vdnx.ts \
+  --agent exec-command/smoke-01 \
+  --email ahb+sandbox@vdnx.app \
+  --app-url https://app.vdnx.app \
+  --routes /dashboard \
+  --verbs ""
+```
 
-> Note: Playwright requires a Node runtime with browsers installed. Cloudflare Worker SSR cannot run Playwright. This harness must run only from a Node context — exec script, cron worker on a Node host, or local dev. Document that constraint; do NOT expose it as a `createServerFn` callable from the Worker SSR.
+Expected:
+1. `signInAsAgent` mints HS256 JWT → posts to `agent-signin` → exchanges `token_hash` via `verifyOtp` → returns real session.
+2. Playwright launches Chromium, seeds session into `localStorage` under `sb-qumqodukmflucvivblqx-auth-token`, navigates `/dashboard`, screenshots.
+3. Report row inserted into `vdnx_probe_reports`; screenshot uploaded to `vdnx-probe-screenshots/<agent_id>/<timestamp>.png`.
 
-## 4. Report storage
-New table `vdnx_probe_reports` (migration):
-- `id uuid pk default gen_random_uuid()`
-- `agent_id text not null`
-- `target_email text not null`
-- `route text`, `verb text`, `status text`, `latency_ms int`
-- `console_errors jsonb`, `network_failures jsonb`, `screenshot_url text`
-- `created_at timestamptz default now()`
-- `created_by uuid references auth.users(id)`
-- GRANT to authenticated + service_role. RLS: owner-only read via `has_role(auth.uid(),'owner')`.
-- New storage bucket `vdnx-probe-screenshots` (private), RLS allow owner read.
+## Step 3 — Verify
+- `select id, route, status, latency_ms, console_errors from vdnx_probe_reports order by created_at desc limit 1;`
+- Inspect uploaded screenshot via signed URL.
+- If `status != 'ok'`, read CLI stdout for the failure (signature rejected, MFA gate, RLS, etc.) and fix before widening scope.
 
-## 5. CLI entry
-`scripts/probe-vdnx.ts` — Node script reading args `--agent <id> --email <sandbox@…> --routes /dashboard,/governance`, calling the harness, printing JSON, inserting into `vdnx_probe_reports`. Run via `bun scripts/probe-vdnx.ts ...`.
+## Step 4 — Widen
+Once smoke passes, run a fuller sweep:
 
-## 6. Agent system prompt
-`docs/probe-vdnx-agent-prompt.md` — role, allowed verbs, hard refusal rules (no prod emails, no replay JWTs, no writeback to VDNX DB, screenshot redaction, max 60-min session, stop on first auth refusal).
+```bash
+bun scripts/probe-vdnx.ts \
+  --agent exec-command/governance-01 \
+  --email ahb+sandbox@vdnx.app \
+  --app-url https://app.vdnx.app \
+  --routes /dashboard,/governance,/agents,/settings \
+  --verbs command-catalog,list-agents
+```
 
-## 7. Reference doc
-Also save the original instructions as `docs/probe-vdnx.md` for human reference.
+## Questions before I run
 
-## Files
-- new `docs/probe-vdnx.md`
-- new `docs/probe-vdnx-agent-prompt.md`
-- new `src/server/vdnx-probe.server.ts`
-- new `src/server/vdnx-probe-runner.server.ts`
-- new `scripts/probe-vdnx.ts`
-- new migration: `vdnx_probe_reports` table + grants + RLS + storage bucket
-- add deps: `jose`, `playwright`
-- add secret: `VDNX_AGENT_HMAC_SECRET`
+1. **App URL** — Is the VDNX frontend at `https://app.vdnx.app`, or a different host (e.g. `vdnx.lovable.app`)? The probe runner needs the exact origin where the Supabase session cookie/localStorage must be seeded.
+2. **Routes** — Which routes should the first smoke probe hit? Default suggestion: just `/dashboard`. Confirm or override.
+3. **Edge function verbs** — Any HTTP verbs (edge functions) you want exercised in the first run, or browser-only for now?
 
-## Open question
-Playwright cannot run inside the Cloudflare Worker SSR runtime that this app deploys to. Confirm you'll run the harness from a Node context (CLI / separate worker), not from a `createServerFn` invoked by the web app.
+Once you answer 1–3, I'll switch to build mode and execute.

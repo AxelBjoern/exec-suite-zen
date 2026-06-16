@@ -1,55 +1,60 @@
-# VDNX Loader — Canonical App-Wide Loader
+# VDNX Probe Harness
 
-Replace every loading indicator in the app with a single VDNX-branded loader component, adapted from the provided animation and themed to the gold/amber palette. This becomes THE loader for the entire app — no more bare `Loader2` spinners as loading states.
+Add a sandbox-only probing capability to this project so executive agents can sign into VDNX (no passkey, MFA pre-bypassed) and exercise routes/verbs, then persist structured reports here.
 
-## New component
+## 1. Secret
+- Add runtime secret `VDNX_AGENT_HMAC_SECRET` (64-char HMAC string, supplied by VDNX edge function config).
+- Reuses existing `VITE_SUPABASE_PUBLISHABLE_KEY` pattern for VDNX anon? No — VDNX is a separate Supabase project. Hardcode the VDNX Supabase URL + anon key as constants in the probe module (they are public anon, doc says so).
 
-`src/components/VdnxLoader.tsx`:
-- Props:
-  - `label?: string` — defaults to context (e.g. "LOADING"); callers pass things like "THINKING", "SAVING", "GENERATING"
-  - `size?: "xs" | "sm" | "md" | "lg"` — xs for button-internal, sm for inline status rows, md for panel-level, lg for full-screen/route fallbacks
-  - `className?: string`
-- Recreates the VDNX visual: stroked "VDNX" wordmark with pulse, neural dots, dashed neural connecting lines (inline SVG), animated gradient progress bar, tagline (the `label`)
-- Size scale (wordmark / progress bar):
-  - `xs` — 14px / 56px, no tagline, no neural lines (just wordmark + progress) — fits inside buttons
-  - `sm` — 28px / 140px, compact stack — inline status rows
-  - `md` — 64px / 240px — panel placeholders, dialog loading
-  - `lg` — 102px / 300px — full-screen route suspense, initial app boot
-- Colors mapped from blues to gold theme tokens:
-  - text fill `#1e40af` → `var(--primary)`
-  - text stroke `#1e3a8a` → `color-mix(in oklab, var(--primary) 70%, black)`
-  - dots / lines / progress gradient `#3b82f6 #60a5fa #6366f1 #22d3ee` → `var(--gold)`, `var(--gold-muted)`, `var(--amber)`, `var(--primary)`
-  - bg transparent (inherits parent — works in panels and overlays)
-  - tagline uses `var(--muted-foreground)`
-- Keyframes (`vdnx-logo-pulse`, `vdnx-neural-pulse`, `vdnx-dash`, `vdnx-progress`, `vdnx-gradient-shift`) added to `src/styles.css` with `vdnx-` prefix to avoid collisions
+## 2. Server-only signin helper
+`src/server/vdnx-probe.server.ts`
+- `signAgentJwt(targetEmail, agentId)`: HS256 JWT, 2 min exp, fresh `randomUUID()` nonce, sub = email, payload `{ agent_id, nonce }`. Uses `jose`.
+- `signInAsAgent(targetEmail, agentId)`: POSTs JWT to `https://qumqodukmflucvivblqx.supabase.co/functions/v1/agent-signin`, calls `verifyOtp({ type: 'magiclink', token_hash })` on a fresh `createClient(VDNX_URL, VDNX_ANON)`, returns `{ supabase, session }`.
+- Throws clear errors on non-2xx (do not retry — endpoint refuses prod users and replays).
+- Add `jose` dependency.
 
-## Canonical full-screen wrapper
+## 3. Probe harness (Playwright)
+`src/server/vdnx-probe-runner.server.ts`
+- Input: `{ agentId, targetEmail, routes: string[], verbs?: {path,body}[] }`.
+- Flow:
+  1. `signInAsAgent` to get session tokens.
+  2. Launch Chromium headless (use existing browser tooling — Playwright via `playwright` npm; add dep).
+  3. For each route: navigate to `https://vdnx.app`, `page.evaluate` to write `sb-qumqodukmflucvivblqx-auth-token` localStorage with `{access_token, refresh_token}`, navigate to route, collect `console` + `requestfailed` events, screenshot to `/tmp`, upload screenshot to existing `chat-uploads` bucket (or new `vdnx-probe-screenshots` bucket — see Q below).
+  4. For each verb: HTTP POST through authed supabase client (no browser).
+- Returns structured `ProbeReport[]`: `{agent_id, target_email, route, verb_or_action, status, latency_ms, console_errors, network_failures, screenshot_url}`.
 
-`VdnxScreen` exported from the same file — centered `lg` loader on a `bg-background` overlay. Used for route suspense fallbacks and full-page loading.
+> Note: Playwright requires a Node runtime with browsers installed. Cloudflare Worker SSR cannot run Playwright. This harness must run only from a Node context — exec script, cron worker on a Node host, or local dev. Document that constraint; do NOT expose it as a `createServerFn` callable from the Worker SSR.
 
-## App-wide replacement
+## 4. Report storage
+New table `vdnx_probe_reports` (migration):
+- `id uuid pk default gen_random_uuid()`
+- `agent_id text not null`
+- `target_email text not null`
+- `route text`, `verb text`, `status text`, `latency_ms int`
+- `console_errors jsonb`, `network_failures jsonb`, `screenshot_url text`
+- `created_at timestamptz default now()`
+- `created_by uuid references auth.users(id)`
+- GRANT to authenticated + service_role. RLS: owner-only read via `has_role(auth.uid(),'owner')`.
+- New storage bucket `vdnx-probe-screenshots` (private), RLS allow owner read.
 
-Sweep the codebase and replace every loading UI with VdnxLoader at the appropriate size:
-- `Loader2` icons used as standalone loading indicators (inline text rows, page placeholders, "loading…" blocks) → `<VdnxLoader size="sm" label="…" />` or `md`/`lg` as fits
-- `Loader2` icons inside buttons (with `animate-spin`, sitting next to button label like "Saving…") → `<VdnxLoader size="xs" />` replacing the icon
-- Route-level suspense / auth gate loading screens → `<VdnxScreen label="LOADING" />`
-- Any custom skeleton "loading…" text blocks → swap to VdnxLoader
+## 5. CLI entry
+`scripts/probe-vdnx.ts` — Node script reading args `--agent <id> --email <sandbox@…> --routes /dashboard,/governance`, calling the harness, printing JSON, inserting into `vdnx_probe_reports`. Run via `bun scripts/probe-vdnx.ts ...`.
 
-Specific call sites to update (non-exhaustive — actual sweep done at build time via `rg "Loader2"` and `rg "isLoading"`):
-- `src/routes/_authenticated/cowork.tsx`:
-  - Line 289 chat "thinking" inline → `<VdnxLoader size="sm" label={loopRunning ? "AUTO-IMPROVING" : "THINKING"} />`
-  - Line 311 loop progress → `<VdnxLoader size="sm" label={\`ITER ${loopStep}/${loopIters}\`} />`
-  - Apply button + Regenerate button spinners → `size="xs"`
-- `src/components/PreviewPane.tsx`:
-  - Mermaid "Rendering…" → `<VdnxLoader size="sm" label="RENDERING" />`
-  - Button-internal spinners (Apply, Regenerate) → `size="xs"`
-- `src/routes/_authenticated/route.tsx` auth gate loading → `<VdnxScreen label="LOADING" />`
-- Any other components under `src/components/**` and `src/routes/**` rendering `Loader2` as a loading state
+## 6. Agent system prompt
+`docs/probe-vdnx-agent-prompt.md` — role, allowed verbs, hard refusal rules (no prod emails, no replay JWTs, no writeback to VDNX DB, screenshot redaction, max 60-min session, stop on first auth refusal).
 
-`Loader2` import is removed from files where it was only used as a loading indicator. Other lucide icons stay.
+## 7. Reference doc
+Also save the original instructions as `docs/probe-vdnx.md` for human reference.
 
 ## Files
+- new `docs/probe-vdnx.md`
+- new `docs/probe-vdnx-agent-prompt.md`
+- new `src/server/vdnx-probe.server.ts`
+- new `src/server/vdnx-probe-runner.server.ts`
+- new `scripts/probe-vdnx.ts`
+- new migration: `vdnx_probe_reports` table + grants + RLS + storage bucket
+- add deps: `jose`, `playwright`
+- add secret: `VDNX_AGENT_HMAC_SECRET`
 
-- new: `src/components/VdnxLoader.tsx` (exports `VdnxLoader`, `VdnxScreen`)
-- edited: `src/styles.css` (add VDNX keyframes)
-- edited: every file currently rendering `Loader2` as a loading state — full sweep, replacing with `VdnxLoader` at the appropriate size
+## Open question
+Playwright cannot run inside the Cloudflare Worker SSR runtime that this app deploys to. Confirm you'll run the harness from a Node context (CLI / separate worker), not from a `createServerFn` invoked by the web app.

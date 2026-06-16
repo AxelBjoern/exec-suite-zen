@@ -38,7 +38,7 @@ export async function runProbe(input: ProbeInput): Promise<ProbeReport[]> {
   for (const v of verbs) {
     const t0 = Date.now();
     try {
-      const { data, error } = await supabase.functions.invoke(v.path, { body: v.body });
+      const { data, error } = await supabase.functions.invoke(v.path, { body: v.body as Record<string, unknown> | undefined });
       reports.push({
         agent_id: input.agentId,
         target_email: input.targetEmail,

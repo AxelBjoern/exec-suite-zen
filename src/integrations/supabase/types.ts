@@ -1189,6 +1189,51 @@ export type Database = {
         }
         Relationships: []
       }
+      vdnx_probe_reports: {
+        Row: {
+          agent_id: string
+          console_errors: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          latency_ms: number | null
+          network_failures: Json
+          route: string | null
+          screenshot_url: string | null
+          status: string | null
+          target_email: string
+          verb: string | null
+        }
+        Insert: {
+          agent_id: string
+          console_errors?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          latency_ms?: number | null
+          network_failures?: Json
+          route?: string | null
+          screenshot_url?: string | null
+          status?: string | null
+          target_email: string
+          verb?: string | null
+        }
+        Update: {
+          agent_id?: string
+          console_errors?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          latency_ms?: number | null
+          network_failures?: Json
+          route?: string | null
+          screenshot_url?: string | null
+          status?: string | null
+          target_email?: string
+          verb?: string | null
+        }
+        Relationships: []
+      }
       workflow_runs: {
         Row: {
           approval_id: string | null

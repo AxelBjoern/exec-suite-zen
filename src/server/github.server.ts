@@ -25,14 +25,14 @@ function normalizeRepo(repo?: string | null): string {
 }
 
 function headers(): Record<string, string> {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN missing.");
-  return {
-    Authorization: `Bearer ${token}`,
+  const h: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "VDNX-Agent-Bridge",
   };
+  const token = process.env.GITHUB_TOKEN;
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
 }
 
 async function gh(path: string, repoForError?: string): Promise<any> {
@@ -41,7 +41,11 @@ async function gh(path: string, repoForError?: string): Promise<any> {
     const body = await res.text().catch(() => "");
     if (res.status === 404) throw new Error(`GitHub 404: ${path}`);
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`GitHub auth failed (${res.status}). Check GITHUB_TOKEN scopes for ${repoForError ?? "this repo"}.`);
+      const hasToken = !!process.env.GITHUB_TOKEN;
+      const hint = hasToken
+        ? `Check GITHUB_TOKEN scopes for ${repoForError ?? "this repo"}.`
+        : `Unauthenticated request was rejected (likely rate-limit or private repo). Set GITHUB_TOKEN to authenticate.`;
+      throw new Error(`GitHub ${res.status}: ${hint}`);
     }
     throw new Error(`GitHub ${res.status}: ${body.slice(0, 200)}`);
   }

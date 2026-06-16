@@ -1,70 +1,34 @@
-# VDNX Probe — Current Status: BLOCKED on `agent-signin` deployment
+# Give agents the ability to read public GitHub repos
 
-## What happened
+## Goal
+Agents in `src/server/agent-tools.server.ts` currently have `web.search` and `web.fetch` but no first-class GitHub read. The VDNX bridge in `src/server/github.server.ts` already implements `listRepoDir`, `readRepoFile`, and `searchRepoCode`, but they require `GITHUB_TOKEN` and a single hard-coded repo. We'll loosen that and surface it as three agent tools that work on any public `owner/repo` (and continue to authenticate when a token is available, for private repos and higher rate limits).
 
-Smoke probe was executed against `ahb+sandbox@vdnx.app` on `https://vdnx.lovable.app`.
-Harness works correctly (JWT minting, HMAC signing, Playwright launch), but VDNX's `agent-signin` edge function is not deployed — returns `404 NOT_FOUND`.
+## Changes
 
-## Blocker
+### 1. `src/server/github.server.ts` — allow unauthenticated public reads
+- Make `headers()` return `Authorization` only when `GITHUB_TOKEN` is set; always send `Accept` / `User-Agent` / API version headers.
+- Keep `defaultRepo()` / `normalizeRepo()` behavior: an explicit `owner/repo` (or GitHub URL) wins; falling back to `VDNX_REPO` only happens when no repo is passed.
+- Rewrite the `gh()` 401/403 message so it distinguishes "rate-limited / private repo without token" from "bad token".
 
-VDNX team needs to deploy `/functions/v1/agent-signin`. We have read-only GitHub access and cannot deploy it ourselves.
+### 2. `src/server/agent-tools.server.ts` — register three tools
+All `readOnly: true`, `allowedAgents: "*"`, audit-logged via existing `executeToolCall` path.
 
-## Handoff message for VDNX team
+- `github.list_dir` — `{ repo: string, path?: string }` → calls `listRepoDir(path, repo)`.
+- `github.read_file` — `{ repo: string, path: string }` → calls `readRepoFile(path, repo)` (already truncates at ~8k chars).
+- `github.search_code` — `{ repo: string, query: string }` → calls `searchRepoCode(query, repo)`. Note: GitHub's code search endpoint requires authentication; if `GITHUB_TOKEN` is unset, return `{ error: "code search requires GITHUB_TOKEN" }` instead of throwing, so the agent can fall back to `list_dir` + `read_file`.
 
-Paste this into your VDNX channel (Slack / Linear / Lovable chat):
+`repo` accepts `"owner/repo"` or a full `github.com/...` URL (already handled by `normalizeRepo`). The existing `zodToJsonSchema` covers `z.string()` + `z.string().optional()` so no schema changes needed.
 
-> **Subject: Deploy `agent-signin` edge function (unblocks VDNX Executive Command probe harness)**
->
-> Our probe harness (`exec-suite-zen`) is wired and ready, but `POST https://qumqodukmflucvivblqx.supabase.co/functions/v1/agent-signin` returns `404 NOT_FOUND`. The function needs to be deployed on the VDNX Supabase project.
->
-> **Contract the harness expects:**
->
-> - **Path:** `/agent-signin` (public, no JWT verification — auth is the HS256 signature on the body).
-> - **Method:** `POST`, `Content-Type: application/json`.
-> - **Request body:** `{ "token": "<HS256-JWT>" }` where the JWT is signed with `VDNX_AGENT_HMAC_SECRET` (shared secret already exchanged) and carries the claims:
->   - `iss: "exec-command"`
->   - `aud: "vdnx-agent-signin"`
->   - `sub: <agent_id>` (e.g. `exec-command/smoke-01`)
->   - `email: <sandbox-operator-email>` (must resolve to a user with `app_metadata.env = 'sandbox'` AND a company row where `is_sandbox = true`)
->   - `nonce: <uuid>` (single-use; reject on replay)
->   - `iat`, `exp` (max 2-minute window)
->
-> **Verification the function must do (refuse otherwise):**
-> 1. Verify HS256 signature with `VDNX_AGENT_HMAC_SECRET`.
-> 2. Check `iss`, `aud`, `exp`, `iat` skew (±30s).
-> 3. Reject replay (store `nonce` for ≥ exp window; reject if seen).
-> 4. Look up user by `email` via `auth.admin.getUserByEmail` (service role). Refuse if:
->    - user not found
->    - `app_metadata.env !== 'sandbox'`
->    - the user's `vdnx_company.is_sandbox !== true`
-> 5. Pre-open the MFA session so `ProtectedRoute` lets the agent through (same mechanism as BETA-001 Phase 1 preflight).
->
-> **Response on success:** `200 application/json`
-> ```json
-> { "token_hash": "<one-time-magic-link-token-hash>" }
-> ```
-> The harness then exchanges it via `supabase.auth.verifyOtp({ type: 'magiclink', token_hash })` to mint a real session and seeds it into `localStorage` under `sb-qumqodukmflucvivblqx-auth-token`.
->
-> **Response on refusal:** non-2xx with `{ "error": "<reason>" }`. The harness does not retry — refusals are intentional.
->
-> **Audit:** log every call (accepted + refused) with `agent_id`, `email`, `nonce`, `ip`, `status`, reason. Write to a VDNX-side audit table; do not write into our DB.
->
-> **Secret needed in VDNX env:** `VDNX_AGENT_HMAC_SECRET` (same value already set on our side).
->
-> Once deployed, ping back and we'll re-run the smoke probe against `ahb+sandbox@vdnx.app` on `https://vdnx.lovable.app/` and share the report.
+Add the three tool consts to the `TOOL_REGISTRY` array.
 
-## Next step (ours)
+### 3. No new dependencies, no migrations, no UI changes
+- Honors the read-only GitHub constraint from `mem://index.md` (only `contents` GET and `search/code` GET).
+- Tool calls are audited in `tool_calls` like every other tool.
 
-Once VDNX confirms deployment, re-run:
+## Out of scope
+- Writing/PR creation (forbidden by core memory).
+- Repo discovery / org listing.
+- Caching layer — GitHub's own ETags + the existing 8k truncation are enough for now.
 
-```bash
-bun scripts/probe-vdnx.ts \
-  --agent exec-command/smoke-01 \
-  --email ahb+sandbox@vdnx.app \
-  --app-url https://vdnx.lovable.app \
-  --routes /,/dashboard \
-  --verbs ""
-```
-
-If smoke passes, widen to full wizard inventory + edge verbs.
-
+## Verification
+After build, an agent prompt like *"list the top-level files of `facebook/react` and read `package.json`"* should result in two tool calls (`github.list_dir`, `github.read_file`) and a coherent answer, with no token required.

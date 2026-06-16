@@ -85,6 +85,51 @@ const web_fetch_tool = def({
   },
 });
 
+const github_list_dir = def({
+  name: "github.list_dir",
+  description: "List files/folders in a public GitHub repo. `repo` is 'owner/repo' or a github.com URL. `path` defaults to repo root.",
+  parameters: z.object({
+    repo: z.string().min(3).max(200),
+    path: z.string().max(500).optional(),
+  }).strict(),
+  readOnly: true,
+  allowedAgents: "*",
+  async execute({ repo, path }) {
+    return await listRepoDir(path ?? "", repo);
+  },
+});
+
+const github_read_file = def({
+  name: "github.read_file",
+  description: "Read a file from a public GitHub repo. Content is truncated at ~8k chars. `repo` is 'owner/repo' or a github.com URL.",
+  parameters: z.object({
+    repo: z.string().min(3).max(200),
+    path: z.string().min(1).max(500),
+  }).strict(),
+  readOnly: true,
+  allowedAgents: "*",
+  async execute({ repo, path }) {
+    return await readRepoFile(path, repo);
+  },
+});
+
+const github_search_code = def({
+  name: "github.search_code",
+  description: "Search code in a public GitHub repo (requires GITHUB_TOKEN). Returns up to 10 matches with snippets.",
+  parameters: z.object({
+    repo: z.string().min(3).max(200),
+    query: z.string().min(1).max(400),
+  }).strict(),
+  readOnly: true,
+  allowedAgents: "*",
+  async execute({ repo, query }) {
+    if (!process.env.GITHUB_TOKEN) {
+      return { error: "code search requires GITHUB_TOKEN; use github.list_dir + github.read_file instead" };
+    }
+    return await searchRepoCode(query, repo);
+  },
+});
+
 const db_read_tasks = def({
   name: "db.read_tasks",
   description: "Read tasks (open by default) for the calling agent.",

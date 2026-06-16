@@ -4,6 +4,7 @@
 import { z, ZodTypeAny } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { webSearch, webFetch } from "@/server/web.server";
+import { listRepoDir, readRepoFile, searchRepoCode } from "@/server/github.server";
 
 export type ToolCtx = {
   agent_slug: string;

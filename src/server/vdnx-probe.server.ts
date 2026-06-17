@@ -1,36 +1,30 @@
 // Server-only helper for signing into a VDNX sandbox tenant as an agent.
-// Calls VDNX's signature-gated `agent-signin` edge function, then exchanges
-// the returned `token_hash` for a real Supabase session via verifyOtp.
 //
-// SANDBOX ONLY. The endpoint refuses production users. Never call from
-// client code. Never log the JWT or the HMAC secret.
+// Previously this called VDNX's signature-gated `agent-signin` edge function
+// and exchanged the returned token_hash for a session via verifyOtp. That
+// path requires a valid legacy `apikey` header, which VDNX has disabled.
+//
+// New behavior: delegate to getVdnxSession (browser-driven sign-in through
+// the live web UI), then wrap the resulting tokens into a supabase-js client
+// with the bearer token attached.
+//
+// SANDBOX ONLY. Never call from client code. Never log the JWT.
 
 import { createClient, type SupabaseClient, type Session } from "@supabase/supabase-js";
-import { SignJWT } from "jose";
-import { randomUUID } from "node:crypto";
+import { getVdnxSession } from "@/server/vdnx-session.server";
 
 // VDNX is a separate Supabase project from this one. URL + anon are public.
+// The anon key is kept around because supabase-js requires *some* apikey
+// string at construction; for our use the Bearer token in Authorization is
+// what actually carries the user identity for RLS.
 export const VDNX_SUPABASE_URL = "https://qumqodukmflucvivblqx.supabase.co";
 export const VDNX_SUPABASE_ANON =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1bXFvZHVrbWZsdWN2aXZibHF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5Nzg0OTYsImV4cCI6MjA2MTU1NDQ5Nn0.-qusc7ibJfkwKIdefcEsBWQ7gpE3z6vllUlUlqMCKvQ";
 export const VDNX_STORAGE_KEY = "sb-qumqodukmflucvivblqx-auth-token";
-export const VDNX_AGENT_SIGNIN_URL = `${VDNX_SUPABASE_URL}/functions/v1/agent-signin`;
 
 export interface AgentSession {
   supabase: SupabaseClient;
   session: Session;
-}
-
-async function signAgentJwt(targetEmail: string, agentId: string): Promise<string> {
-  const secret = process.env.VDNX_AGENT_HMAC_SECRET;
-  if (!secret) throw new Error("VDNX_AGENT_HMAC_SECRET missing");
-  const key = new TextEncoder().encode(secret);
-  return await new SignJWT({ agent_id: agentId, nonce: randomUUID() })
-    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-    .setSubject(targetEmail)
-    .setIssuedAt()
-    .setExpirationTime("2m")
-    .sign(key);
 }
 
 export async function signInAsAgent(
@@ -39,26 +33,23 @@ export async function signInAsAgent(
 ): Promise<AgentSession> {
   if (!targetEmail || !agentId) throw new Error("targetEmail and agentId required");
 
-  const token = await signAgentJwt(targetEmail, agentId);
-  const res = await fetch(VDNX_AGENT_SIGNIN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  const body = (await res.json().catch(() => ({}))) as { token_hash?: string; error?: string };
-  if (!res.ok || !body.token_hash) {
-    // Do not retry — refusal is intentional (prod user, replay, expired JWT, etc.)
-    throw new Error(`agent-signin failed [${res.status}]: ${body.error ?? JSON.stringify(body)}`);
-  }
+  const s = await getVdnxSession({ email: targetEmail });
 
   const supabase = createClient(VDNX_SUPABASE_URL, VDNX_SUPABASE_ANON, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${s.access_token}` } },
   });
-  const { data, error } = await supabase.auth.verifyOtp({
-    type: "magiclink",
-    token_hash: body.token_hash,
-  });
-  if (error || !data.session) throw new Error(`verifyOtp failed: ${error?.message ?? "no session"}`);
 
-  return { supabase, session: data.session };
+  // Build a minimal Session shape for callers that need it (e.g. the
+  // Playwright probe runner that seeds localStorage).
+  const session: Session = {
+    access_token: s.access_token,
+    refresh_token: s.refresh_token,
+    expires_at: s.expires_at,
+    expires_in: Math.max(0, s.expires_at - Math.floor(Date.now() / 1000)),
+    token_type: "bearer",
+    user: { id: "", aud: "", email: s.email } as Session["user"],
+  };
+
+  return { supabase, session };
 }

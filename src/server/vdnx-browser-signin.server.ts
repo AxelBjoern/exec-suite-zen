@@ -13,7 +13,7 @@
 
 import { VDNX_STORAGE_KEY } from "@/server/vdnx-probe.server";
 
-const DEFAULT_APP_URL = "https://app.vdnx.com";
+const DEFAULT_APP_URL = "https://preview--natax-sales-nexus.lovable.app";
 const REQUEST_TIMEOUT_MS = 45_000;
 
 export type BrowserSignInResult = {

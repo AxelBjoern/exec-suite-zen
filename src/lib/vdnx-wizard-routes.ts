@@ -1,10 +1,10 @@
 // Static override manifest for VDNX wizard routes. The discovery server
-// fn (src/lib/vdnx-wizard-discovery.functions.ts) merges these in on top
-// of whatever it auto-discovers from the VDNX repo, so anything that
-// auto-discovery misses can be hand-tagged here.
+// fn (src/lib/vdnx-wizard-discovery.functions.ts) prefers these over its
+// GitHub auto-search, which misses wizards that are imported transitively
+// rather than directly in the route file.
 //
-// `marker` is a string the probe scans the rendered HTML for; if found,
-// wizard_loaded='true'. Leave null when no reliable marker is known yet.
+// Routes derived from VDNX's src/App.tsx + page-level Routes (react-router).
+// Last cross-checked: 2026-06-17.
 
 export type WizardRouteOverride = {
   wizard: string;
@@ -14,7 +14,17 @@ export type WizardRouteOverride = {
 };
 
 export const VDNX_WIZARD_ROUTE_OVERRIDES: WizardRouteOverride[] = [
-  // Examples — replace/extend as needed:
-  // { wizard: "ShareIssueWizardDialog", route: "/shares", marker: "data-wizard=\"share-issue\"" },
-  // { wizard: "ClientOnboardingWizard", route: "/onboarding", marker: "Client Onboarding" },
+  // Shares wizards — all mounted via VdnxIssuancesPage or NewEventsModal.
+  { wizard: "ShareIssueWizardDialog", route: "/vdnx-shares/issuances", marker: "Issuances", source: "VdnxIssuancesPage" },
+  { wizard: "ShareTransferWizardDialog", route: "/vdnx-shares/share-ledger-events", marker: "Ledger", source: "NewEventsModal" },
+  { wizard: "AdvancedTransferWizardDialog", route: "/vdnx-shares/share-ledger-events", marker: "Ledger", source: "NewEventsModal" },
+  { wizard: "SharePledgeWizardDialog", route: "/vdnx-shares/share-ledger-events", marker: "Ledger", source: "NewEventsModal" },
+  { wizard: "ShareSplitWizardDialog", route: "/vdnx-shares/share-ledger-events", marker: "Ledger", source: "NewEventsModal" },
+  { wizard: "ReverseSplitWizardDialog", route: "/vdnx-shares/share-ledger-events", marker: "Ledger", source: "NewEventsModal" },
+  // Contract wizard — mounted in the Contracts tab on AdminUserListPage.
+  { wizard: "ContractWizardShell", route: "/admin/users", marker: "Users", source: "AdminContractsTab" },
+  // Public onboarding wizard — token-gated; probe just confirms route loads.
+  { wizard: "ClientOnboardingWizard", route: "/client-onboarding/probe-test", marker: null, source: "ClientOnboardingPage (token route)" },
+  // User creation — mounted on VdnxAdminUsersPage via UnifiedUserManagementPage.
+  { wizard: "UserCreationWizard", route: "/vdnx-admin-apps/users", marker: "Users", source: "VdnxAdminUsersPage" },
 ];

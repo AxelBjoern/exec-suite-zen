@@ -169,4 +169,3 @@ export async function signInVdnxViaBrowser(opts: {
 // Reference imports kept so tree-shaker doesn't drop them — supabaseAdmin
 // is used by callers that import this module's siblings, and keeping the
 // import here avoids accidental circular reorgs later.
-void supabaseAdmin;

@@ -1,21 +1,12 @@
 // Server-only: get a valid VDNX Supabase session for the test account.
 // Caches the session in public.vdnx_session_cache so we don't sign in on
-// every probe run. Refreshes via supabase.auth.refreshSession when within
-// 5 minutes of expiry; falls back to signInWithPassword if refresh fails.
-//
-// VDNX is a SEPARATE Supabase project — we instantiate a fresh client
-// pointed at VDNX_SUPABASE_URL / VDNX_SUPABASE_ANON_KEY. Those values are
-// already used elsewhere in src/server/vdnx-probe.server.ts; if absent we
-// fall back to the hardcoded vdnx.app values used in that file.
+// every probe run. When the cached session is within the refresh window
+// (or absent), we drive a real browser through the live VDNX web UI to
+// produce a fresh session — this side-steps VDNX's disabled legacy API
+// keys, which would otherwise reject REST sign-in/refresh.
 
-import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-
-// VDNX project constants live in src/server/vdnx-probe.server.ts — reuse so
-// the two helpers can never drift apart.
-import { VDNX_SUPABASE_URL, VDNX_SUPABASE_ANON } from "@/server/vdnx-probe.server";
-const VDNX_URL = process.env.VDNX_SUPABASE_URL ?? VDNX_SUPABASE_URL;
-const VDNX_ANON = process.env.VDNX_SUPABASE_ANON_KEY ?? VDNX_SUPABASE_ANON;
+import { signInVdnxViaBrowser } from "@/server/vdnx-browser-signin.server";
 
 const REFRESH_WINDOW_MS = 5 * 60 * 1000; // refresh if expiring within 5 min
 
@@ -27,12 +18,6 @@ export type VdnxSession = {
   from_cache: boolean;
   refreshed: boolean;
 };
-
-function vdnxClient() {
-  return createClient(VDNX_URL, VDNX_ANON, {
-    auth: { persistSession: false, autoRefreshToken: false, storage: undefined },
-  });
-}
 
 async function loadCached(email: string) {
   const { data, error } = await supabaseAdmin
@@ -75,37 +60,13 @@ export async function getVdnxSession(opts: { email: string; password?: string })
         refreshed: false,
       };
     }
-    // Try refresh first
-    try {
-      const sb = vdnxClient();
-      const { data, error } = await sb.auth.refreshSession({ refresh_token: cached.refresh_token });
-      if (!error && data.session) {
-        const out = {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at ?? Math.floor(now / 1000) + 3600,
-          email,
-        };
-        await persist(out);
-        return { ...out, from_cache: true, refreshed: true };
-      }
-    } catch {
-      /* fall through to password sign-in */
-    }
   }
 
-  // Cold sign-in
-  const sb = vdnxClient();
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error || !data.session) {
-    throw new Error(`VDNX sign-in failed for ${email}: ${error?.message ?? "no session returned"}`);
-  }
-  const out = {
-    access_token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-    expires_at: data.session.expires_at ?? Math.floor(now / 1000) + 3600,
-    email,
-  };
-  await persist(out);
-  return { ...out, from_cache: false, refreshed: false };
+  // Cold sign-in (or near-expiry refresh) — drive the live web UI. REST
+  // refresh requires a valid `apikey` header, which VDNX no longer accepts
+  // for the legacy anon key, so re-signing through the browser is simpler
+  // and strictly more reliable than juggling key formats.
+  const fresh = await signInVdnxViaBrowser({ email, password });
+  await persist(fresh);
+  return { ...fresh, from_cache: false, refreshed: Boolean(cached) };
 }

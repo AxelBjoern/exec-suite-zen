@@ -1,105 +1,71 @@
-# VDNX Wizard Sweep via Automate
+## Approach: Playwright-driven web sign-in
 
-Stress-tested by DeepSeek V4 Pro. Risks it flagged are addressed below; where I disagree with its rewrite (Cloudflare Browser Rendering, KV) I say so explicitly so you can override.
+Drive the live VDNX web app with a real headless browser. Sign in through the UI like a human, capture the Supabase session out of `localStorage`, then reuse that session for the route probes. The legacy-vs-publishable API key question goes away — the browser uses whatever key VDNX's own bundle ships.
 
-## Goal
+## Where Playwright runs
 
-A new Automate workflow signs into `vdnx.app` as `cmd-ai-test@vdnx.app`, probes every wizard's host route, records status + latency + a wizard-mounted check per route, then parks on a human-review summarizing failures. Sequential, HTTP-only, runs inside the Worker.
+Playwright cannot run inside Cloudflare Workers (no Chromium, no native binaries). It will run in a **separate Node-based worker process** invoked from a server function, not inside the Worker SSR runtime itself.
 
-## What DeepSeek flagged + how this plan handles it
+Two viable hosts; I'll pick (a) by default and only fall back to (b) if you don't want to add the secret:
 
-| # | Risk | Decision |
-|---|---|---|
-| 1 | **HTTP 200 only proves the SPA shell loaded** — not that the wizard actually mounted. | **ACCEPT (modified).** Don't use Cloudflare Browser Rendering (not wired into this project, adds a binding + cost, and you explicitly ruled out browser-based testing in Automate). Instead: after the fetch, scan the returned HTML for the wizard's known marker — the dialog component name as a string, or an `id`/`data-testid` we add to each WizardDialog in a follow-up. Mark `wizard_loaded: true/false/unknown` so a 200 with `unknown` is visibly weaker than a 200 with `true`. |
-| 2 | **30 routes × 10s timeout = 300s, blows the 30s Worker wall clock.** | **ACCEPT.** Per-route timeout drops to 4s. Probe up to 6 routes concurrently via `Promise.allSettled`. Global abort at 25s — any unprobed routes are recorded as `status: "timeout_global"` and the run continues to human_review. If discovery returns >25 routes, the runner splits them across N sequential `vdnx_route_probe` nodes (each its own job_queue tick), so >25 routes still complete. |
-| 3 | **Password in env risks lockout from repeated sign-ins.** | **ACCEPT (partial).** `VDNX_TEST_PASSWORD` stays as a server secret (project standard; no KV namespace is provisioned and adding one is out of scope). Cache the VDNX session in a new `vdnx_session_cache` row (single-row table keyed by email, server-only access) with `expires_at`. Sign-in only when cached session is missing or within 5 min of expiry. Refresh uses `supabase.auth.refreshSession` before falling back to password. |
-| 4 | **GitHub filename heuristics will miss/mis-map routes.** | **ACCEPT.** Discovery parses VDNX's actual router config (TanStack Start route files under `src/routes/` or `src/pages/`) using `github.read_file` + `github.search_code`, not folder-name guessing. Anything unresolved goes into the returned list as `route: null` so we see the gap instead of probing a wrong URL. Static fallback manifest at `src/lib/vdnx-wizard-routes.ts` for hand-overrides. |
-| 5 | **human_review node can't show dynamic results.** | **ACCEPT.** Probe node writes a summary string into the next node's config at runtime (workflow_runner already supports mutating downstream node config — see how `llm_step` passes its output). human_review's `payload` gets `{ failure_count, first_10_failures, run_id }` so `/approvals` shows it without DB lookup. |
-| 6 | **30 concurrent requests look like a DoS to the VDNX CDN.** | **ACCEPT.** Concurrency capped at 6, 200ms gap between batches. Identifies itself via `User-Agent: VDNX-Automate-Probe/1.0` + `X-Probe-Run-Id: <run_id>` so VDNX logs can correlate. |
-| 7 | **Hand-built `sb-<ref>-auth-token` cookie is fragile.** | **ACCEPT.** Don't construct the cookie. Sign in with the Supabase JS client (already a dep), keep the session object, send only `Authorization: Bearer <access_token>` on the probe fetches. VDNX SPA reads its session from the bearer on first paint; cookie isn't needed for SSR. |
+(a) **Browserless.io (or any remote Playwright CDP endpoint)** — connect via `chromium.connectOverCDP(BROWSERLESS_WS_URL)` from inside a server fn. No binaries shipped, works from the Worker, pay-per-use. Requires one new secret: `BROWSERLESS_WS_URL` (you create the account; I'll prompt for the URL via the secrets tool).
 
-## What I'm rejecting from DeepSeek's rewrite
+(b) **Self-hosted via a tiny Supabase Edge Function** that runs Deno + `npm:playwright-core` against a remote Chromium — same idea, just the launcher lives in an Edge Function instead of a server fn. More moving parts. Skip unless (a) is off the table.
 
-- **Cloudflare Browser Rendering binding.** Adds infrastructure, costs, and contradicts your "Automate route-load smoke test" answer. We get ~80% of its value via the HTML-marker scan in Risk 1.
-- **KV namespace for session cache.** This project uses Supabase, not Workers KV. A small table is the on-pattern choice here.
+## Step 1 — VDNX browser sign-in helper
 
-## Changes (final shape)
+New file: `src/server/vdnx-browser-signin.server.ts`
 
-### 1. Secrets
-- `VDNX_TEST_PASSWORD` (new, via `secrets--add_secret`).
+- Exports `signInVdnxViaBrowser({ email, password }): Promise<VdnxSession>`.
+- Connects to the remote Chromium, opens `https://app.vdnx.com/auth` (env-overridable `VDNX_APP_URL`).
+- Fills the email + password fields (role/name selectors, not brittle CSS), clicks Sign in, waits for the post-login redirect.
+- Reads `localStorage.getItem("sb-qumqodukmflucvivblqx-auth-token")`, parses it, returns `{ access_token, refresh_token, expires_at, email }`.
+- Hard timeout per step (10s nav, 5s field, 15s post-submit). On failure, captures a screenshot to the `vdnx-probe-screenshots` bucket so the run-history row links to visual evidence.
+- Closes the context every time — no session reuse across runs, that's what the cache table is for.
 
-### 2. Database
-```sql
-create table public.vdnx_session_cache (
-  email text primary key,
-  access_token text not null,
-  refresh_token text not null,
-  expires_at timestamptz not null,
-  updated_at timestamptz not null default now()
-);
-revoke all on public.vdnx_session_cache from anon, authenticated;
-grant all on public.vdnx_session_cache to service_role;
-alter table public.vdnx_session_cache enable row level security; -- no policies = locked to service_role
+Never logs the password or the captured tokens.
 
-create table public.vdnx_route_probe_results (
-  id uuid primary key default gen_random_uuid(),
-  run_id uuid not null references public.workflow_runs(id) on delete cascade,
-  route text not null,
-  status text not null,                -- '200', '404', 'timeout', 'timeout_global', 'error', 'auth_redirect'
-  http_status int,
-  latency_ms int,
-  wizard_loaded text not null default 'unknown', -- 'true' | 'false' | 'unknown'
-  marker_checked text,                 -- which marker string we scanned for
-  html_length int,
-  error text,
-  created_at timestamptz not null default now()
-);
-grant select, insert on public.vdnx_route_probe_results to authenticated;
-grant all on public.vdnx_route_probe_results to service_role;
-alter table public.vdnx_route_probe_results enable row level security;
-create policy "owner reads own probe results"
-  on public.vdnx_route_probe_results for select to authenticated
-  using (exists (select 1 from public.workflow_runs r where r.id = run_id and r.user_id = auth.uid()));
-```
+## Step 2 — Swap it into the existing session flow
 
-### 3. Files to add
-- `src/server/vdnx-session.server.ts` — `getVdnxSession({email,password})` reads cache, refreshes if near expiry, signs in only as last resort.
-- `src/server/vdnx-route-probe.server.ts` — `runVdnxRouteProbe(node, run)` with 4s per-route timeout, concurrency 6, 25s global abort, marker scan, batch insert into `vdnx_route_probe_results`, summary written into the next node's config.
-- `src/lib/vdnx-wizard-discovery.functions.ts` — owner-gated `discoverVdnxWizardRoutes` server fn; parses VDNX's `src/routes/` via `github.read_file`/`github.search_code`; returns `[{wizard, route, marker, source_file}]`.
-- `src/lib/vdnx-wizard-routes.ts` — static override manifest (empty by default).
-- `supabase/migrations/<ts>_vdnx_automate_sweep.sql` — both tables above.
+Edit `src/server/vdnx-session.server.ts`:
 
-### 4. Files to edit
-- `src/lib/workflows.functions.ts` — add `vdnx_route_probe` to `NodeSchema` enum.
-- `src/lib/workflow-templates.ts` — add node type + label + seed `"vdnx-wizard-sweep"` template.
-- `src/server/workflow-runner.server.ts` — new `case "vdnx_route_probe":` dispatching to the helper above; on completion, mutate the next node's `config.payload` (failure summary) before enqueuing the next tick.
-- `src/components/automate/NodeCard.tsx` — render route count + "Re-discover from repo" button (owner-only).
-- `src/routes/_authenticated/automate.tsx` — toolbar "Seed: VDNX Wizard Sweep" button.
+- Keep the `vdnx_session_cache` table and the 5-minute refresh window — they're independent of sign-in mechanism.
+- Replace the `signInWithPassword` cold-sign-in path with a call to `signInVdnxViaBrowser`.
+- Replace the `refreshSession` path: if the cached session is within the refresh window, just re-run browser sign-in. Refresh requires the gotrue REST endpoint and a valid `apikey` header — exactly the thing we're stepping away from.
+- Delete the legacy `VDNX_SUPABASE_ANON` import.
 
-### 5. Workflow shape
-```
-trigger → vdnx_route_probe (×N if >25 routes) → human_review (auto-populated summary) → output
-```
+Edit `src/server/vdnx-probe.server.ts`:
 
-## Constraints honored
+- Stop calling the `agent-signin` edge function entirely. That path also needs `apikey`, and the browser-derived session is strictly more capable (it's an actual user session, not an OTP exchange).
+- `signInAsAgent(targetEmail, agentId)` now delegates to `getVdnxSession({ email: targetEmail })` and wraps the access token into a `supabase-js` client built without an `apikey` (just `Authorization: Bearer …`) — RLS sees the real user.
+- `VDNX_AGENT_HMAC_SECRET` becomes unused; leave the secret in place but stop referencing it. (Removing the secret would also work; safer to keep it for now in case we need agent-signin back.)
 
-- No Playwright, no Browser Rendering binding, no KV — pure HTTP from the Worker.
-- VDNX GitHub access stays read-only.
-- Password stored as a server secret; never logged; cached session avoids login spam.
-- Only allowed OpenRouter models touched (we don't change LLM config).
+## Step 3 — Plumbing
 
-## Verification
+- Add `playwright-core` to dependencies (lightweight; no browser download because we connect over CDP).
+- New secret prompt: `BROWSERLESS_WS_URL` — I'll trigger the add-secret form after you approve this plan; the value looks like `wss://chrome.browserless.io?token=…`. If you'd rather use Playwright's own grid, the URL format is the same.
+- Read both `BROWSERLESS_WS_URL` and `VDNX_TEST_PASSWORD` inside `.handler()` bodies only — never at module scope.
 
-1. `secrets--add_secret VDNX_TEST_PASSWORD` (you enter the value).
-2. Click "Discover VDNX wizards" — confirm the returned routes look correct against the wizard list you pasted; gaps appear as `route: null`.
-3. "Seed: VDNX Wizard Sweep" → Save → Run now.
-4. Open the run: `vdnx_route_probe_results` should have one row per route. Inspect `wizard_loaded` per row — a route with `200`/`unknown` means the marker scan didn't find the wizard's identifier (TODO: tag that wizard's dialog).
-5. `/approvals` shows summary card with failure count + first 10 failures.
-6. Re-run within an hour — confirm `vdnx_session_cache` was hit (no fresh sign-in in logs).
+## Step 4 — Carry-over: full wizard route inventory
 
-## Out of scope
+Once sign-in is reliable, expand `src/lib/vdnx-wizard-discovery.functions.ts` (`KNOWN_WIZARDS`) and `src/lib/vdnx-wizard-routes.ts` (overrides) from the current 9 entries to all ~28 wizards across `vdnx-gov`, `vdnx-sales` / `agreements`, the remaining `shares-wizards` (Dividend, NoCashIssue, CapitalReduction, AnnualReturn, OptionGrant, SafeInvestment, etc.), contracts, onboarding, and user management. Routes pulled from the VDNX repo's actual `<Route path>` registrations.
 
-- Clicking wizards open / filling fields / submitting — needs Playwright via `scripts/probe-vdnx.ts` (separate task).
-- Edge function verb sweep.
-- Any write into VDNX.
-- Cron-scheduled runs (use the existing `toggleWorkflowActive` if wanted later).
+## What I won't touch
+
+- No Chromium binaries, no `puppeteer`, no `child_process` — strictly `playwright-core` over CDP.
+- No changes to the probe runner, schema, log writer, or UI.
+- No mutating writes to the VDNX repo.
+- No edits to the legacy `agent-signin` edge function on VDNX's side.
+
+## Validation
+
+After Steps 1–3: **Run now** on the VDNX Route Probe node:
+- Run log: `vdnx browser sign-in ok in <N>ms` line; no "Legacy API keys" error.
+- A screenshot URL appears in the log entry on failure (none on success).
+- 9 routes probed (existing override list).
+
+After Step 4: **Re-discover from repo** → ~28 routes → **Save** → **Run now**. Per-route results land in `vdnx_route_probe_results` with `wizard_loaded: true/false/unknown`.
+
+## Fallback if you'd rather skip Browserless
+
+If you don't want to provision a remote Chromium, the simplest alternative is the previous plan: scrape the live `sb_publishable_*` key from VDNX's own JS bundle and use REST sign-in. Slightly more fragile (depends on VDNX's bundle layout) but zero new infra and zero new secrets. Say the word and I'll pivot.

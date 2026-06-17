@@ -136,8 +136,9 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
       }
     }
   } catch (e: any) {
-    await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "error", message: e?.message ?? String(e) }, log);
-    await finish(payload.run_id, "failed", log, `Node ${node.label} failed`);
+    const msg = e?.message ?? String(e);
+    log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "error", message: msg, data: { stack: e?.stack } }, log);
+    await finish(payload.run_id, "failed", log, `Node ${node.label} failed: ${msg}`);
     throw e;
   }
 

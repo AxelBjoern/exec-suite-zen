@@ -1234,6 +1234,80 @@ export type Database = {
         }
         Relationships: []
       }
+      vdnx_route_probe_results: {
+        Row: {
+          created_at: string
+          error: string | null
+          html_length: number | null
+          http_status: number | null
+          id: string
+          latency_ms: number | null
+          marker_checked: string | null
+          route: string
+          run_id: string
+          status: string
+          wizard_loaded: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          html_length?: number | null
+          http_status?: number | null
+          id?: string
+          latency_ms?: number | null
+          marker_checked?: string | null
+          route: string
+          run_id: string
+          status: string
+          wizard_loaded?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          html_length?: number | null
+          http_status?: number | null
+          id?: string
+          latency_ms?: number | null
+          marker_checked?: string | null
+          route?: string
+          run_id?: string
+          status?: string
+          wizard_loaded?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vdnx_route_probe_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vdnx_session_cache: {
+        Row: {
+          access_token: string
+          email: string
+          expires_at: string
+          refresh_token: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          email: string
+          expires_at: string
+          refresh_token: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          email?: string
+          expires_at?: string
+          refresh_token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workflow_runs: {
         Row: {
           approval_id: string | null

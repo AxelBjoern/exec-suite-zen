@@ -31,9 +31,28 @@ export const WORKFLOW_TEMPLATES: Template[] = [
       { id: uuidv4(), type: "output", label: "Dashboard Update", config: { summary: "Model diversification audit recorded." } },
     ],
   },
+  {
+    slug: "vdnx-wizard-sweep",
+    name: "VDNX Wizard Sweep",
+    description: "Signs into vdnx.app as the test account and HTTP-probes every wizard route. Pauses for human review of failures.",
+    nodes: [
+      { id: uuidv4(), type: "trigger", label: "Manual run", config: {} },
+      {
+        id: uuidv4(), type: "vdnx_route_probe", label: "Probe VDNX wizard routes",
+        config: {
+          email: "cmd-ai-test@vdnx.app",
+          base_url: "https://vdnx.app",
+          // routes: populated by the "Discover" action; each entry is { route, marker?, wizard? } or a plain route string
+          routes: [],
+        },
+      },
+      { id: uuidv4(), type: "human_review", label: "Review wizard sweep failures", config: {} },
+      { id: uuidv4(), type: "output", label: "Wizard sweep recorded", config: { summary: "VDNX wizard sweep completed and reviewed." } },
+    ],
+  },
 ];
 
-export const NODE_TYPES = ["trigger", "llm_step", "human_review", "action", "output"] as const;
+export const NODE_TYPES = ["trigger", "llm_step", "human_review", "action", "output", "vdnx_route_probe"] as const;
 
 export const NODE_TYPE_LABEL: Record<(typeof NODE_TYPES)[number], string> = {
   trigger: "Trigger",
@@ -41,6 +60,7 @@ export const NODE_TYPE_LABEL: Record<(typeof NODE_TYPES)[number], string> = {
   human_review: "Human Review",
   action: "Action",
   output: "Output",
+  vdnx_route_probe: "VDNX Route Probe",
 };
 
 export const ALLOWED_CHAT_MODELS = [

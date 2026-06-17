@@ -110,6 +110,27 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
         log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "info", message: `Output written: ${node.label}` }, log);
         break;
       }
+      case "vdnx_route_probe": {
+        const { runVdnxRouteProbe } = await import("@/server/vdnx-route-probe.server");
+        const cfg = (node.config ?? {}) as { email?: string; base_url?: string; routes?: any[] };
+        const routes = Array.isArray(cfg.routes) ? cfg.routes : [];
+        if (!routes.length) {
+          log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "warn", message: "No routes configured. Run 'Discover VDNX wizards' first." }, log);
+          break;
+        }
+        const { rows, summary } = await runVdnxRouteProbe({
+          run_id: payload.run_id,
+          email: cfg.email,
+          base_url: cfg.base_url,
+          routes,
+        });
+        log = await appendLog(payload.run_id, {
+          ts: new Date().toISOString(), node_id: node.id, level: summary.failures > 0 ? "warn" : "info",
+          message: `Probed ${summary.total} routes — ${summary.ok} ok, ${summary.failures} failing, ${summary.unknown} unknown (no marker match).`,
+          data: { summary, sample: rows.slice(0, 5) },
+        }, log);
+        break;
+      }
       default: {
         log = await appendLog(payload.run_id, { ts: new Date().toISOString(), node_id: node.id, level: "warn", message: `Unknown node type: ${node.type}` }, log);
       }

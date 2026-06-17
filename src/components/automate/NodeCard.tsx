@@ -23,6 +23,7 @@ const TYPE_TONE: Record<WorkflowNode["type"], string> = {
   human_review: "bg-destructive/15 text-foreground border-destructive/40",
   action: "bg-muted text-foreground border-border",
   output: "bg-panel-2 text-foreground border-border",
+  vdnx_route_probe: "bg-primary/10 text-foreground border-primary/40",
 };
 
 export function NodeCard({ node, index, onChange, onDelete, onDragStart, onDragOver, onDrop }: Props) {
@@ -98,6 +99,9 @@ export function NodeCard({ node, index, onChange, onDelete, onDragStart, onDragO
               <Input value={node.config?.summary ?? ""} onChange={(e) => onChange({ ...node, config: { ...node.config, summary: e.target.value } })} className="h-8 text-xs" />
             </ConfigField>
           )}
+          {node.type === "vdnx_route_probe" && (
+            <VdnxRouteProbeConfig node={node} onChange={onChange} />
+          )}
         </div>
       )}
     </div>
@@ -110,5 +114,78 @@ function ConfigField({ label, children }: { label: string; children: React.React
       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</label>
       {children}
     </div>
+  );
+}
+
+function VdnxRouteProbeConfig({ node, onChange }: { node: WorkflowNode; onChange: (n: WorkflowNode) => void }) {
+  const [discovering, setDiscovering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const routes = Array.isArray(node.config?.routes) ? (node.config.routes as any[]) : [];
+  const unresolved = (node.config?.unresolved_count as number | undefined) ?? 0;
+
+  async function discover() {
+    setDiscovering(true);
+    setError(null);
+    try {
+      const { discoverVdnxWizardRoutes } = await import("@/lib/vdnx-wizard-discovery.functions");
+      const res = await discoverVdnxWizardRoutes();
+      onChange({
+        ...node,
+        config: {
+          ...node.config,
+          routes: res.probe_routes,
+          unresolved_count: res.unresolved_count,
+          discovered_at: new Date().toISOString(),
+        },
+      });
+    } catch (e: any) {
+      setError(e?.message ?? "discovery failed");
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  return (
+    <>
+      <ConfigField label="Email">
+        <Input
+          value={node.config?.email ?? "cmd-ai-test@vdnx.app"}
+          onChange={(e) => onChange({ ...node, config: { ...node.config, email: e.target.value } })}
+          className="h-8 text-xs"
+        />
+      </ConfigField>
+      <ConfigField label="Base URL">
+        <Input
+          value={node.config?.base_url ?? "https://vdnx.app"}
+          onChange={(e) => onChange({ ...node, config: { ...node.config, base_url: e.target.value } })}
+          className="h-8 text-xs"
+        />
+      </ConfigField>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="text-[11px] text-muted-foreground">
+          {routes.length} route{routes.length === 1 ? "" : "s"}
+          {unresolved > 0 && <span className="text-destructive"> · {unresolved} unresolved</span>}
+        </div>
+        <button
+          type="button"
+          onClick={discover}
+          disabled={discovering}
+          className="rounded border border-border bg-panel-2 px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-50"
+        >
+          {discovering ? "Discovering…" : "Re-discover from repo"}
+        </button>
+      </div>
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {routes.length > 0 && (
+        <details className="text-[11px]">
+          <summary className="cursor-pointer text-muted-foreground">Route list</summary>
+          <ul className="mt-1 max-h-40 overflow-y-auto font-mono">
+            {routes.map((r: any, i: number) => (
+              <li key={i} className="truncate">{typeof r === "string" ? r : `${r.route}${r.wizard ? ` ← ${r.wizard}` : ""}`}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
   );
 }

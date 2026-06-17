@@ -24,19 +24,25 @@ export type BrowserSignInResult = {
 };
 
 function resolveEndpoint(): string {
-  const url = process.env.BROWSERLESS_URL ?? process.env.BROWSERLESS_WS_URL;
-  const token = process.env.BROWSERLESS_TOKEN;
-  if (!url) {
+  const raw = process.env.BROWSERLESS_URL ?? process.env.BROWSERLESS_WS_URL ?? process.env.BROWSERLESS_TOKEN;
+  const explicitToken = process.env.BROWSERLESS_TOKEN;
+  if (!raw) {
     throw new Error(
       "BROWSERLESS_URL not set — cannot drive a remote browser. " +
         "Add a Browserless endpoint (e.g. https://chrome.browserless.io) as a secret.",
     );
   }
-  // Convert wss:// → https:// for the REST API
-  let base = url.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
-  // If user passed a /function URL already, use as-is.
+  // If the secret has no scheme and no slashes, treat it as just a token
+  // and use the default Browserless host.
+  let base: string;
+  let token = explicitToken;
+  if (!/^[a-z]+:\/\//i.test(raw) && !raw.includes("/")) {
+    base = "https://chrome.browserless.io";
+    token = token ?? raw;
+  } else {
+    base = raw.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://");
+  }
   if (/\/function(\?|$)/.test(base)) return base;
-  // Strip trailing slash, append /function
   base = base.replace(/\/+$/, "");
   const sep = base.includes("?") ? "&" : "?";
   return `${base}/function${token ? `${sep}token=${encodeURIComponent(token)}` : ""}`;

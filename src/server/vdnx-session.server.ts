@@ -11,12 +11,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-// Hardcoded VDNX project (matches src/server/vdnx-probe.server.ts).
-// Override via env if needed.
-const VDNX_URL = process.env.VDNX_SUPABASE_URL ?? "https://nrgknrutiakjzczsmuwj.supabase.co";
-const VDNX_ANON =
-  process.env.VDNX_SUPABASE_ANON_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5yZ2tucnV0aWFranpjenNtdXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4OTM4MTksImV4cCI6MjA2MzQ2OTgxOX0.qB-mBDpgGjP-DqEHv1mUFVIWvWfDIYbXBNJDwxYPjJg";
+// VDNX project constants live in src/server/vdnx-probe.server.ts — reuse so
+// the two helpers can never drift apart.
+import { VDNX_SUPABASE_URL, VDNX_SUPABASE_ANON } from "@/server/vdnx-probe.server";
+const VDNX_URL = process.env.VDNX_SUPABASE_URL ?? VDNX_SUPABASE_URL;
+const VDNX_ANON = process.env.VDNX_SUPABASE_ANON_KEY ?? VDNX_SUPABASE_ANON;
 
 const REFRESH_WINDOW_MS = 5 * 60 * 1000; // refresh if expiring within 5 min
 

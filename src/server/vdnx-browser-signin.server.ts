@@ -11,7 +11,6 @@
 //
 // Never log the password or the captured tokens.
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { VDNX_STORAGE_KEY } from "@/server/vdnx-probe.server";
 
 const DEFAULT_APP_URL = "https://app.vdnx.com";
@@ -43,19 +42,8 @@ function resolveEndpoint(): string {
   return `${base}/function${token ? `${sep}token=${encodeURIComponent(token)}` : ""}`;
 }
 
-// The script executed inside the remote browser. Browserless exposes
-// `page`, `context`, and `browser` as globals to a default-exported async fn.
-// We return the parsed token object directly so the caller doesn't need to
-// re-fetch anything.
-const SCRIPT = `
-export default async function ({ page, context: _ctx }) {
-  const { authUrl, email, password, storageKey } = await page.evaluate(() => ({}));
-  // arguments come in via the "context" field in the POST body
-  return { __error: "should not reach here" };
-}
-`;
-
-// Build the actual script with parameters interpolated as JSON literals.
+// Build the script with parameters interpolated as JSON literals so we
+// don't have to thread the Browserless `context` argument shape.
 function buildScript(authUrl: string, email: string, password: string, storageKey: string): string {
   return `
 export default async function ({ page }) {

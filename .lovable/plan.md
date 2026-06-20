@@ -1,28 +1,16 @@
-## Change the VDNX sign-in target URL
+## Disconnect Browserless
 
-Production (`www.vdnx.app`) currently errors on login. The preview deployment at `https://preview--natax-sales-nexus.lovable.app/auth` works. Point the browser-driven sign-in there instead.
+Only `BROWSERLESS_URL` exists in this project's secrets — there is no `BROWSERLESS_TOKEN` set. I'll remove `BROWSERLESS_URL` and leave the VDNX browser sign-in code in place, so it stays dormant until a Browserless endpoint is reconnected later.
 
-## Edits
+### Steps
 
-**`src/server/vdnx-browser-signin.server.ts`**
-- Change `DEFAULT_APP_URL` from `https://app.vdnx.com` to `https://preview--natax-sales-nexus.lovable.app`.
-- Keep the `VDNX_APP_URL` env override so we can flip back to prod later without a code change once VDNX prod login is fixed.
-- `authUrl` stays computed as `${appUrl}/auth` — resolves to `https://preview--natax-sales-nexus.lovable.app/auth`.
+1. Delete the `BROWSERLESS_URL` runtime secret via `secrets--delete_secret`.
+2. No code changes. `signInVdnxViaBrowser()` in `src/server/vdnx-browser-signin.server.ts` already throws a clear "BROWSERLESS_URL not configured" error when the secret is absent, and the cached-session path in `getVdnxSession()` keeps working for already-cached sessions.
 
-**`.lovable/plan.md`**
-- Update the one reference to `https://app.vdnx.com/auth` so the doc matches reality.
+### Effect
 
-## What I won't touch
+- `@board` and other VDNX flows that require a *fresh* browser sign-in will fail fast with a "BROWSERLESS_URL not configured" error instead of the URL parsing crash.
+- Cached VDNX sessions in `vdnx_session_cache` continue to work until they expire.
+- No other chat/agent functionality is affected.
 
-- No changes to `VDNX_SUPABASE_URL` / `VDNX_STORAGE_KEY` in `vdnx-probe.server.ts` — the preview app writes to the same Supabase project (`qumqodukmflucvivblqx`) and the same localStorage key, so the captured session is still valid for VDNX RLS.
-- No changes to the cache table, session helper, probe runner, or Browserless wiring.
-- No removal of the override — `VDNX_APP_URL` remains the escape hatch.
-
-## Validation
-
-Trigger the VDNX Route Probe node. Expect:
-- No "Legacy API keys are disabled" error.
-- Run log shows `vdnx browser sign-in ok` against the preview host.
-- Cached session row in `vdnx_session_cache` updated for `cmd-ai-test@vdnx.app`.
-
-If the preview app's `/auth` form uses different selectors than prod (different placeholder/label), I'll adjust the selectors in the Browserless script in the same edit after a quick screenshot check.
+Confirm and I'll run the delete.

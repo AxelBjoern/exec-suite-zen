@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/public/cron/schedule-tick")({
           if (!nextRunAt) {
             const next = parsed.nextRun(now);
             await supabaseAdmin.from("schedules").update({
-              next_run_at: next ? next.toISOString() : null,
+              next_run_at: next ? next.toISOString() : undefined,
             }).eq("id", sched.id);
             continue;
           }
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/api/public/cron/schedule-tick")({
           const next = parsed.nextRun(now);
           await supabaseAdmin.from("schedules").update({
             last_run_at: now.toISOString(),
-            next_run_at: next ? next.toISOString() : null,
+            next_run_at: next ? next.toISOString() : undefined,
           }).eq("id", sched.id);
           fired.push({ workflow_id: wf.id, run_id: run.id, cron: sched.cron });
         }

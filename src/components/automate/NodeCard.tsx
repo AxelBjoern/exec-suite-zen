@@ -131,6 +131,8 @@ export function NodeCard({ node, index, onChange, onDelete, onDragStart, onDragO
   );
 }
 
+function tryParseJson(s: string): any { try { return JSON.parse(s); } catch { return s; } }
+
 function ConfigField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">

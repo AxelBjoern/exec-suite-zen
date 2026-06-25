@@ -101,19 +101,35 @@ export const vibeChat = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
     messages: z.array(MessageSchema).min(1).max(80),
     model: z.string().min(1).max(80).optional(),
+    use_tools: z.boolean().optional(),
   }).parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const model = resolveTextChatModel(data.model ?? "grok");
+    const nonSystem = data.messages.filter((m) => m.role !== "system");
+    if (data.use_tools !== false) {
+      const { callAgentTool } = await import("@/server/llm.server");
+      const lastUser = [...nonSystem].reverse().find((m) => m.role === "user");
+      const history = nonSystem.slice(0, -1)
+        .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 4000)}`).join("\n\n");
+      const system = `${VIBE_CODER_AUTOMATOR_PROMPT}\n\nYou have access to tools (web.search, web.fetch, image.generate, vdnx.http_probe, browser.run for the self-hosted Playwright worker driving vdnx.app's built-in calendar / legacy pages, plus draft tools for email & LinkedIn). Call them whenever useful, then reply in markdown.${history ? `\n\nConversation so far:\n${history}` : ""}`;
+      const res = await callAgentTool({
+        agent_slug: "cowork", system, user: lastUser?.content ?? "", model,
+        context: { owner_user_id: context.userId },
+      });
+      const toolNote = res.toolCalls.length
+        ? `\n\n<sub>_Used tools: ${res.toolCalls.map((t) => t.name).join(", ")}_</sub>` : "";
+      return { text: (res.finalMessage || "").trim() + toolNote, model, tool_calls: res.toolCalls };
+    }
     const res = await chatCompletion({
       model,
       messages: [
         { role: "system", content: VIBE_CODER_AUTOMATOR_PROMPT },
-        ...data.messages.filter((m) => m.role !== "system"),
+        ...nonSystem,
       ],
       temperature: 0.4,
     });
     const text: string = res?.choices?.[0]?.message?.content ?? "";
-    return { text, model };
+    return { text, model, tool_calls: [] };
   });
 
 export const autoTitleSession = createServerFn({ method: "POST" })

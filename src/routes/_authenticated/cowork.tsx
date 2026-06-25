@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PreviewPane, type PreviewType } from "@/components/PreviewPane";
+import { GithubApplyDialog } from "@/components/cowork/GithubApplyDialog";
 import {
   listSessions, getSession, createSession, updateSession, applyPreview, deleteSession, vibeChat, autoTitleSession,
 } from "@/lib/cowork.functions";
@@ -361,6 +362,13 @@ function CoworkPage() {
                 <Button size="sm" variant="outline" onClick={startLoop} disabled={pendingMsg || !session || !previewContent.trim()} className="h-7 text-xs"><Sparkles className="h-3 w-3 mr-1" /> Auto-improve</Button>
               )}
               {loopRunning && <VdnxLoader size="xs" label={`ITER ${loopStep}/${loopIters}`} />}
+              {session && previewContent.trim() && (
+                <GithubApplyDialog
+                  sessionId={session}
+                  defaultTitle={(current.data as any)?.title ?? "Cowork output"}
+                  savedTarget={((current.data as any)?.github_target ?? null) as any}
+                />
+              )}
             </div>
             <div
               className={`relative rounded-md ${dragOver ? "ring-2 ring-primary/60" : ""}`}

@@ -118,7 +118,8 @@ export const vibeChat = createServerFn({ method: "POST" })
       });
       const toolNote = res.toolCalls.length
         ? `\n\n<sub>_Used tools: ${res.toolCalls.map((t) => t.name).join(", ")}_</sub>` : "";
-      return { text: (res.finalMessage || "").trim() + toolNote, model, tool_calls: res.toolCalls };
+      const calls = res.toolCalls.map((t) => ({ name: t.name, error: t.error ?? null }));
+      return { text: (res.finalMessage || "").trim() + toolNote, model, tool_calls: calls };
     }
     const res = await chatCompletion({
       model,

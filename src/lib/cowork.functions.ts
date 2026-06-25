@@ -11,6 +11,12 @@ const MessageSchema = z.object({
 
 const PreviewType = z.enum(["markdown", "tsx", "ts", "json", "mermaid", "text", "html", "image"]);
 
+const GithubTargetSchema = z.object({
+  repo: z.string().min(3).max(140),
+  path: z.string().min(1).max(400),
+  branch_prefix: z.string().min(1).max(60).optional(),
+});
+
 export const listSessions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -53,6 +59,7 @@ export const updateSession = createServerFn({ method: "POST" })
     messages: z.array(MessageSchema).max(500).optional(),
     preview_content: z.string().max(200_000).optional(),
     preview_type: PreviewType.optional(),
+    github_target: GithubTargetSchema.nullable().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { id, ...patch } = data;
@@ -67,6 +74,53 @@ async function sha256Hex(s: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+export const applyToGithub = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    id: z.string().uuid(),
+    commit_message: z.string().min(3).max(200),
+    pr_title: z.string().min(3).max(200).optional(),
+    pr_body: z.string().max(4000).optional(),
+    // Optional override; otherwise the saved github_target is used.
+    target: GithubTargetSchema.optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("cowork_sessions")
+      .select("preview_content, preview_type, title, github_target")
+      .eq("id", data.id).single();
+    if (error) throw new Error(error.message);
+    const target = data.target ?? (row.github_target as z.infer<typeof GithubTargetSchema> | null);
+    if (!target) throw new Error("No GitHub target configured for this session");
+    if (!row.preview_content?.trim()) throw new Error("Preview is empty — nothing to push");
+
+    const { applyContentAsPR, assertNotVdnxRepo } = await import("@/server/github-write.server");
+    assertNotVdnxRepo(target.repo);
+
+    const res = await applyContentAsPR({
+      repo: target.repo,
+      path: target.path,
+      content: row.preview_content,
+      commitMessage: data.commit_message,
+      prTitle: data.pr_title ?? data.commit_message,
+      prBody: data.pr_body ?? `Pushed from Cowork session "${row.title}".`,
+    });
+
+    await context.supabase.from("cowork_sessions")
+      .update({ applied_content: row.preview_content }).eq("id", data.id);
+
+    const payload = {
+      session_id: data.id, repo: target.repo, path: target.path,
+      branch: res.branch, pr_url: res.prUrl, commit_sha: res.commitSha,
+    };
+    const hash_self = await sha256Hex(JSON.stringify(payload));
+    await context.supabase.from("audit_log").insert({
+      actor: context.userId, agent_slug: "vibe-coder", action: "cowork.github_pushed",
+      target: data.id, payload, hash_self,
+    });
+    return res;
+  });
 
 export const applyPreview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

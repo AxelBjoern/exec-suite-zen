@@ -101,6 +101,27 @@ export function NodeCard({ node, index, onChange, onDelete, onDragStart, onDragO
               <Input value={node.config?.summary ?? ""} onChange={(e) => onChange({ ...node, config: { ...node.config, summary: e.target.value } })} className="h-8 text-xs" />
             </ConfigField>
           )}
+          {node.type === "tool_call" && (
+            <>
+              <ConfigField label="Tool slug">
+                <Input value={node.config?.tool ?? ""} placeholder="web.search | image.generate | vdnx.http_probe | browser.run | …" onChange={(e) => onChange({ ...node, config: { ...node.config, tool: e.target.value } })} className="h-8 text-xs font-mono" />
+              </ConfigField>
+              <ConfigField label="Input (JSON, may use {{steps.<id>.output.<path>}})">
+                <Textarea rows={4} value={typeof node.config?.input === "string" ? node.config.input : JSON.stringify(node.config?.input ?? {}, null, 2)} onChange={(e) => onChange({ ...node, config: { ...node.config, input: tryParseJson(e.target.value) } })} className="text-xs font-mono" />
+              </ConfigField>
+            </>
+          )}
+          {node.type === "playwright_step" && (
+            <>
+              <ConfigField label="Recipe slug">
+                <Input value={node.config?.script ?? ""} placeholder="vdnx.signin | vdnx.calendar.create_event | …" onChange={(e) => onChange({ ...node, config: { ...node.config, script: e.target.value } })} className="h-8 text-xs font-mono" />
+              </ConfigField>
+              <ConfigField label="Inputs (JSON, may use {{steps.<id>.output}})">
+                <Textarea rows={4} value={typeof node.config?.inputs === "string" ? node.config.inputs : JSON.stringify(node.config?.inputs ?? {}, null, 2)} onChange={(e) => onChange({ ...node, config: { ...node.config, inputs: tryParseJson(e.target.value) } })} className="text-xs font-mono" />
+              </ConfigField>
+              <p className="text-[10px] text-muted-foreground">Requires PLAYWRIGHT_WORKER_URL + PLAYWRIGHT_WORKER_SECRET. See docs/playwright-worker.md.</p>
+            </>
+          )}
           {node.type === "vdnx_route_probe" && (
             <VdnxRouteProbeConfig node={node} onChange={onChange} />
           )}

@@ -113,7 +113,36 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
         log = await appendLog(payload.run_id, {
           ts: new Date().toISOString(), node_id: node.id, level: "info",
           message: `LLM (${model}): ${text.slice(0, 280)}${text.length > 280 ? "…" : ""}`,
-          data: { full: text, model },
+          data: { full: text, model, output: text },
+        }, log);
+        break;
+      }
+      case "tool_call": {
+        const { executeToolCall } = await import("@/server/agent-tools.server");
+        const toolName: string = node.config?.tool;
+        if (!toolName) throw new Error("tool_call node missing config.tool");
+        const result = await executeToolCall(toolName, node.config?.input ?? {}, {
+          agent_slug: "workflow-runner",
+          owner_user_id: run.user_id,
+        });
+        if (!result.ok) throw new Error(`tool ${toolName}: ${result.error}`);
+        log = await appendLog(payload.run_id, {
+          ts: new Date().toISOString(), node_id: node.id, level: "info",
+          message: `Tool ${toolName} ok`,
+          data: { tool: toolName, output: result.result },
+        }, log);
+        break;
+      }
+      case "playwright_step": {
+        const { runPlaywrightScript } = await import("@/server/playwright-client.server");
+        const script: string = node.config?.script;
+        if (!script) throw new Error("playwright_step node missing config.script");
+        const res = await runPlaywrightScript({ script, inputs: node.config?.inputs ?? {} });
+        if (!res.ok) throw new Error(`playwright ${script}: ${res.error}`);
+        log = await appendLog(payload.run_id, {
+          ts: new Date().toISOString(), node_id: node.id, level: "info",
+          message: `Playwright ${script} ok${res.screenshots?.length ? ` (${res.screenshots.length} screenshot)` : ""}`,
+          data: { script, output: res.output, logs: res.logs?.slice(0, 20), screenshots: res.screenshots },
         }, log);
         break;
       }

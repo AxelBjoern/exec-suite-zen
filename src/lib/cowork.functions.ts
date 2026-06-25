@@ -130,7 +130,7 @@ export const vibeChat = createServerFn({ method: "POST" })
       temperature: 0.4,
     });
     const text: string = res?.choices?.[0]?.message?.content ?? "";
-    return { text, model, tool_calls: [] };
+    return { text, model, tool_calls: [] as { name: string; error: string | null }[] };
   });
 
 export const autoTitleSession = createServerFn({ method: "POST" })

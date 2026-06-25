@@ -50,13 +50,27 @@ export const WORKFLOW_TEMPLATES: Template[] = [
       { id: uuidv4(), type: "output", label: "Wizard sweep recorded", config: { summary: "VDNX wizard sweep completed and reviewed." } },
     ],
   },
+  {
+    slug: "vdnx-calendar-daily",
+    name: "Daily VDNX Calendar Sync",
+    description: "Asks an LLM what should land on tomorrow's VDNX calendar, then drives the built-in calendar UI via Playwright.",
+    nodes: [
+      { id: uuidv4(), type: "trigger", label: "Daily 6pm", config: { cron: "0 18 * * *" } },
+      { id: uuidv4(), type: "llm_step", label: "Draft tomorrow's events", config: { prompt: "List 1-3 events for tomorrow as JSON [{title,start_iso,end_iso,notes}]. Return only JSON.", model: "deepseek" } },
+      { id: uuidv4(), type: "human_review", label: "Approve calendar entries", config: {} },
+      { id: uuidv4(), type: "playwright_step", label: "Create in VDNX calendar", config: { script: "vdnx.calendar.create_event", inputs: { events: "{{steps.PREV.output}}" } } },
+      { id: uuidv4(), type: "output", label: "Logged", config: { summary: "VDNX calendar updated for tomorrow." } },
+    ],
+  },
 ];
 
-export const NODE_TYPES = ["trigger", "llm_step", "human_review", "action", "output", "vdnx_route_probe"] as const;
+export const NODE_TYPES = ["trigger", "llm_step", "tool_call", "playwright_step", "human_review", "action", "output", "vdnx_route_probe"] as const;
 
 export const NODE_TYPE_LABEL: Record<(typeof NODE_TYPES)[number], string> = {
   trigger: "Trigger",
   llm_step: "LLM Step",
+  tool_call: "Tool Call",
+  playwright_step: "Playwright (Browser)",
   human_review: "Human Review",
   action: "Action",
   output: "Output",

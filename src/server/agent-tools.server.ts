@@ -215,7 +215,7 @@ const outbound_draft_linkedin = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["linkedin", "social", "cmo", "ceo"],
+  allowedAgents: ["linkedin", "social", "cmo", "ceo", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { data: agent } = await supabaseAdmin.from("agents").select("id").eq("slug", ctx.agent_slug).maybeSingle();
     const { data: draft } = await supabaseAdmin.from("content_drafts").insert({
@@ -246,7 +246,7 @@ const outbound_draft_email = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["sales", "cmo", "ceo", "linkedin"],
+  allowedAgents: ["sales", "cmo", "ceo", "linkedin", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { data: agent } = await supabaseAdmin.from("agents").select("id").eq("slug", ctx.agent_slug).maybeSingle();
     const { data: draft } = await supabaseAdmin.from("content_drafts").insert({
@@ -277,7 +277,7 @@ const db_draft_lead_reply = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["sales", "cmo", "ceo"],
+  allowedAgents: ["sales", "cmo", "ceo", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { error } = await supabaseAdmin.from("lead_replies").update({
       classification: args.classification,
@@ -290,6 +290,72 @@ const db_draft_lead_reply = def({
       payload: { agent_slug: ctx.agent_slug, classification: args.classification } as any,
     }).select().single();
     return { ok: true, approval_id: appr?.id };
+  },
+});
+
+// ─── Plug-in tools (Slice 1 + 3) ─────────────────────────────────────────
+
+const image_generate = def({
+  name: "image.generate",
+  description: "Generate an image from a text prompt via Replicate. Returns the image URL.",
+  parameters: z.object({
+    prompt: z.string().min(3).max(2000),
+    width: z.number().int().min(256).max(1920).optional(),
+    height: z.number().int().min(256).max(1920).optional(),
+  }).strict(),
+  readOnly: false,
+  externalSideEffect: false,
+  allowedAgents: "*",
+  async execute({ prompt, width, height }) {
+    const token = process.env.REPLICATE_API_TOKEN;
+    if (!token) return { error: "REPLICATE_API_TOKEN missing" };
+    const create = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait" },
+      body: JSON.stringify({ input: { prompt, width: width ?? 1024, height: height ?? 1024, num_outputs: 1, output_format: "webp" } }),
+    });
+    const json: any = await create.json();
+    if (!create.ok) return { error: `replicate ${create.status}: ${JSON.stringify(json).slice(0, 300)}` };
+    const out = Array.isArray(json?.output) ? json.output[0] : json?.output;
+    return { url: out, prediction_id: json?.id };
+  },
+});
+
+const vdnx_http_probe = def({
+  name: "vdnx.http_probe",
+  description: "Probe one or more VDNX wizard routes over HTTPS as the test account. Returns per-route status and marker matches.",
+  parameters: z.object({
+    routes: z.array(z.string().min(1).max(400)).min(1).max(40),
+    email: z.string().email().optional(),
+    base_url: z.string().url().optional(),
+  }).strict(),
+  readOnly: true,
+  allowedAgents: "*",
+  async execute({ routes, email, base_url }) {
+    const { runVdnxRouteProbe } = await import("@/server/vdnx-route-probe.server");
+    const { rows, summary } = await runVdnxRouteProbe({
+      run_id: null as any,
+      email,
+      base_url,
+      routes: routes.map((r) => ({ route: r })),
+    });
+    return { summary, rows: rows.slice(0, 20) };
+  },
+});
+
+const browser_run = def({
+  name: "browser.run",
+  description: "Run a Playwright recipe on the self-hosted browser worker (for legacy/SPA pages like vdnx.app). Use for built-in vdnx calendar, wizards, login flows. Always treated as approval-gated.",
+  parameters: z.object({
+    script: z.string().min(1).max(100),
+    inputs: z.record(z.string().min(1).max(60), z.any()).optional(),
+  }).strict(),
+  readOnly: false,
+  externalSideEffect: true,
+  allowedAgents: "*",
+  async execute({ script, inputs }) {
+    const { runPlaywrightScript } = await import("@/server/playwright-client.server");
+    return await runPlaywrightScript({ script, inputs: inputs ?? {} });
   },
 });
 
@@ -309,6 +375,9 @@ export const TOOL_REGISTRY: ToolDef<any>[] = [
   outbound_draft_linkedin as ToolDef<any>,
   outbound_draft_email as ToolDef<any>,
   db_draft_lead_reply as ToolDef<any>,
+  image_generate as ToolDef<any>,
+  vdnx_http_probe as ToolDef<any>,
+  browser_run as ToolDef<any>,
 ];
 
 export const READ_ONLY_TOOL_NAMES = TOOL_REGISTRY.filter(t => t.readOnly).map(t => t.name);

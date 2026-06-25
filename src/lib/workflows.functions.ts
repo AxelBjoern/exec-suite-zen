@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const NodeSchema = z.object({
   id: z.string().min(1).max(64),
-  type: z.enum(["trigger", "llm_step", "human_review", "action", "output", "vdnx_route_probe"]),
+  type: z.enum(["trigger", "llm_step", "tool_call", "playwright_step", "human_review", "action", "output", "vdnx_route_probe"]),
   label: z.string().min(1).max(160),
   config: z.record(z.string().min(1).max(64), z.any()).default({}),
 });

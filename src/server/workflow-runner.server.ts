@@ -28,6 +28,49 @@ async function finish(runId: string, status: "completed" | "failed", existing: a
   }).eq("id", runId).select();
 }
 
+// Walk previously appended log entries, find ones tagged with node_id
+// and `.data.output`, and expose them as `steps[node_id].output` for
+// Mustache-style interpolation: `{{steps.<id>.output.<path>}}`.
+function buildStepsCtx(log: any[]): Record<string, { output: unknown }> {
+  const ctx: Record<string, { output: unknown }> = {};
+  for (const entry of log) {
+    const id = entry?.node_id;
+    const out = entry?.data?.output;
+    if (id && out !== undefined) ctx[id] = { output: out };
+  }
+  return ctx;
+}
+
+function getPath(obj: unknown, path: string): unknown {
+  let cur: any = obj;
+  for (const seg of path.split(".")) {
+    if (cur == null) return undefined;
+    cur = cur[seg];
+  }
+  return cur;
+}
+
+const TEMPLATE_RE = /\{\{\s*steps\.([a-zA-Z0-9_\-]+)\.output(?:\.([a-zA-Z0-9_.\-]+))?\s*\}\}/g;
+
+function interpolate(value: any, steps: Record<string, { output: unknown }>): any {
+  if (typeof value === "string") {
+    return value.replace(TEMPLATE_RE, (_m, id, path) => {
+      const step = steps[id];
+      if (!step) return "";
+      const v = path ? getPath(step.output, path) : step.output;
+      if (v == null) return "";
+      return typeof v === "string" ? v : JSON.stringify(v);
+    });
+  }
+  if (Array.isArray(value)) return value.map((v) => interpolate(v, steps));
+  if (value && typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = interpolate(v, steps);
+    return out;
+  }
+  return value;
+}
+
 export async function runWorkflowStep(payload: { run_id: string; node_index: number }) {
   const { data: run, error } = await supabaseAdmin
     .from("workflow_runs").select("*, workflows(nodes, name)").eq("id", payload.run_id).single();
@@ -36,13 +79,15 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
   const nodes = (run.workflows?.nodes ?? []) as Array<{ id: string; type: string; label: string; config: any }>;
   const idx = payload.node_index;
   let log: any[] = Array.isArray(run.log) ? run.log : [];
+  const steps = buildStepsCtx(log);
 
   if (idx >= nodes.length) {
     await finish(payload.run_id, "completed", log, "All nodes complete.");
     return;
   }
 
-  const node = nodes[idx];
+  const rawNode = nodes[idx];
+  const node = { ...rawNode, config: interpolate(rawNode.config ?? {}, steps) };
   await supabaseAdmin.from("workflow_runs").update({
     status: "running", current_node_id: node.id,
   }).eq("id", payload.run_id).select();
@@ -68,7 +113,36 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
         log = await appendLog(payload.run_id, {
           ts: new Date().toISOString(), node_id: node.id, level: "info",
           message: `LLM (${model}): ${text.slice(0, 280)}${text.length > 280 ? "…" : ""}`,
-          data: { full: text, model },
+          data: { full: text, model, output: text },
+        }, log);
+        break;
+      }
+      case "tool_call": {
+        const { executeToolCall } = await import("@/server/agent-tools.server");
+        const toolName: string = node.config?.tool;
+        if (!toolName) throw new Error("tool_call node missing config.tool");
+        const result = await executeToolCall(toolName, node.config?.input ?? {}, {
+          agent_slug: "workflow-runner",
+          owner_user_id: run.user_id,
+        });
+        if (!result.ok) throw new Error(`tool ${toolName}: ${result.error}`);
+        log = await appendLog(payload.run_id, {
+          ts: new Date().toISOString(), node_id: node.id, level: "info",
+          message: `Tool ${toolName} ok`,
+          data: { tool: toolName, output: result.result },
+        }, log);
+        break;
+      }
+      case "playwright_step": {
+        const { runPlaywrightScript } = await import("@/server/playwright-client.server");
+        const script: string = node.config?.script;
+        if (!script) throw new Error("playwright_step node missing config.script");
+        const res = await runPlaywrightScript({ script, inputs: node.config?.inputs ?? {} });
+        if (!res.ok) throw new Error(`playwright ${script}: ${res.error}`);
+        log = await appendLog(payload.run_id, {
+          ts: new Date().toISOString(), node_id: node.id, level: "info",
+          message: `Playwright ${script} ok${res.screenshots?.length ? ` (${res.screenshots.length} screenshot)` : ""}`,
+          data: { script, output: res.output, logs: res.logs?.slice(0, 20), screenshots: res.screenshots },
         }, log);
         break;
       }

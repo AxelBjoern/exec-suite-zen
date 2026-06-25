@@ -1,0 +1,1 @@
+ALTER TABLE public.cowork_sessions ADD COLUMN IF NOT EXISTS github_target jsonb;

@@ -41,6 +41,7 @@ import { Route as AuthenticatedBudgetBoardRouteImport } from './routes/_authenti
 import { Route as AuthenticatedBudgetAssumptionsRouteImport } from './routes/_authenticated/budget.assumptions'
 import { Route as ApiPublicCronWeeklyDraftsRouteImport } from './routes/api/public/cron/weekly-drafts'
 import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
+import { Route as ApiPublicCronScheduleTickRouteImport } from './routes/api/public/cron/schedule-tick'
 import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
 import { Route as ApiPublicCronLeadReplyTriageRouteImport } from './routes/api/public/cron/lead-reply-triage'
 import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
@@ -226,6 +227,12 @@ const ApiPublicCronScheduledOutboundRoute =
     path: '/api/public/cron/scheduled-outbound',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronScheduleTickRoute =
+  ApiPublicCronScheduleTickRouteImport.update({
+    id: '/api/public/cron/schedule-tick',
+    path: '/api/public/cron/schedule-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronMondayBoardRoute =
   ApiPublicCronMondayBoardRouteImport.update({
     id: '/api/public/cron/monday-board',
@@ -298,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/schedule-tick': typeof ApiPublicCronScheduleTickRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
   '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
@@ -336,6 +344,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/schedule-tick': typeof ApiPublicCronScheduleTickRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
   '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
@@ -377,6 +386,7 @@ export interface FileRoutesById {
   '/api/public/cron/job-tick': typeof ApiPublicCronJobTickRoute
   '/api/public/cron/lead-reply-triage': typeof ApiPublicCronLeadReplyTriageRoute
   '/api/public/cron/monday-board': typeof ApiPublicCronMondayBoardRoute
+  '/api/public/cron/schedule-tick': typeof ApiPublicCronScheduleTickRoute
   '/api/public/cron/scheduled-outbound': typeof ApiPublicCronScheduledOutboundRoute
   '/api/public/cron/weekly-drafts': typeof ApiPublicCronWeeklyDraftsRoute
 }
@@ -418,6 +428,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/job-tick'
     | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/schedule-tick'
     | '/api/public/cron/scheduled-outbound'
     | '/api/public/cron/weekly-drafts'
   fileRoutesByTo: FileRoutesByTo
@@ -456,6 +467,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/job-tick'
     | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/schedule-tick'
     | '/api/public/cron/scheduled-outbound'
     | '/api/public/cron/weekly-drafts'
   id:
@@ -496,6 +508,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/job-tick'
     | '/api/public/cron/lead-reply-triage'
     | '/api/public/cron/monday-board'
+    | '/api/public/cron/schedule-tick'
     | '/api/public/cron/scheduled-outbound'
     | '/api/public/cron/weekly-drafts'
   fileRoutesById: FileRoutesById
@@ -512,6 +525,7 @@ export interface RootRouteChildren {
   ApiPublicCronJobTickRoute: typeof ApiPublicCronJobTickRoute
   ApiPublicCronLeadReplyTriageRoute: typeof ApiPublicCronLeadReplyTriageRoute
   ApiPublicCronMondayBoardRoute: typeof ApiPublicCronMondayBoardRoute
+  ApiPublicCronScheduleTickRoute: typeof ApiPublicCronScheduleTickRoute
   ApiPublicCronScheduledOutboundRoute: typeof ApiPublicCronScheduledOutboundRoute
   ApiPublicCronWeeklyDraftsRoute: typeof ApiPublicCronWeeklyDraftsRoute
 }
@@ -742,6 +756,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronScheduledOutboundRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/schedule-tick': {
+      id: '/api/public/cron/schedule-tick'
+      path: '/api/public/cron/schedule-tick'
+      fullPath: '/api/public/cron/schedule-tick'
+      preLoaderRoute: typeof ApiPublicCronScheduleTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/monday-board': {
       id: '/api/public/cron/monday-board'
       path: '/api/public/cron/monday-board'
@@ -878,19 +899,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronJobTickRoute: ApiPublicCronJobTickRoute,
   ApiPublicCronLeadReplyTriageRoute: ApiPublicCronLeadReplyTriageRoute,
   ApiPublicCronMondayBoardRoute: ApiPublicCronMondayBoardRoute,
+  ApiPublicCronScheduleTickRoute: ApiPublicCronScheduleTickRoute,
   ApiPublicCronScheduledOutboundRoute: ApiPublicCronScheduledOutboundRoute,
   ApiPublicCronWeeklyDraftsRoute: ApiPublicCronWeeklyDraftsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

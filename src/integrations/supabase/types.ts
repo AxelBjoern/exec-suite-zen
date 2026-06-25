@@ -533,6 +533,7 @@ export type Database = {
         Row: {
           applied_content: string | null
           created_at: string
+          github_target: Json | null
           id: string
           messages: Json
           preview_content: string
@@ -544,6 +545,7 @@ export type Database = {
         Insert: {
           applied_content?: string | null
           created_at?: string
+          github_target?: Json | null
           id?: string
           messages?: Json
           preview_content?: string
@@ -555,6 +557,7 @@ export type Database = {
         Update: {
           applied_content?: string | null
           created_at?: string
+          github_target?: Json | null
           id?: string
           messages?: Json
           preview_content?: string

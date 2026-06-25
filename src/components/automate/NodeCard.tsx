@@ -20,6 +20,8 @@ type Props = {
 const TYPE_TONE: Record<WorkflowNode["type"], string> = {
   trigger: "bg-primary/15 text-foreground border-primary/40",
   llm_step: "bg-accent/15 text-foreground border-accent/40",
+  tool_call: "bg-accent/10 text-foreground border-accent/40",
+  playwright_step: "bg-primary/10 text-foreground border-primary/40",
   human_review: "bg-destructive/15 text-foreground border-destructive/40",
   action: "bg-muted text-foreground border-border",
   output: "bg-panel-2 text-foreground border-border",

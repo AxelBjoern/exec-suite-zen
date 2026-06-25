@@ -215,7 +215,7 @@ const outbound_draft_linkedin = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["linkedin", "social", "cmo", "ceo"],
+  allowedAgents: ["linkedin", "social", "cmo", "ceo", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { data: agent } = await supabaseAdmin.from("agents").select("id").eq("slug", ctx.agent_slug).maybeSingle();
     const { data: draft } = await supabaseAdmin.from("content_drafts").insert({
@@ -246,7 +246,7 @@ const outbound_draft_email = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["sales", "cmo", "ceo", "linkedin"],
+  allowedAgents: ["sales", "cmo", "ceo", "linkedin", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { data: agent } = await supabaseAdmin.from("agents").select("id").eq("slug", ctx.agent_slug).maybeSingle();
     const { data: draft } = await supabaseAdmin.from("content_drafts").insert({
@@ -277,7 +277,7 @@ const db_draft_lead_reply = def({
   }).strict(),
   readOnly: false,
   externalSideEffect: true,
-  allowedAgents: ["sales", "cmo", "ceo"],
+  allowedAgents: ["sales", "cmo", "ceo", "cowork", "workflow-runner"],
   async execute(args, ctx) {
     const { error } = await supabaseAdmin.from("lead_replies").update({
       classification: args.classification,

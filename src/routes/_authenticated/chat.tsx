@@ -140,22 +140,9 @@ function ChatPage() {
   }, []);
   const isOwner = isVdnxOwnerEmail(userEmail);
 
-  const allowlistFn = useServerFn(getMyModelAllowlist);
-  const { data: allowlist } = useQuery({
-    queryKey: ["my-model-allowlist"],
-    queryFn: () => allowlistFn(),
-  });
-  const allowedModels = useMemo(() => {
-    const allowed = new Set(allowlist?.allowed ?? CHAT_MODEL_OPTIONS.map((m) => m.id));
-    return CHAT_MODEL_OPTIONS.filter((m) => allowed.has(m.id));
-  }, [allowlist]);
+  // No allowlist — every model in CHAT_MODEL_OPTIONS is pickable in chat.
+  const allowedModels = CHAT_MODEL_OPTIONS;
 
-  useEffect(() => {
-    if (!allowedModels.length) return;
-    if (!allowedModels.some((m) => m.id === model)) {
-      setModel(allowedModels[0].id);
-    }
-  }, [allowedModels, model]);
 
   const pendingKey = activeId ?? PENDING_NONE_KEY;
   const pendingUser = pendingByConvo[pendingKey] ?? null;

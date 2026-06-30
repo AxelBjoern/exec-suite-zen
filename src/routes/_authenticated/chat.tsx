@@ -14,7 +14,7 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
-import { getMyModelAllowlist } from "@/lib/models.functions";
+
 import { isVdnxOwnerEmail } from "@/lib/vdnx";
 import { supabase } from "@/integrations/supabase/client";
 import {

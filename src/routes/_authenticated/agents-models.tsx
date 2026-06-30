@@ -164,6 +164,7 @@ function AgentsModelsShell() {
       toast.success("Model added");
       if (me?.id) clearDraft(modelDraftKey(me.id));
       qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+      qc.invalidateQueries({ queryKey: ["my-model-allowlist"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
@@ -176,6 +177,7 @@ function AgentsModelsShell() {
     onSuccess: () => {
       toast.success("Model updated");
       qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+      qc.invalidateQueries({ queryKey: ["my-model-allowlist"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });

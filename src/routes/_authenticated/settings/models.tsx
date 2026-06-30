@@ -39,6 +39,8 @@ function ModelsPage() {
     if (allowlist.data) setSelected(new Set(allowlist.data.allowed));
   }, [allowlist.data]);
 
+  const modelOptions = allowlist.data?.options ?? CHAT_MODEL_OPTIONS;
+
   function toggle(id: string, on: boolean) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -49,8 +51,8 @@ function ModelsPage() {
   }
 
   const allOn = useMemo(
-    () => CHAT_MODEL_OPTIONS.every((m) => selected.has(m.id)),
-    [selected],
+    () => modelOptions.every((m) => selected.has(m.id)),
+    [modelOptions, selected],
   );
 
   async function save() {
@@ -94,7 +96,7 @@ function ModelsPage() {
 
       <section className="mt-6 rounded-lg border border-border bg-panel p-2">
         <ul className="divide-y divide-border">
-          {CHAT_MODEL_OPTIONS.map((m) => {
+          {modelOptions.map((m) => {
             const on = selected.has(m.id);
             return (
               <li
@@ -104,7 +106,7 @@ function ModelsPage() {
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{m.label}</div>
                   <div className="font-mono text-[11px] text-muted-foreground">
-                    {m.id}
+                    {m.slug}
                   </div>
                 </div>
                 <Switch
@@ -124,7 +126,7 @@ function ModelsPage() {
           className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
           onClick={() =>
             setSelected(
-              allOn ? new Set() : new Set(CHAT_MODEL_OPTIONS.map((m) => m.id)),
+              allOn ? new Set() : new Set(modelOptions.map((m) => m.id)),
             )
           }
         >

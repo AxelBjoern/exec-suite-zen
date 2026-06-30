@@ -148,11 +148,12 @@ function ChatPage() {
     queryFn: () => allowlistFn(),
   });
   // Per-user scope: show every model the user enabled in Settings → Models.
-  // No hard cap — any model added to CHAT_MODEL_OPTIONS becomes togglable there.
+  // No hard cap — user-added model-library rows become pickable here.
+  const modelOptions = allowlist?.options ?? CHAT_MODEL_OPTIONS;
   const allowedModels = useMemo(() => {
-    const allowed = new Set(allowlist?.allowed ?? CHAT_MODEL_OPTIONS.map((m) => m.id));
-    return CHAT_MODEL_OPTIONS.filter((m) => allowed.has(m.id));
-  }, [allowlist]);
+    const allowed = new Set(allowlist?.allowed ?? modelOptions.map((m) => m.id));
+    return modelOptions.filter((m) => allowed.has(m.id));
+  }, [allowlist, modelOptions]);
 
   useEffect(() => {
     if (!allowedModels.length) return;
@@ -487,9 +488,9 @@ function ChatPage() {
 
   const activeModelLabel = useMemo(
     () =>
-      CHAT_MODEL_OPTIONS.find((m) => m.id === model)?.label ??
+      modelOptions.find((m) => m.id === model)?.label ??
       CHAT_MODEL_OPTIONS[0].label,
-    [model],
+    [model, modelOptions],
   );
 
   // Indicators are scoped to the active conversation only — a reply still

@@ -52,10 +52,6 @@ function ModelsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (allowlist.data) setSelected(new Set(allowlist.data.allowed));
-  }, [allowlist.data]);
-
   const modelOptions = useMemo(() => {
     const byId = new Map<string, ChatModelOption>(
       CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]),
@@ -77,6 +73,17 @@ function ModelsPage() {
     }
     return Array.from(byId.values());
   }, [allowlist.data?.options, libraryModels]);
+
+  useEffect(() => {
+    if (!allowlist.data) return;
+    setSelected(
+      new Set(
+        allowlist.data.isDefault
+          ? modelOptions.map((m) => m.id)
+          : allowlist.data.allowed,
+      ),
+    );
+  }, [allowlist.data, modelOptions]);
 
   function toggle(id: string, on: boolean) {
     setSelected((prev) => {

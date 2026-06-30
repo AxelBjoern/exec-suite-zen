@@ -140,6 +140,11 @@ async function runChatWithWebTools(opts: {
       // Model has no tool-capable endpoint (e.g. Claude Opus 4.7 on OpenRouter).
       // Retry the same model without tools rather than swapping models.
       const emsg = e?.message ?? "";
+      if (/No endpoints found that support image input/i.test(emsg)) {
+        throw new Error(
+          "The selected model can't read images. Pick Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro to analyze attached images, or remove the image to continue with this model.",
+        );
+      }
       if (!toolsDisabled && (/no tool-capable endpoint/i.test(emsg) || /No endpoints found that can handle the requested parameters/i.test(emsg) || /\b404\b/.test(emsg))) {
         toolsDisabled = true;
         i--;

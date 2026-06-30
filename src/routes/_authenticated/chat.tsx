@@ -147,9 +147,43 @@ function ChatPage() {
     queryKey: ["my-model-allowlist"],
     queryFn: () => allowlistFn(),
   });
+  const { data: libraryModels = [] } = useQuery({
+    queryKey: ["chat", "base-models"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("base_models")
+        .select("slug,name,provider,description")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        slug: string;
+        name: string;
+        provider?: string | null;
+        description?: string | null;
+      }>;
+    },
+  });
   // Per-user scope: show every model the user enabled in Settings → Models.
   // No hard cap — user-added model-library rows become pickable here.
-  const modelOptions = allowlist?.options ?? CHAT_MODEL_OPTIONS;
+  const modelOptions = useMemo(() => {
+    const byId = new Map(CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]));
+    for (const m of libraryModels) {
+      const slug = m.slug?.trim();
+      if (!slug || [...byId.values()].some((existing) => existing.slug === slug)) continue;
+      byId.set(slug, {
+        id: slug,
+        slug,
+        label: m.name?.trim() || slug,
+        provider: m.provider ?? "openrouter",
+        description: m.description ?? undefined,
+        source: "library" as const,
+      });
+    }
+    for (const m of allowlist?.options ?? []) {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    }
+    return Array.from(byId.values());
+  }, [allowlist?.options, libraryModels]);
   const allowedModels = useMemo(() => {
     const allowed = new Set(allowlist?.allowed ?? modelOptions.map((m) => m.id));
     return modelOptions.filter((m) => allowed.has(m.id));

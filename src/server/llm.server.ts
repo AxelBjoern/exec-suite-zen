@@ -10,7 +10,8 @@ const DEFAULT_MODEL = "x-ai/grok-4.3";
 const DEFAULT_MAX_TOKENS = 8000;
 const RETRY_MAX_TOKENS = 12000;
 
-// The ONLY allowed models. No other versions, no fallbacks.
+// Built-in aliases. User-added OpenRouter slugs are allowed after the
+// per-user model-library check in models.functions.ts.
 const MODEL_SLUGS = {
   hermes: "nousresearch/hermes-4-405b",
   grok: "x-ai/grok-4.3",
@@ -45,8 +46,9 @@ export function resolveChatModel(id?: string | null): string {
   if (!id) return DEFAULT_MODEL;
   if (MODEL_LABELS[id]) return id;
   const slug = MODEL_SLUGS[id as keyof typeof MODEL_SLUGS];
-  if (!slug) throw new Error(`Unknown model "${id}". Allowed: Hermes 4 405B, Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, DeepSeek V4 Pro, DeepSeek V4 Flash, Kling v3.0 Std.`);
-  return slug;
+  if (slug) return slug;
+  if (/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:/-]*$/i.test(id)) return id;
+  throw new Error(`Unknown model "${id}". Add the OpenRouter slug in Agents & Models first.`);
 }
 
 export function resolveTextChatModel(id?: string | null): string {

@@ -6,11 +6,12 @@ import { toast } from "sonner";
 import { ArrowLeft, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import {
   getMyModelAllowlist,
   updateMyModelAllowlist,
 } from "@/lib/models.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/settings/models")({
   head: () => ({
@@ -31,13 +32,58 @@ function ModelsPage() {
     queryKey: ["my-model-allowlist"],
     queryFn: () => get(),
   });
+  const { data: libraryModels = [] } = useQuery({
+    queryKey: ["settings", "base-models"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("base_models")
+        .select("slug,name,provider,description")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        slug: string;
+        name: string;
+        provider?: string | null;
+        description?: string | null;
+      }>;
+    },
+  });
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
+  const modelOptions = useMemo(() => {
+    const byId = new Map<string, ChatModelOption>(
+      CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]),
+    );
+    for (const m of libraryModels) {
+      const slug = m.slug?.trim();
+      if (!slug || [...byId.values()].some((existing) => existing.slug === slug)) continue;
+      byId.set(slug, {
+        id: slug,
+        slug,
+        label: m.name?.trim() || slug,
+        provider: m.provider ?? "openrouter",
+        description: m.description ?? undefined,
+        source: "library" as const,
+      });
+    }
+    for (const m of allowlist.data?.options ?? []) {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    }
+    return Array.from(byId.values());
+  }, [allowlist.data?.options, libraryModels]);
+
   useEffect(() => {
-    if (allowlist.data) setSelected(new Set(allowlist.data.allowed));
-  }, [allowlist.data]);
+    if (!allowlist.data) return;
+    setSelected(
+      new Set(
+        allowlist.data.isDefault
+          ? modelOptions.map((m) => m.id)
+          : allowlist.data.allowed,
+      ),
+    );
+  }, [allowlist.data, modelOptions]);
 
   function toggle(id: string, on: boolean) {
     setSelected((prev) => {
@@ -49,8 +95,8 @@ function ModelsPage() {
   }
 
   const allOn = useMemo(
-    () => CHAT_MODEL_OPTIONS.every((m) => selected.has(m.id)),
-    [selected],
+    () => modelOptions.every((m) => selected.has(m.id)),
+    [modelOptions, selected],
   );
 
   async function save() {
@@ -94,7 +140,7 @@ function ModelsPage() {
 
       <section className="mt-6 rounded-lg border border-border bg-panel p-2">
         <ul className="divide-y divide-border">
-          {CHAT_MODEL_OPTIONS.map((m) => {
+          {modelOptions.map((m) => {
             const on = selected.has(m.id);
             return (
               <li
@@ -104,7 +150,7 @@ function ModelsPage() {
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{m.label}</div>
                   <div className="font-mono text-[11px] text-muted-foreground">
-                    {m.id}
+                    {m.slug}
                   </div>
                 </div>
                 <Switch
@@ -124,7 +170,7 @@ function ModelsPage() {
           className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
           onClick={() =>
             setSelected(
-              allOn ? new Set() : new Set(CHAT_MODEL_OPTIONS.map((m) => m.id)),
+              allOn ? new Set() : new Set(modelOptions.map((m) => m.id)),
             )
           }
         >

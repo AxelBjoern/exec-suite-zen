@@ -13,7 +13,7 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
-import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 
 
@@ -147,12 +147,53 @@ function ChatPage() {
     queryKey: ["my-model-allowlist"],
     queryFn: () => allowlistFn(),
   });
+  const { data: libraryModels = [] } = useQuery({
+    queryKey: ["chat", "base-models"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("base_models")
+        .select("slug,name,provider,description")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        slug: string;
+        name: string;
+        provider?: string | null;
+        description?: string | null;
+      }>;
+    },
+  });
   // Per-user scope: show every model the user enabled in Settings → Models.
-  // No hard cap — any model added to CHAT_MODEL_OPTIONS becomes togglable there.
+  // No hard cap — user-added model-library rows become pickable here.
+  const modelOptions = useMemo(() => {
+    const byId = new Map<string, ChatModelOption>(
+      CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]),
+    );
+    for (const m of libraryModels) {
+      const slug = m.slug?.trim();
+      if (!slug || [...byId.values()].some((existing) => existing.slug === slug)) continue;
+      byId.set(slug, {
+        id: slug,
+        slug,
+        label: m.name?.trim() || slug,
+        provider: m.provider ?? "openrouter",
+        description: m.description ?? undefined,
+        source: "library" as const,
+      });
+    }
+    for (const m of allowlist?.options ?? []) {
+      if (!byId.has(m.id)) byId.set(m.id, m);
+    }
+    return Array.from(byId.values());
+  }, [allowlist?.options, libraryModels]);
   const allowedModels = useMemo(() => {
-    const allowed = new Set(allowlist?.allowed ?? CHAT_MODEL_OPTIONS.map((m) => m.id));
-    return CHAT_MODEL_OPTIONS.filter((m) => allowed.has(m.id));
-  }, [allowlist]);
+    const allowed = new Set(
+      !allowlist || allowlist.isDefault
+        ? modelOptions.map((m) => m.id)
+        : allowlist.allowed,
+    );
+    return modelOptions.filter((m) => allowed.has(m.id));
+  }, [allowlist, modelOptions]);
 
   useEffect(() => {
     if (!allowedModels.length) return;
@@ -487,9 +528,9 @@ function ChatPage() {
 
   const activeModelLabel = useMemo(
     () =>
-      CHAT_MODEL_OPTIONS.find((m) => m.id === model)?.label ??
+      modelOptions.find((m) => m.id === model)?.label ??
       CHAT_MODEL_OPTIONS[0].label,
-    [model],
+    [model, modelOptions],
   );
 
   // Indicators are scoped to the active conversation only — a reply still

@@ -14,6 +14,8 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { getMyModelAllowlist } from "@/lib/models.functions";
+
 
 import { isVdnxOwnerEmail } from "@/lib/vdnx";
 import { supabase } from "@/integrations/supabase/client";
@@ -140,8 +142,25 @@ function ChatPage() {
   }, []);
   const isOwner = isVdnxOwnerEmail(userEmail);
 
-  // No allowlist — every model in CHAT_MODEL_OPTIONS is pickable in chat.
-  const allowedModels = CHAT_MODEL_OPTIONS;
+  const allowlistFn = useServerFn(getMyModelAllowlist);
+  const { data: allowlist } = useQuery({
+    queryKey: ["my-model-allowlist"],
+    queryFn: () => allowlistFn(),
+  });
+  // Per-user scope: show every model the user enabled in Settings → Models.
+  // No hard cap — any model added to CHAT_MODEL_OPTIONS becomes togglable there.
+  const allowedModels = useMemo(() => {
+    const allowed = new Set(allowlist?.allowed ?? CHAT_MODEL_OPTIONS.map((m) => m.id));
+    return CHAT_MODEL_OPTIONS.filter((m) => allowed.has(m.id));
+  }, [allowlist]);
+
+  useEffect(() => {
+    if (!allowedModels.length) return;
+    if (!allowedModels.some((m) => m.id === model)) {
+      setModel(allowedModels[0].id);
+    }
+  }, [allowedModels, model]);
+
 
 
   const pendingKey = activeId ?? PENDING_NONE_KEY;

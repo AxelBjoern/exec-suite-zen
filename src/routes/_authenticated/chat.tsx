@@ -13,7 +13,7 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
-import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 
 
@@ -166,7 +166,9 @@ function ChatPage() {
   // Per-user scope: show every model the user enabled in Settings → Models.
   // No hard cap — user-added model-library rows become pickable here.
   const modelOptions = useMemo(() => {
-    const byId = new Map(CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]));
+    const byId = new Map<string, ChatModelOption>(
+      CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]),
+    );
     for (const m of libraryModels) {
       const slug = m.slug?.trim();
       if (!slug || [...byId.values()].some((existing) => existing.slug === slug)) continue;
@@ -185,7 +187,11 @@ function ChatPage() {
     return Array.from(byId.values());
   }, [allowlist?.options, libraryModels]);
   const allowedModels = useMemo(() => {
-    const allowed = new Set(allowlist?.allowed ?? modelOptions.map((m) => m.id));
+    const allowed = new Set(
+      !allowlist || allowlist.isDefault
+        ? modelOptions.map((m) => m.id)
+        : allowlist.allowed,
+    );
     return modelOptions.filter((m) => allowed.has(m.id));
   }, [allowlist, modelOptions]);
 

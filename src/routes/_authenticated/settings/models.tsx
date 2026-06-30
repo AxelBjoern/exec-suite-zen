@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { CHAT_MODEL_OPTIONS } from "@/lib/chat-models";
+import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import {
   getMyModelAllowlist,
   updateMyModelAllowlist,
@@ -57,7 +57,9 @@ function ModelsPage() {
   }, [allowlist.data]);
 
   const modelOptions = useMemo(() => {
-    const byId = new Map(CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]));
+    const byId = new Map<string, ChatModelOption>(
+      CHAT_MODEL_OPTIONS.map((m) => [m.id, { ...m }]),
+    );
     for (const m of libraryModels) {
       const slug = m.slug?.trim();
       if (!slug || [...byId.values()].some((existing) => existing.slug === slug)) continue;

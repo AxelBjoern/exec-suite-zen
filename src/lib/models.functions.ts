@@ -48,26 +48,11 @@ export const updateMyModelAllowlist = createServerFn({ method: "POST" })
     return { ok: true, allowed: cleaned as ChatModelId[] };
   });
 
-/** Server-side enforcement helper for the chat / dispatch entry points. */
-export async function assertModelAllowedForUser(opts: {
+/** No-op: chat has no per-user model limits. Any model in CHAT_MODEL_OPTIONS is allowed. */
+export async function assertModelAllowedForUser(_opts: {
   userId: string;
   modelId?: string | null;
 }) {
-  if (!opts.modelId) return;
-  if (!ALL_ID_SET.has(opts.modelId)) return; // unknown ids handled by resolveChatModel
-  const { data } = await supabaseAdmin
-    .from("user_settings")
-    .select("chat_model_allowlist")
-    .eq("user_id", opts.userId)
-    .maybeSingle();
-  const stored = (data?.chat_model_allowlist ?? null) as string[] | null;
-  if (!stored || stored.length === 0) return; // default = all allowed
-  if (!stored.includes(opts.modelId)) {
-    const label =
-      CHAT_MODEL_OPTIONS.find((m) => m.id === opts.modelId)?.label ??
-      opts.modelId;
-    throw new Error(
-      `${label} is disabled for your account. Enable it in Settings → Models.`,
-    );
-  }
+  return;
 }
+

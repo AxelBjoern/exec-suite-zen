@@ -92,6 +92,13 @@ export function ChatComposer({
                 onSubmit();
               }
             }}
+            onPaste={(e) => {
+              const items = e.clipboardData?.files;
+              if (items && items.length > 0) {
+                e.preventDefault();
+                onFiles(items);
+              }
+            }}
             placeholder="Message the CEO… (Enter to send, Shift+Enter for newline)"
             rows={2}
             disabled={pending}

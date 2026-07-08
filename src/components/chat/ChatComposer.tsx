@@ -93,10 +93,34 @@ export function ChatComposer({
               }
             }}
             onPaste={(e) => {
-              const items = e.clipboardData?.files;
-              if (items && items.length > 0) {
+              const cd = e.clipboardData;
+              if (!cd) return;
+              const collected: File[] = [];
+              if (cd.files && cd.files.length > 0) {
+                collected.push(...Array.from(cd.files));
+              }
+              if (collected.length === 0 && cd.items) {
+                for (const it of Array.from(cd.items)) {
+                  if (it.kind === "file") {
+                    const f = it.getAsFile();
+                    if (f) {
+                      const named = f.name
+                        ? f
+                        : new File(
+                            [f],
+                            `pasted-${Date.now()}.${(f.type.split("/")[1] || "png").split("+")[0]}`,
+                            { type: f.type || "image/png" },
+                          );
+                      collected.push(named);
+                    }
+                  }
+                }
+              }
+              if (collected.length > 0) {
                 e.preventDefault();
-                onFiles(items);
+                const dt = new DataTransfer();
+                collected.forEach((f) => dt.items.add(f));
+                onFiles(dt.files);
               }
             }}
             placeholder="Message the CEO… (Enter to send, Shift+Enter for newline)"

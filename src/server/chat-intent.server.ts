@@ -44,19 +44,21 @@ const TOOL = {
 
 const SYSTEM = `You classify the user's latest chat message for outbound dispatch.
 
-CRITICAL: Only return an outbound kind (email/linkedin/reminder) when the user is DISPATCHING ready content. If the user is asking the assistant to write, draft, compose, generate, create, or come up with content, return kind='none'. Do NOT intercept authoring requests.
+Return an outbound kind (email/linkedin/reminder) ONLY when the user is DISPATCHING content (either ready content, or content the previous assistant message just produced). If the user is asking the assistant to author fresh content from scratch, return kind='none'.
 
-Verbs that indicate action='file' (dispatch existing content):
-  send, post, publish, schedule, share this, file this, submit, deliver.
-Verbs that indicate action='generate' (authoring request — return kind='none'):
-  write, draft, create, compose, generate, make, give me, help me with, come up with, brainstorm.
-Quantity cues ("a post", "one post", "three posts", "a few", "5 options") always mean action='generate' — return kind='none'.
+Verbs that indicate action='file' (dispatch — ready or previously-drafted content):
+  send, post, publish, schedule, share, file, ship, submit, deliver, "post these", "file all", "ship them", "send the above".
+Verbs that indicate action='generate' (authoring — return kind='none'):
+  write, draft, compose, generate, create, make, "give me", "come up with", brainstorm.
 
-Only when kind ≠ 'none':
+When kind ≠ 'none':
 - email required: to, body.
 - reminder required: body.
-- linkedin required: text.
-List any absent required field in "missing". Extract literal values from the user message — do not invent recipients, do not fabricate content.`;
+- linkedin required: text. If the user is filing posts the assistant just drafted, leave text empty and list "text" in missing — the caller pulls it from history.
+List absent required fields in "missing". Extract literal values from the user message — do not invent recipients or fabricate content.`;
+
+// Cheap pre-check: skip the classifier LLM call when there is no dispatch verb.
+const DISPATCH_VERB_RE = /\b(send|sends|sent|post|posts|posting|publish|publishes|published|schedul(?:e|es|ed|ing)|shar(?:e|es|ed|ing)|fil(?:e|es|ed|ing)|ship(?:s|ped|ping)?|submit(?:s|ted|ting)?|deliver(?:s|ed|ing)?)\b/i;
 
 export async function parseOutboundIntent(
   userText: string,
@@ -66,6 +68,7 @@ export async function parseOutboundIntent(
   const t = userText.trim();
   if (t.length < 8) return { kind: "none" };
   if (t.startsWith("@")) return { kind: "none" };
+  if (!DISPATCH_VERB_RE.test(t)) return { kind: "none" };
 
   const trimmedHistory = recentHistory.slice(-6);
   const userPrompt =

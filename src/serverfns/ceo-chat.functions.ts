@@ -123,10 +123,12 @@ async function runChatWithWebTools(opts: {
   messages: ChatMessage[];
   model: string;
   temperature?: number;
+  max_tokens?: number;
+  disableTools?: boolean;
 }): Promise<string> {
   const msgs: any[] = [...opts.messages];
   const MAX_ITERS = 4;
-  let toolsDisabled = false;
+  let toolsDisabled = !!opts.disableTools;
   for (let i = 0; i < MAX_ITERS; i++) {
     let json: any;
     try {
@@ -135,6 +137,7 @@ async function runChatWithWebTools(opts: {
         ...(toolsDisabled ? {} : { tools: WEB_TOOLS as any, tool_choice: "auto" as const }),
         temperature: opts.temperature,
         model: opts.model,
+        ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
       });
     } catch (e: any) {
       // Model has no tool-capable endpoint (e.g. Claude Opus 4.7 on OpenRouter).
@@ -175,6 +178,7 @@ async function runChatWithWebTools(opts: {
     messages: msgs,
     temperature: opts.temperature,
     model: opts.model,
+    ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
   });
   return (json?.choices?.[0]?.message?.content ?? "").trim() || "(no reply)";
 }
@@ -1336,62 +1340,59 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       messages,
       model: resolvedModel,
       temperature: 0.6,
+      ...(isLinkedInAuthoring ? { max_tokens: 16000 } : {}),
     });
 
-    if (isLinkedInAuthoring && postCount >= 2) {
-      // If the model under-delivered, retry once with a stricter instruction.
-      const gotCount = splitPosts(reply).length;
-      if (gotCount < postCount) {
+    if (isLinkedInAuthoring) {
+      // Strip a leading preamble paragraph (intro line like "Here are two fresh posts…")
+      // before counting bodies, so the under-delivered check is honest.
+      const stripPreamble = (text: string): string => {
+        const trimmed = text.trim();
+        const firstBreak = trimmed.search(/\n\s*\n/);
+        if (firstBreak < 0) return trimmed;
+        const head = trimmed.slice(0, firstBreak).trim();
+        const looksLikePreamble =
+          /^(here (are|is)|below (are|is)|sure|okay|got it|i(?:'|\u2019)?ve (drafted|written|got)|check (these|this) out|as requested|of course)/i.test(head) ||
+          (head.length < 200 && !/#\w/.test(head) && !/[.!?]"?\s*$/.test(head));
+        return looksLikePreamble ? trimmed.slice(firstBreak).replace(/^\s*(?:---+|\*\*\*+)\s*\n/, "").trim() : trimmed;
+      };
+
+      const isUnderDelivered = (text: string): boolean => {
+        const stripped = stripPreamble(text);
+        const bodies = splitPosts(stripped).filter((p) => p.length >= 200);
+        if (bodies.length < postCount) return true;
+        if (/\n\s*(?:---+|\*\*\*+)\s*$/.test(text.trim())) return bodies.length < postCount;
+        if (text.trim().length < postCount * 300) return true;
+        return false;
+      };
+
+      let attempts = 0;
+      while (isUnderDelivered(reply) && attempts < 2) {
+        attempts++;
         const retryMessages: ChatMessage[] = [
           ...messages,
           { role: "assistant", content: reply },
           {
             role: "user",
-            content: `You returned ${gotCount} post${gotCount === 1 ? "" : "s"}. I asked for ${postCount}. Return EXACTLY ${postCount} posts, separated by a line containing only '---', each with a '### Post K' header. No other text, no meta commentary.`,
+            content: `Return ONLY the ${postCount} LinkedIn post ${postCount === 1 ? "body" : "bodies separated by a line containing only '---'"}. No intro, no meta, no "here are", no "### Post" headers. Start directly with the first post's hook. Each post 800–1600 chars with 3–6 hashtags.`,
           },
         ];
         try {
           reply = await runChatWithWebTools({
             messages: retryMessages,
             model: resolvedModel,
-            temperature: 0.5,
+            temperature: 0.4,
+            max_tokens: 16000,
+            disableTools: true,
           });
         } catch (e) {
           console.error("[linkedin retry]", e);
+          break;
         }
       }
-      reply = truncateToPostCount(reply, postCount);
-    } else if (isLinkedInAuthoring) {
       reply = truncateToPostCount(reply, postCount);
     }
 
-    // Guard against preamble-only replies on any authoring turn.
-    if (isLinkedInAuthoring) {
-      const gotCount = splitPosts(reply).length;
-      const isPreambleOnly =
-        gotCount === 0 ||
-        (reply.trim().length < 400 && /^(here (are|is)|sure|okay|got it|below (are|is))/i.test(reply.trim()));
-      if (isPreambleOnly) {
-        try {
-          const hardRetry: ChatMessage[] = [
-            ...messages,
-            { role: "assistant", content: reply },
-            {
-              role: "user",
-              content: `Return ONLY the ${postCount} LinkedIn post ${postCount === 1 ? "body" : "bodies separated by a line containing only '---'"}. No intro line, no "here are", no meta. Start directly with the first post's hook.`,
-            },
-          ];
-          reply = await runChatWithWebTools({
-            messages: hardRetry,
-            model: resolvedModel,
-            temperature: 0.5,
-          });
-          reply = truncateToPostCount(reply, postCount);
-        } catch (e) {
-          console.error("[linkedin preamble retry]", e);
-        }
-      }
-    }
 
 
 

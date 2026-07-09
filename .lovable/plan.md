@@ -1,41 +1,50 @@
-## Fix "Add to Outbound" so chat-authored posts always file to Outbound
+# Fix: chat replies with preamble but no post bodies
 
-### Root cause
+## What's actually happening
 
-The button is already wired to `fileLinkedInDrafts` in `src/lib/outbound.functions.ts` (which inserts pending `outbound_linkedin` rows in `approvals`). The wiring works — the reason posts don't reach Outbound is:
+The assistant reply in your screenshot was literally:
 
-1. The assistant sometimes replies with only a preamble ("Here are two fresh posts…") and no post bodies. Nothing to file.
-2. `looksLikeLinkedInDraft` in `src/components/chat/MessageRow.tsx` requires ≥200 chars AND (`#hashtag` OR `---` OR `### Post N` OR `**Post N**`). Posts without hashtags / dividers never show the button.
-3. The button has no signal from the surrounding turn — it can't tell "this was a LinkedIn authoring turn" and only inspects the message text.
+```
+Here are two fresh posts on the same theme — distinct angles, same core message.
 
-### Changes
 
-**1. `src/components/chat/MessageRow.tsx` — always show the button on LinkedIn authoring turns**
-- Accept a new optional prop `linkedInAuthoring?: boolean` on `MessageRow` / `AddToOutboundButton`.
-- When `linkedInAuthoring` is true, skip `looksLikeLinkedInDraft` and render the button as long as the reply has ≥80 non-preamble chars.
-- Relax `looksLikeLinkedInDraft` for the fallback path: drop the `#hashtag`/divider requirement and use length ≥200 + not a pure question/apology.
-- Lower `splitPostsClient`'s min-chunk from 20 to keep short chunks; use the detected count for the label.
+---
+```
 
-**2. `src/routes/_authenticated/chat.tsx` — pass authoring flag per assistant message**
-- Track which assistant message IDs replied to a LinkedIn-authoring user turn (reuse the same regex logic as `ceo-chat.functions.ts`: `mentionsPost && authoringVerb`, `numericPostAsk`, or `parsePostCount ≥ 2` on the immediately preceding user message).
-- Pass `linkedInAuthoring` to `<MessageRow>` for those messages.
+Preamble + a stray `---` divider, then nothing. That's why "Add to Outbound" has nothing to file — the model never produced the post bodies. Two root causes combine:
 
-**3. `src/lib/outbound.functions.ts` — file even short/preamble-only content safely**
-- In `fileLinkedInDrafts`, lower the per-chunk filter from `>= 50` to `>= 30` and, if the split yields zero valid chunks, still file the whole text as one row (already the fallback — keep it, but ensure the min-length filter doesn't drop legitimate short posts).
-- Return `{ ids, count, errors, skipped }` so the toast can say "Nothing to file — reply had no post body" instead of a generic error.
+1. **Token truncation.** `runChatWithWebTools` calls `chatCompletion` with `DEFAULT_MAX_TOKENS = 8000`, and Grok 4.3 spends a large budget on hidden reasoning before writing output. When it runs out mid-generation, we get exactly this shape: intro sentence + first divider + cut-off.
+2. **Retry guards don't catch this shape.** In `src/serverfns/ceo-chat.functions.ts`:
+   - `splitPosts` filters chunks by `length >= 20`, so "Here are two…" (≈60 chars) counts as **1 post**, and the "under-delivered" retry at line 1341 fires — but the retry runs with the same 8k cap and often truncates again.
+   - The preamble guard at line 1369 requires `reply.trim().length < 400` AND a "here are/sure/okay" prefix. A reply that's 401 chars, or starts with "Below are…" or "I've drafted…", slips through.
+   - Both retries call `runChatWithWebTools`, which keeps `WEB_TOOLS` enabled — the model can burn its budget on a tool call and again run out of tokens before writing posts.
 
-**4. `src/serverfns/ceo-chat.functions.ts` — stop preamble-only replies**
-- In the LinkedIn authoring branch, after the retry, if `splitPosts(reply).length === 0` AND the reply is short (<400 chars) OR looks like preamble (`/^(here (are|is)|sure|okay|got it)/i`), do one more retry with a hard instruction: "Return ONLY the N post bodies separated by `---`. No intro line. Start directly with the first post's hook."
-- Keep the existing `truncateToPostCount` call.
+## Fix
 
-### Out of scope
+Edit `src/server/llm.server.ts`:
+- No signature change needed; `chatCompletion` already accepts `max_tokens`.
 
-- No change to the Outbound page, `approvals` table, or auto-send settings.
-- No change to `SendPlanButton` or the plan-filing path.
-- No change to email/reminder intent handling.
+Edit `src/serverfns/ceo-chat.functions.ts`:
+1. Add an optional `max_tokens` and `disableTools` param to `runChatWithWebTools`, forwarded to `chatCompletion`. When `disableTools` is set, skip the tools/tool_choice fields entirely (don't just no-op the loop).
+2. For the **initial** LinkedIn authoring call, pass `max_tokens: 16000` so a 2-post reply (≈2×1600 chars + reasoning) fits comfortably.
+3. Rewrite the under-delivered / preamble guard into one block that runs after the first call:
+   - Compute `bodies = splitPosts(reply)` **after stripping** a leading preamble paragraph (first block before the first blank line that matches `/^(here (are|is)|below (are|is)|sure|okay|got it|i(?:'|)ve (drafted|written)|check (these|this) out)/i`, or a paragraph shorter than 200 chars that contains no hashtag and no sentence-ending punctuation typical of a post hook).
+   - Also treat as under-delivered when the reply ends with a bare `---` and has fewer than `postCount` bodies of `length >= 200`, OR when total reply length < `postCount * 300`.
+   - When under-delivered, retry up to **2 times** with `disableTools: true`, `max_tokens: 16000`, temperature 0.4, and a stricter instruction: "Return ONLY the N post bodies separated by a line containing only `---`. No intro, no meta, no `### Post` headers. Start with the first post's hook. Each post 800–1600 chars with 3–6 hashtags."
+   - After retries, `truncateToPostCount` as today.
+4. Remove the now-redundant separate preamble guard (lines 1368–1394) — the unified guard replaces it.
 
-### Verification
+Also relax `splitPosts` in `src/server/chat-intent.server.ts`:
+- Raise the per-chunk minimum from `length >= 20` to `length >= 120` so a lone "Here are two fresh posts…" preamble is no longer counted as a post. This makes the under-delivered check honest for every downstream caller (including `fileLinkedInDrafts`).
 
-- Ask CEO chat: "write 2 linkedin posts about X". Confirm reply contains 2 post bodies, the "Add 2 posts to Outbound" button shows, clicking it toasts "Added 2 posts" and two pending rows appear on `/outbound`.
-- Ask: "one more post". Confirm authoring flag still triggers (previous assistant was LinkedIn) and button appears.
-- Regression: normal Q&A replies still show no Outbound button.
+## Out of scope
+
+- No changes to `MessageRow`, `AddToOutboundButton`, or `fileLinkedInDrafts` — the button already works once real bodies exist.
+- No changes to intent detection or the outbound schema.
+- No new models, no model swap; still Grok 4.3 (or whatever the user picked).
+
+## Verification
+
+- Ask "write me 2 LinkedIn posts about X" — reply contains 2 full bodies separated by `---`, and the button reads "Add 2 posts to Outbound".
+- Ask "write me 1 LinkedIn post about Y" — single body, button reads "Add to Outbound".
+- Regression: a normal (non-LinkedIn) reply still returns immediately without extra calls.

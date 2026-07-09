@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { FileText, Copy, Check, Send as SendIcon } from "lucide-react";
 import { VdnxLoader } from "@/components/VdnxLoader";
 import { ArtifactPill, type DocArtifact } from "@/components/ArtifactDrawer";
-import { filePlanFromChat } from "@/lib/outbound.functions";
+import { filePlanFromChat, fileLinkedInDrafts } from "@/lib/outbound.functions";
 import { copyToClipboard, formatBytes, type Attachment } from "@/lib/chat-helpers";
 
 export function MessageRow({

@@ -16,6 +16,7 @@ export function MessageRow({
   artifact,
   modelUsed,
   onOpenArtifact,
+  linkedInAuthoring = false,
 }: {
   role: "user" | "assistant";
   content: string;
@@ -23,7 +24,9 @@ export function MessageRow({
   artifact?: DocArtifact | null;
   modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
+  linkedInAuthoring?: boolean;
 }) {
+
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));
   const imageAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("image/"));
   const audioAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("audio/"));
@@ -173,7 +176,7 @@ export function MessageRow({
               </>
             )}
           </button>
-          <AddToOutboundButton content={content} />
+          <AddToOutboundButton content={content} force={linkedInAuthoring} />
           <SendPlanButton content={content} />
           {modelUsed && <ModelPill model={modelUsed} />}
         </div>
@@ -206,15 +209,18 @@ function looksLikeLinkedInDraft(text: string): boolean {
   const t = text.trim();
   if (t.length < 200) return false;
   if (/\?\s*$/.test(t)) return false;
-  if (/^(you'?ve already|here you go|to publish|copy post|the posts are|i can'?t|📨|✅)/i.test(t)) return false;
-  return /#\w+/.test(t) || /\n---+\n/.test(t) || /###\s*Post\s*\d/i.test(t) || /\*\*Post\s*\d/i.test(t);
+  if (/^(you'?ve already|to publish|copy post|the posts are|i can'?t|📨|✅)/i.test(t)) return false;
+  // Relaxed: length + not a pure question/apology is enough.
+  return true;
 }
 
-function AddToOutboundButton({ content }: { content: string }) {
+function AddToOutboundButton({ content, force = false }: { content: string; force?: boolean }) {
   const fileDrafts = useServerFn(fileLinkedInDrafts);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  if (!looksLikeLinkedInDraft(content)) return null;
+  const trimmed = content.trim();
+  const eligible = force ? trimmed.length >= 80 : looksLikeLinkedInDraft(content);
+  if (!eligible) return null;
   const n = splitPostsClient(content).length;
 
   async function handleClick() {
@@ -231,7 +237,7 @@ function AddToOutboundButton({ content }: { content: string }) {
           action: { label: "Review", onClick: () => { window.location.href = "/outbound"; } },
         });
       } else {
-        toast.error(res?.errors?.[0] ?? "Nothing was filed");
+        toast.error(res?.errors?.[0] ?? "Nothing to file — reply had no post body");
       }
     } catch (e: any) {
       toast.dismiss(t);
@@ -254,6 +260,7 @@ function AddToOutboundButton({ content }: { content: string }) {
     </button>
   );
 }
+
 
 function SendPlanButton({ content }: { content: string }) {
   const filePlan = useServerFn(filePlanFromChat);

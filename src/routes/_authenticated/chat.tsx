@@ -677,17 +677,34 @@ function ChatPage() {
               </div>
             )}
 
-            {messages.map((m) => (
-              <MessageRow
-                key={m.id}
-                role={m.role}
-                content={m.content}
-                attachments={m.attachments ?? []}
-                artifact={m.artifact_json ?? parseArtifactFromMarkdown(m.content)}
-                modelUsed={(m as any).model_used ?? null}
-                onOpenArtifact={setOpenArtifact}
-              />
-            ))}
+            {messages.map((m, idx) => {
+              let linkedInAuthoring = false;
+              if (m.role === "assistant") {
+                for (let i = idx - 1; i >= 0; i--) {
+                  const prev = messages[i];
+                  if (prev.role !== "user") continue;
+                  const c = prev.content.toLowerCase();
+                  const mentionsPost = /\b(linkedin|post|posts)\b/.test(c);
+                  const authoringVerb = /\b(write|draft|create|compose|generate|make|give me|give us|come up with|brainstorm|another|more|need|want|fresh|new)\b/.test(c);
+                  const numericPostAsk = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(more\s+)?(linkedin\s+)?(posts?|variants?|drafts?|options?|versions?|ideas?)\b/i.test(prev.content);
+                  linkedInAuthoring = (mentionsPost && authoringVerb) || numericPostAsk;
+                  break;
+                }
+              }
+              return (
+                <MessageRow
+                  key={m.id}
+                  role={m.role}
+                  content={m.content}
+                  attachments={m.attachments ?? []}
+                  artifact={m.artifact_json ?? parseArtifactFromMarkdown(m.content)}
+                  modelUsed={(m as any).model_used ?? null}
+                  onOpenArtifact={setOpenArtifact}
+                  linkedInAuthoring={linkedInAuthoring}
+                />
+              );
+            })}
+
 
             {pendingUser && (
               <MessageRow

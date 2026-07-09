@@ -1291,11 +1291,30 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           data.content,
           (history ?? []).slice(-6).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         );
-        if (intent.kind !== "none") {
+        // Only auto-file when the user is dispatching ready content. Authoring
+        // requests (write/draft/generate…) fall through to the normal LLM turn.
+        if (intent.kind !== "none" && intent.action === "file") {
+          // If required text/body is missing, try to pull it from the previous
+          // substantive assistant draft before asking the user.
+          if (intent.missing?.length) {
+            const lastAssistant = [...(history ?? [])].reverse().find(
+              (m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim().length >= 40 && !/\?\s*$/.test(m.content.trim()) && !/^📨\s+I can/i.test(m.content.trim()),
+            );
+            const draft = lastAssistant?.content?.trim();
+            if (draft) {
+              if (intent.kind === "linkedin" && intent.missing.includes("text")) {
+                intent.text = draft;
+                intent.missing = intent.missing.filter((f) => f !== "text");
+              } else if ((intent.kind === "email" || intent.kind === "reminder") && intent.missing.includes("body")) {
+                (intent as any).body = draft;
+                intent.missing = intent.missing.filter((f) => f !== "body");
+              }
+            }
+          }
           if (intent.missing?.length) {
             const ask = intent.missing.join(", ");
             return await saveAssistant(
-              `📨 I can ${intent.kind === "linkedin" ? "draft this LinkedIn post" : intent.kind === "reminder" ? "draft this reminder" : "draft this email"} — but I still need: **${ask}**. What should I use?`,
+              `📨 I can ${intent.kind === "linkedin" ? "file this LinkedIn post" : intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
             );
           }
 
@@ -1395,8 +1414,21 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
 
     // ── Normal CEO conversational reply ───────────────────────────────────
+    // Detect LinkedIn authoring intent to enforce exact post count.
+    const lowerContent = data.content.toLowerCase();
+    const isLinkedInAuthoring =
+      /\blinkedin\b/.test(lowerContent) &&
+      /\b(write|draft|create|compose|generate|make|give me|come up with|brainstorm)\b/.test(lowerContent);
+    let systemPrompt = CEO_SYSTEM;
+    let postCount = 1;
+    if (isLinkedInAuthoring) {
+      const { parsePostCount } = await import("@/server/chat-intent.server");
+      postCount = parsePostCount(data.content);
+      systemPrompt = `${CEO_SYSTEM}\n\n=== LINKEDIN AUTHORING RULE ===\nThe user asked for exactly ${postCount} LinkedIn post${postCount === 1 ? "" : "s"}. Produce exactly ${postCount} — no more, no fewer. Do NOT add extra variants, alternates, or "here's another version". ${postCount === 1 ? "Return a single post as plain markdown — no numbering, no '### Post 1' header." : `Separate posts with a line containing only '---' and label them '### Post 1', '### Post 2', … up to ${postCount}.`}`;
+    }
+
     const messages: ChatMessage[] = [
-      { role: "system", content: CEO_SYSTEM },
+      { role: "system", content: systemPrompt },
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {
@@ -1414,11 +1446,16 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }),
     ];
 
-    const reply = await runChatWithWebTools({
+    let reply = await runChatWithWebTools({
       messages,
       model: resolvedModel,
       temperature: 0.6,
     });
+
+    if (isLinkedInAuthoring && postCount >= 1) {
+      const { truncateToPostCount } = await import("@/server/chat-intent.server");
+      reply = truncateToPostCount(reply, postCount);
+    }
 
     return await saveAssistant(reply);
   });

@@ -1405,7 +1405,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
                   kind: "outbound_linkedin",
                   payload: rowPayload,
                 });
-                filedRows.push({ id: row.id, status: row.status });
+                filedRows.push({ id: row.id ?? "?", status: row.status });
               } catch (fileErr: any) {
                 filedRows.push({ id: "?", status: "error", err: fileErr?.message ?? "file failed" });
               }

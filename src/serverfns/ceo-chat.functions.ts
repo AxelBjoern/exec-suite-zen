@@ -1343,67 +1343,91 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
             };
             label = `reminder`;
           } else {
-            // linkedin — generate tagline + image, attach to payload
-            kind = "outbound_linkedin";
-            payload = { text: intent.text! };
-            label = `LinkedIn post`;
-            try {
-              const { callTool } = await import("@/server/llm.server");
-              const { result: tag } = await callTool<{ tagline: string; visual_prompt: string }>({
-                system:
-                  "You are a senior brand designer. Given a LinkedIn post, return a bold 4-8 word tagline (sentence case, no period) and a short visual concept (subject, mood, style, colors). No emojis, no hashtags.",
-                user: `Post text:\n"""${intent.text}"""`,
-                tool: {
-                  type: "function" as const,
-                  function: {
-                    name: "compose_tagline",
-                    description: "Tagline + visual prompt for a LinkedIn share image.",
-                    parameters: {
-                      type: "object",
-                      additionalProperties: false,
-                      required: ["tagline", "visual_prompt"],
-                      properties: {
-                        tagline: { type: "string" },
-                        visual_prompt: { type: "string" },
+            // linkedin — split into individual posts and file one row per post
+            const { splitPosts, parsePostCount } = await import("@/server/chat-intent.server");
+            const rawText = intent.text!;
+            const posts = splitPosts(rawText);
+            const requested = parsePostCount(data.content);
+            const wantAll = /\b(all|these|those|them|the\s+above|each|every)\b/i.test(data.content);
+            const count = wantAll ? posts.length : Math.min(Math.max(requested, 1), posts.length);
+            const selected = posts.slice(0, count);
+
+            const { getDesignRulesForUser } = await import("@/server/designRules.server");
+            const { generateLinkedInImageBase64 } = await import("@/server/linkedinImage.server");
+            const { callTool } = await import("@/server/llm.server");
+            const designRules = await getDesignRulesForUser({ userId, email: userEmail });
+
+            const filedRows: { id: string; status: string; err?: string }[] = [];
+            for (const postText of selected) {
+              const rowPayload: Record<string, any> = { text: postText };
+              try {
+                const { result: tag } = await callTool<{ tagline: string; visual_prompt: string }>({
+                  system:
+                    "You are a senior brand designer. Given a LinkedIn post, return a bold 4-8 word tagline (sentence case, no period) and a short visual concept (subject, mood, style, colors). No emojis, no hashtags.",
+                  user: `Post text:\n"""${postText}"""`,
+                  tool: {
+                    type: "function" as const,
+                    function: {
+                      name: "compose_tagline",
+                      description: "Tagline + visual prompt for a LinkedIn share image.",
+                      parameters: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["tagline", "visual_prompt"],
+                        properties: {
+                          tagline: { type: "string" },
+                          visual_prompt: { type: "string" },
+                        },
                       },
                     },
                   },
-                },
-                toolChoice: { name: "compose_tagline" },
-                model: "x-ai/grok-4.3",
-              });
-              payload.tagline = tag.tagline;
-              payload.visualPrompt = tag.visual_prompt;
-              try {
-                const { generateLinkedInImageBase64 } = await import("@/server/linkedinImage.server");
-                const { getDesignRulesForUser } = await import("@/server/designRules.server");
-                const designRules = await getDesignRulesForUser({ userId, email: userEmail });
-                payload.imageBase64 = await generateLinkedInImageBase64({
-                  tagline: tag.tagline,
-                  visualPrompt: tag.visual_prompt,
-                  designRules,
+                  toolChoice: { name: "compose_tagline" },
+                  model: "x-ai/grok-4.3",
                 });
-              } catch (imgErr: any) {
-                payload.imageError = imgErr?.message ?? "image generation failed";
+                rowPayload.tagline = tag.tagline;
+                rowPayload.visualPrompt = tag.visual_prompt;
+                try {
+                  rowPayload.imageBase64 = await generateLinkedInImageBase64({
+                    tagline: tag.tagline,
+                    visualPrompt: tag.visual_prompt,
+                    designRules,
+                  });
+                } catch (imgErr: any) {
+                  rowPayload.imageError = imgErr?.message ?? "image generation failed";
+                }
+              } catch (tagErr: any) {
+                rowPayload.imageError = tagErr?.message ?? "tagline generation failed";
               }
-            } catch (tagErr: any) {
-              payload.imageError = tagErr?.message ?? "tagline generation failed";
+              try {
+                const row = await fileOutboundFromChat({
+                  userId,
+                  userEmail,
+                  kind: "outbound_linkedin",
+                  payload: rowPayload,
+                });
+                filedRows.push({ id: row.id ?? "?", status: row.status });
+              } catch (fileErr: any) {
+                filedRows.push({ id: "?", status: "error", err: fileErr?.message ?? "file failed" });
+              }
             }
+
+            const ok = filedRows.filter((r) => r.status !== "error");
+            const failed = filedRows.filter((r) => r.status === "error");
+            const links = ok
+              .map((r) => `[#${r.id.slice(0, 8)} →](/outbound?filed=${r.id})`)
+              .join(", ");
+            const failNote = failed.length ? `\n\n_${failed.length} failed: ${failed.map((f) => f.err).join("; ")}_` : "";
+            return await saveAssistant(
+              `📨 Filed **${ok.length} LinkedIn post${ok.length === 1 ? "" : "s"}** in Outbound: ${links}${failNote}`,
+            );
           }
 
           const filed = await fileOutboundFromChat({ userId, userEmail, kind, payload });
           const status = filed.status === "sent" ? "✅ Sent" : "📨 Filed as pending";
-          const imgNote =
-            kind === "outbound_linkedin"
-              ? payload.imageBase64
-                ? "\n\n_Image generated and attached._"
-                : payload.imageError
-                  ? `\n\n_Image skipped: ${payload.imageError}_`
-                  : ""
-              : "";
           return await saveAssistant(
-            `${status} ${label} in Outbound (\`${filed.id?.slice(0, 8) ?? "?"}\`). **[Review →](/outbound?filed=${filed.id})**${imgNote}`,
+            `${status} ${label} in Outbound (\`${filed.id?.slice(0, 8) ?? "?"}\`). **[Review →](/outbound?filed=${filed.id})**`,
           );
+
         }
       } catch (e: any) {
         // intent detection / filing failure — fall through to normal reply but

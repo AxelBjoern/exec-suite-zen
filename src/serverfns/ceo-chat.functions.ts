@@ -1414,8 +1414,21 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
 
     // ── Normal CEO conversational reply ───────────────────────────────────
+    // Detect LinkedIn authoring intent to enforce exact post count.
+    const lowerContent = data.content.toLowerCase();
+    const isLinkedInAuthoring =
+      /\blinkedin\b/.test(lowerContent) &&
+      /\b(write|draft|create|compose|generate|make|give me|come up with|brainstorm)\b/.test(lowerContent);
+    let systemPrompt = CEO_SYSTEM;
+    let postCount = 1;
+    if (isLinkedInAuthoring) {
+      const { parsePostCount } = await import("@/server/chat-intent.server");
+      postCount = parsePostCount(data.content);
+      systemPrompt = `${CEO_SYSTEM}\n\n=== LINKEDIN AUTHORING RULE ===\nThe user asked for exactly ${postCount} LinkedIn post${postCount === 1 ? "" : "s"}. Produce exactly ${postCount} — no more, no fewer. Do NOT add extra variants, alternates, or "here's another version". ${postCount === 1 ? "Return a single post as plain markdown — no numbering, no '### Post 1' header." : `Separate posts with a line containing only '---' and label them '### Post 1', '### Post 2', … up to ${postCount}.`}`;
+    }
+
     const messages: ChatMessage[] = [
-      { role: "system", content: CEO_SYSTEM },
+      { role: "system", content: systemPrompt },
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {
@@ -1433,11 +1446,16 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }),
     ];
 
-    const reply = await runChatWithWebTools({
+    let reply = await runChatWithWebTools({
       messages,
       model: resolvedModel,
       temperature: 0.6,
     });
+
+    if (isLinkedInAuthoring && postCount >= 1) {
+      const { truncateToPostCount } = await import("@/server/chat-intent.server");
+      reply = truncateToPostCount(reply, postCount);
+    }
 
     return await saveAssistant(reply);
   });

@@ -176,7 +176,7 @@ export function MessageRow({
               </>
             )}
           </button>
-          <AddToOutboundButton content={content} />
+          <AddToOutboundButton content={content} force={linkedInAuthoring} />
           <SendPlanButton content={content} />
           {modelUsed && <ModelPill model={modelUsed} />}
         </div>

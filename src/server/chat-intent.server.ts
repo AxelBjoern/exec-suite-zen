@@ -126,14 +126,9 @@ export async function parseOutboundIntent(
         missing: missing.length ? missing : undefined,
       };
     }
-    // linkedin
-    if (!result.text) missing.push("text");
-    return {
-      kind: "linkedin",
-      action,
-      text: result.text || undefined,
-      missing: missing.length ? missing : undefined,
-    };
+    // linkedin filing is user-initiated via the "Add to Outbound" button.
+    if (result.kind === "linkedin") return { kind: "none" };
+    return { kind: "none" };
   } catch {
     return { kind: "none" };
   }

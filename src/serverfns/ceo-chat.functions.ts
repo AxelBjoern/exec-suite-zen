@@ -123,10 +123,12 @@ async function runChatWithWebTools(opts: {
   messages: ChatMessage[];
   model: string;
   temperature?: number;
+  max_tokens?: number;
+  disableTools?: boolean;
 }): Promise<string> {
   const msgs: any[] = [...opts.messages];
   const MAX_ITERS = 4;
-  let toolsDisabled = false;
+  let toolsDisabled = !!opts.disableTools;
   for (let i = 0; i < MAX_ITERS; i++) {
     let json: any;
     try {
@@ -135,6 +137,7 @@ async function runChatWithWebTools(opts: {
         ...(toolsDisabled ? {} : { tools: WEB_TOOLS as any, tool_choice: "auto" as const }),
         temperature: opts.temperature,
         model: opts.model,
+        ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
       });
     } catch (e: any) {
       // Model has no tool-capable endpoint (e.g. Claude Opus 4.7 on OpenRouter).
@@ -175,6 +178,7 @@ async function runChatWithWebTools(opts: {
     messages: msgs,
     temperature: opts.temperature,
     model: opts.model,
+    ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
   });
   return (json?.choices?.[0]?.message?.content ?? "").trim() || "(no reply)";
 }

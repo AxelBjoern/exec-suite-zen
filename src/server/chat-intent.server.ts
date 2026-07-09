@@ -174,7 +174,7 @@ export function splitPosts(markdown: string): string[] {
   const parts = markdown
     .split(/\n(?:---+|\*\*\*+)\n|\n(?=#{1,4}\s*Post\s*\d+)|\n(?=\*\*Post\s*\d+)/i)
     .map((p) => p.replace(/^#{1,4}\s*Post\s*\d+\s*[:\-]?\s*/i, "").replace(/^\*\*Post\s*\d+\*\*\s*[:\-]?\s*/i, "").trim())
-    .filter((p) => p.length >= 20);
+    .filter((p) => p.length >= 120);
   return parts.length ? parts : [markdown.trim()];
 }
 

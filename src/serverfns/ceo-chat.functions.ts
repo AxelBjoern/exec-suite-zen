@@ -1291,11 +1291,30 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           data.content,
           (history ?? []).slice(-6).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         );
-        if (intent.kind !== "none") {
+        // Only auto-file when the user is dispatching ready content. Authoring
+        // requests (write/draft/generate…) fall through to the normal LLM turn.
+        if (intent.kind !== "none" && intent.action === "file") {
+          // If required text/body is missing, try to pull it from the previous
+          // substantive assistant draft before asking the user.
+          if (intent.missing?.length) {
+            const lastAssistant = [...(history ?? [])].reverse().find(
+              (m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim().length >= 40 && !/\?\s*$/.test(m.content.trim()) && !/^📨\s+I can/i.test(m.content.trim()),
+            );
+            const draft = lastAssistant?.content?.trim();
+            if (draft) {
+              if (intent.kind === "linkedin" && intent.missing.includes("text")) {
+                intent.text = draft;
+                intent.missing = intent.missing.filter((f) => f !== "text");
+              } else if ((intent.kind === "email" || intent.kind === "reminder") && intent.missing.includes("body")) {
+                (intent as any).body = draft;
+                intent.missing = intent.missing.filter((f) => f !== "body");
+              }
+            }
+          }
           if (intent.missing?.length) {
             const ask = intent.missing.join(", ");
             return await saveAssistant(
-              `📨 I can ${intent.kind === "linkedin" ? "draft this LinkedIn post" : intent.kind === "reminder" ? "draft this reminder" : "draft this email"} — but I still need: **${ask}**. What should I use?`,
+              `📨 I can ${intent.kind === "linkedin" ? "file this LinkedIn post" : intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
             );
           }
 

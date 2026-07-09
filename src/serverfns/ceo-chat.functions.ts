@@ -1297,10 +1297,25 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           // If required text/body is missing, try to pull it from the previous
           // substantive assistant draft before asking the user.
           if (intent.missing?.length) {
-            const lastAssistant = [...(history ?? [])].reverse().find(
-              (m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim().length >= 40 && !/\?\s*$/.test(m.content.trim()) && !/^📨\s+I can/i.test(m.content.trim()),
-            );
-            const draft = lastAssistant?.content?.trim();
+            // Find the most recent assistant message that actually looks like a
+            // real draft (has hashtags OR post delimiters, ≥300 chars, not meta prose).
+            const META_RE = /^(you'?ve already|here you go|to publish|copy post|the posts are|i can'?t|as requested|they'?re polished|📨|✅)/i;
+            const looksLikeLinkedInDraft = (s: string) => {
+              const t = s.trim();
+              if (t.length < 300) return false;
+              if (META_RE.test(t)) return false;
+              return /#\w+/.test(t) || /\n---+\n/.test(t) || /###\s*Post\s*\d/i.test(t) || /\*\*Post\s*\d/i.test(t);
+            };
+            const looksSubstantive = (s: string) => {
+              const t = s.trim();
+              return t.length >= 40 && !/\?\s*$/.test(t) && !META_RE.test(t);
+            };
+            const rev = [...(history ?? [])].reverse();
+            const draftSource =
+              (intent.kind === "linkedin"
+                ? rev.find((m) => m.role === "assistant" && typeof m.content === "string" && looksLikeLinkedInDraft(m.content))
+                : rev.find((m) => m.role === "assistant" && typeof m.content === "string" && looksSubstantive(m.content)));
+            const draft = draftSource?.content?.trim();
             if (draft) {
               if (intent.kind === "linkedin" && intent.missing.includes("text")) {
                 intent.text = draft;
@@ -1311,12 +1326,19 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               }
             }
           }
+
           if (intent.missing?.length) {
+            if (intent.kind === "linkedin") {
+              return await saveAssistant(
+                `📨 I couldn't find drafted LinkedIn posts in this thread. Say **"draft 3 posts about X"** and I'll write them, then say **"post these"** to file.`,
+              );
+            }
             const ask = intent.missing.join(", ");
             return await saveAssistant(
-              `📨 I can ${intent.kind === "linkedin" ? "file this LinkedIn post" : intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
+              `📨 I can ${intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
             );
           }
+
 
           const { fileOutboundFromChat } = await import("@/lib/outbound.functions");
           const userId = handlerContext.userId;
@@ -1440,18 +1462,27 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // ── Normal CEO conversational reply ───────────────────────────────────
     // Detect LinkedIn authoring intent to enforce exact post count.
     const lowerContent = data.content.toLowerCase();
+    const { parsePostCount, truncateToPostCount, splitPosts } = await import("@/server/chat-intent.server");
+    const parsedCount = parsePostCount(data.content);
     const mentionsPost = /\b(linkedin|post|posts)\b/.test(lowerContent);
-    const authoringVerb = /\b(write|draft|create|compose|generate|make|give me|come up with|brainstorm|another|more)\b/.test(lowerContent);
-    // Also treat as LinkedIn authoring if the previous assistant message was a LinkedIn draft.
+    const authoringVerb = /\b(write|draft|create|compose|generate|make|give me|give us|come up with|brainstorm|another|more|need|want)\b/.test(lowerContent);
+    const numericPostAsk = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(more\s+)?(linkedin\s+)?(posts?|variants?|drafts?|options?|versions?|ideas?)\b/i.test(data.content);
     const prevAssistant = [...(history ?? [])].reverse().find((m) => m.role === "assistant")?.content ?? "";
-    const prevWasLinkedIn = /linkedin|#\w+|\n\n#[A-Za-z]/.test(prevAssistant) && prevAssistant.length > 200;
-    const isLinkedInAuthoring = (mentionsPost && authoringVerb) || (prevWasLinkedIn && authoringVerb);
+    const prevWasLinkedIn = /linkedin|#\w+|\n---\n|###\s*Post\s*\d/i.test(prevAssistant) && prevAssistant.length > 200;
+    const isLinkedInAuthoring =
+      (mentionsPost && authoringVerb) ||
+      (mentionsPost && parsedCount >= 2) ||
+      numericPostAsk ||
+      (prevWasLinkedIn && (authoringVerb || numericPostAsk));
     let systemPrompt = CEO_SYSTEM;
     let postCount = 1;
     if (isLinkedInAuthoring) {
-      const { parsePostCount } = await import("@/server/chat-intent.server");
-      postCount = parsePostCount(data.content);
-      systemPrompt = `${CEO_SYSTEM}\n\n=== LINKEDIN AUTHORING RULE ===\nThe user asked for exactly ${postCount} LinkedIn post${postCount === 1 ? "" : "s"}. Produce exactly ${postCount} — no more, no fewer. Do NOT add extra variants, alternates, or "here's another version". ${postCount === 1 ? "Return a single post as plain markdown — no numbering, no '### Post 1' header." : `Separate posts with a line containing only '---' and label them '### Post 1', '### Post 2', … up to ${postCount}.`}`;
+      postCount = parsedCount;
+      const rule =
+        postCount === 1
+          ? `=== LINKEDIN AUTHORING (MANDATORY) ===\nReturn EXACTLY 1 full LinkedIn post as plain markdown. No preamble, no meta commentary, no "here you go", no numbering, no '### Post 1' header. Just the post body (hook + body + CTA + 3–6 hashtags), 800–1600 chars.`
+          : `=== LINKEDIN AUTHORING (MANDATORY) ===\nProduce EXACTLY ${postCount} full LinkedIn posts. No preamble, no meta commentary, no "here you go", no summary, no refusals.\nFormat strictly:\n### Post 1\n<full post body with hashtags>\n---\n### Post 2\n<full post body with hashtags>\n---\n… up to ### Post ${postCount}.\nEvery post must stand alone (hook + body + CTA + 3–6 hashtags), 800–1600 chars. Never say "you already wrote these" — always output the ${postCount} posts.`;
+      systemPrompt = `${rule}\n\n${CEO_SYSTEM}`;
     }
 
     const messages: ChatMessage[] = [
@@ -1479,10 +1510,33 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       temperature: 0.6,
     });
 
-    if (isLinkedInAuthoring && postCount >= 1) {
-      const { truncateToPostCount } = await import("@/server/chat-intent.server");
+    if (isLinkedInAuthoring && postCount >= 2) {
+      // If the model under-delivered, retry once with a stricter instruction.
+      const gotCount = splitPosts(reply).length;
+      if (gotCount < postCount) {
+        const retryMessages: ChatMessage[] = [
+          ...messages,
+          { role: "assistant", content: reply },
+          {
+            role: "user",
+            content: `You returned ${gotCount} post${gotCount === 1 ? "" : "s"}. I asked for ${postCount}. Return EXACTLY ${postCount} posts, separated by a line containing only '---', each with a '### Post K' header. No other text, no meta commentary.`,
+          },
+        ];
+        try {
+          reply = await runChatWithWebTools({
+            messages: retryMessages,
+            model: resolvedModel,
+            temperature: 0.5,
+          });
+        } catch (e) {
+          console.error("[linkedin retry]", e);
+        }
+      }
+      reply = truncateToPostCount(reply, postCount);
+    } else if (isLinkedInAuthoring) {
       reply = truncateToPostCount(reply, postCount);
     }
+
 
     return await saveAssistant(reply);
   });

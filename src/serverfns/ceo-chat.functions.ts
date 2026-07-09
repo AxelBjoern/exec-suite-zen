@@ -1297,10 +1297,25 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           // If required text/body is missing, try to pull it from the previous
           // substantive assistant draft before asking the user.
           if (intent.missing?.length) {
-            const lastAssistant = [...(history ?? [])].reverse().find(
-              (m) => m.role === "assistant" && typeof m.content === "string" && m.content.trim().length >= 40 && !/\?\s*$/.test(m.content.trim()) && !/^📨\s+I can/i.test(m.content.trim()),
-            );
-            const draft = lastAssistant?.content?.trim();
+            // Find the most recent assistant message that actually looks like a
+            // real draft (has hashtags OR post delimiters, ≥300 chars, not meta prose).
+            const META_RE = /^(you'?ve already|here you go|to publish|copy post|the posts are|i can'?t|as requested|they'?re polished|📨|✅)/i;
+            const looksLikeLinkedInDraft = (s: string) => {
+              const t = s.trim();
+              if (t.length < 300) return false;
+              if (META_RE.test(t)) return false;
+              return /#\w+/.test(t) || /\n---+\n/.test(t) || /###\s*Post\s*\d/i.test(t) || /\*\*Post\s*\d/i.test(t);
+            };
+            const looksSubstantive = (s: string) => {
+              const t = s.trim();
+              return t.length >= 40 && !/\?\s*$/.test(t) && !META_RE.test(t);
+            };
+            const rev = [...(history ?? [])].reverse();
+            const draftSource =
+              (intent.kind === "linkedin"
+                ? rev.find((m) => m.role === "assistant" && typeof m.content === "string" && looksLikeLinkedInDraft(m.content))
+                : rev.find((m) => m.role === "assistant" && typeof m.content === "string" && looksSubstantive(m.content)));
+            const draft = draftSource?.content?.trim();
             if (draft) {
               if (intent.kind === "linkedin" && intent.missing.includes("text")) {
                 intent.text = draft;
@@ -1311,6 +1326,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
               }
             }
           }
+
           if (intent.missing?.length) {
             const ask = intent.missing.join(", ");
             return await saveAssistant(

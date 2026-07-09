@@ -173,3 +173,13 @@ export function truncateToPostCount(markdown: string, n: number): string {
   return parts.slice(0, n).join("\n\n---\n\n").trim();
 }
 
+// Split an assistant draft into individual posts using the same delimiters
+// as truncateToPostCount. Returns [markdown] if no delimiters are found.
+export function splitPosts(markdown: string): string[] {
+  const parts = markdown
+    .split(/\n(?:---+|\*\*\*+)\n|\n(?=#{1,4}\s*Post\s*\d+)|\n(?=\*\*Post\s*\d+)/i)
+    .map((p) => p.replace(/^#{1,4}\s*Post\s*\d+\s*[:\-]?\s*/i, "").replace(/^\*\*Post\s*\d+\*\*\s*[:\-]?\s*/i, "").trim())
+    .filter((p) => p.length >= 20);
+  return parts.length ? parts : [markdown.trim()];
+}
+

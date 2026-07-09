@@ -1,51 +1,37 @@
-## What's broken
+## Diagnosis
 
-Two related bugs in the LinkedIn flow:
+Two regressions from the last outbound intent changes in `src/server/chat-intent.server.ts` and `src/serverfns/ceo-chat.functions.ts`:
 
-**Bug A — outbound stub swallows authoring requests.**
-`src/serverfns/ceo-chat.functions.ts` (~L1287–1300) sends every user message through `parseOutboundIntent` (`src/server/chat-intent.server.ts`). The classifier tags "write a LinkedIn post about X" as `kind: linkedin`, sees no post text embedded in the message, marks `text` as missing, and returns "I still need: text." The LLM never sees the request, so it never writes anything.
-
-**Bug B — the model ignores the requested count.**
-When authoring does run, the system prompt / post-processing produces multiple posts even when the user asked for one (you asked for one, got three). The count in the user's message ("one", "a post", "three posts", "5 variants") must drive the output exactly.
+1. **Chat feels broken / stalls.** The classifier SYSTEM prompt now says *"Quantity cues (‘a post’, ‘three posts’, ‘5 options’) always mean action='generate'"* and Grok is called on almost every user turn. It hijacks normal messages and, worse, forces `kind='none'` for anything with a number — so even the "post these" replies never reach the filer.
+2. **No LinkedIn post is filed to /outbound.** When the user says "post these three on linkedin" after seeing a 3-post draft:
+   - The classifier returns `kind='none'` (quantity cue rule above) → no filing path runs.
+   - Even when it does classify as `linkedin` + `action='file'`, the code files a **single** `outbound_linkedin` row using the whole previous assistant message as `text`, so 3 requested posts become 1 blob.
 
 ## Fix
 
-### 1. `src/server/chat-intent.server.ts`
-- Add `action: "file" | "generate" | "unknown"` to the classifier tool + SYSTEM prompt.
-  - *send / post / publish / schedule / share this / file* → `file`.
-  - *write / draft / create / compose / generate / make / give me / help me with* → `generate`.
-  - Any quantity cue ("a post", "one post", "three posts", "5 options") → force `generate`.
-- Only report `email` / `linkedin` / `reminder` when the user is dispatching existing content. Authoring requests return `kind='none'` or `action='generate'`.
+### `src/server/chat-intent.server.ts`
+- Remove the "quantity cues always = generate" rule. Distinguish by verb only:
+  - `file` verbs: send, post, publish, file, ship, share, schedule + "these/those/them/above/all of them".
+  - `generate` verbs: write, draft, compose, create, generate, make, give me.
+- Keep the `action==='generate' → kind='none'` short-circuit in `parseOutboundIntent`.
+- Add a fast pre-check: if the text has no dispatch verb AND no `@mention`, return `{kind:'none'}` without calling the LLM. Keeps normal chat fast and stops the classifier from meddling.
+- Reuse existing `parsePostCount` to detect how many posts the user is filing ("post these 3", "file all three").
 
-### 2. `src/serverfns/ceo-chat.functions.ts` — outbound intent block
-- If `intent.action !== 'file'` → skip the stub, fall through to the normal LLM turn so the model actually reads the message.
-- If `intent.action === 'file'` and text/body missing:
-  - Pull from the previous assistant message if it contains a substantive draft (≥ 40 chars, not a question/stub).
-  - Otherwise keep today's "I still need X" prompt.
-- Same `action` gate for email/reminder. Missing *recipient* on a real send still asks.
+### `src/serverfns/ceo-chat.functions.ts` (outbound auto-file block, ~1284–1413)
+- When `intent.kind === 'linkedin'` and `action === 'file'`:
+  1. Pull the previous substantive assistant message (existing lookup).
+  2. Split it into posts using the same delimiters as `truncateToPostCount` (`---`, `### Post N`, `**Post N**`).
+  3. Determine `count = min(parsePostCount(user msg), splitPosts.length)`; default to all split posts when the user said "these/all/them".
+  4. For each post text: generate tagline + visual prompt + image, then call `fileOutboundFromChat` once per post.
+  5. Aggregate results into a single assistant reply: `📨 Filed 3 LinkedIn posts in Outbound: [#a1b2 →](…), [#c3d4 →](…), [#e5f6 →](…)`.
+- For `email` / `reminder`: unchanged single-row flow.
+- Keep the "missing text falls back to previous assistant draft" logic, but only use it when the split produced ≥1 post.
 
-### 3. Respect the requested post count (Bug B)
-Add a small `parsePostCount(userText)` helper used only when the LLM turn is producing LinkedIn content:
-- Detect explicit numerics ("1", "2", "3", "one", "two", "three", "a", "an", "a couple" → 2, "a few" → 3). Default to **1** if no count is given.
-- Pass the resolved count into the LinkedIn authoring system prompt as a hard rule: *"Produce exactly N post(s). Do not produce more, do not produce variants."*
-- In the response post-processor for LinkedIn, if the model returned more than N clearly-separated posts (delimiters like `### Post`, `---`, `Post 1/2/3`), truncate to the first N and log that it was over-produced.
-- Never auto-multiply: if the user asked for one, ship one.
-
-### 4. Guardrails
-- Messages < 8 chars or starting with an already-handled `@mention` skip `parseOutboundIntent`.
-- When in doubt, fall through to the model — never let the outbound stub swallow a message the LLM should have answered.
-
-## Result
-
-- "write a LinkedIn post about X" → **one** post.
-- "write three LinkedIn posts about X" → exactly **three** posts.
-- "post this on LinkedIn: <text>" → files to /outbound.
-- "post this" after a draft → files that draft.
-- Missing recipient on a real send still asks.
+### Guardrail
+- Wrap the whole outbound block so any failure logs and falls through to the normal LLM reply (already partially done) — make sure the fast pre-check runs first so 99% of chat turns skip the classifier entirely and behave exactly as before.
 
 ## Files touched
+- `src/server/chat-intent.server.ts` — prompt + pre-check.
+- `src/serverfns/ceo-chat.functions.ts` — multi-post filing loop + aggregated reply.
 
-- `src/server/chat-intent.server.ts` — add `action`, tighten prompt.
-- `src/serverfns/ceo-chat.functions.ts` — gate auto-file on `action === 'file'`, add previous-draft fallback, add `parsePostCount` + enforce N in LinkedIn authoring prompt + truncate over-production.
-
-No UI, schema, or unrelated flow changes.
+No schema or UI changes.

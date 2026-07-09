@@ -16,6 +16,7 @@ export function MessageRow({
   artifact,
   modelUsed,
   onOpenArtifact,
+  linkedInAuthoring = false,
 }: {
   role: "user" | "assistant";
   content: string;
@@ -23,7 +24,9 @@ export function MessageRow({
   artifact?: DocArtifact | null;
   modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
+  linkedInAuthoring?: boolean;
 }) {
+
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));
   const imageAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("image/"));
   const audioAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("audio/"));

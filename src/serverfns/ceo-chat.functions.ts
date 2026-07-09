@@ -1365,6 +1365,35 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       reply = truncateToPostCount(reply, postCount);
     }
 
+    // Guard against preamble-only replies on any authoring turn.
+    if (isLinkedInAuthoring) {
+      const gotCount = splitPosts(reply).length;
+      const isPreambleOnly =
+        gotCount === 0 ||
+        (reply.trim().length < 400 && /^(here (are|is)|sure|okay|got it|below (are|is))/i.test(reply.trim()));
+      if (isPreambleOnly) {
+        try {
+          const hardRetry: ChatMessage[] = [
+            ...messages,
+            { role: "assistant", content: reply },
+            {
+              role: "user",
+              content: `Return ONLY the ${postCount} LinkedIn post ${postCount === 1 ? "body" : "bodies separated by a line containing only '---'"}. No intro line, no "here are", no meta. Start directly with the first post's hook.`,
+            },
+          ];
+          reply = await runChatWithWebTools({
+            messages: hardRetry,
+            model: resolvedModel,
+            temperature: 0.5,
+          });
+          reply = truncateToPostCount(reply, postCount);
+        } catch (e) {
+          console.error("[linkedin preamble retry]", e);
+        }
+      }
+    }
+
+
 
     return await saveAssistant(reply);
   });

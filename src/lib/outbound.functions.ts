@@ -453,6 +453,29 @@ export const requestLinkedIn = createServerFn({ method: "POST" })
     return fileRequest(userId, claims?.email, "outbound_linkedin", data);
   });
 
+// Bulk-file assistant drafts from chat. Splits on `---` / `### Post N` /
+// `**Post N**` and files one pending outbound_linkedin row per chunk.
+export const fileLinkedInDrafts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ text: z.string().min(1).max(60000) }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { userId, claims } = context as { userId: string; claims: { email?: string } };
+    const { splitPosts } = await import("@/server/chat-intent.server");
+    const chunks = splitPosts(data.text).filter((p) => p.trim().length >= 50);
+    const posts = chunks.length ? chunks : [data.text.trim()];
+    const ids: string[] = [];
+    const errors: string[] = [];
+    for (const text of posts) {
+      try {
+        const row = await fileRequest(userId, claims?.email, "outbound_linkedin", { text });
+        if (row.id) ids.push(row.id);
+      } catch (e: any) {
+        errors.push(e?.message ?? "file failed");
+      }
+    }
+    return { ids, count: ids.length, errors };
+  });
+
 // ── My requests list ─────────────────────────────────────────────────────
 export const listMyRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

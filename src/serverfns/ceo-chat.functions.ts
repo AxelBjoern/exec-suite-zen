@@ -1416,9 +1416,12 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     // ── Normal CEO conversational reply ───────────────────────────────────
     // Detect LinkedIn authoring intent to enforce exact post count.
     const lowerContent = data.content.toLowerCase();
-    const isLinkedInAuthoring =
-      /\blinkedin\b/.test(lowerContent) &&
-      /\b(write|draft|create|compose|generate|make|give me|come up with|brainstorm)\b/.test(lowerContent);
+    const mentionsPost = /\b(linkedin|post|posts)\b/.test(lowerContent);
+    const authoringVerb = /\b(write|draft|create|compose|generate|make|give me|come up with|brainstorm|another|more)\b/.test(lowerContent);
+    // Also treat as LinkedIn authoring if the previous assistant message was a LinkedIn draft.
+    const prevAssistant = [...(history ?? [])].reverse().find((m) => m.role === "assistant")?.content ?? "";
+    const prevWasLinkedIn = /linkedin|#\w+|\n\n#[A-Za-z]/.test(prevAssistant) && prevAssistant.length > 200;
+    const isLinkedInAuthoring = (mentionsPost && authoringVerb) || (prevWasLinkedIn && authoringVerb);
     let systemPrompt = CEO_SYSTEM;
     let postCount = 1;
     if (isLinkedInAuthoring) {

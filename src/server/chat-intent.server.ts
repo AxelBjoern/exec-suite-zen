@@ -139,20 +139,25 @@ export async function parseOutboundIntent(
 // Parse an explicit post count from the user's message. Defaults to 1.
 export function parsePostCount(userText: string): number {
   const t = userText.toLowerCase();
-  // digit form: "3 posts", "write 5 linkedin"
-  const digit = t.match(/\b(\d{1,2})\s*(?:linkedin\s+)?(?:post|posts|variants|versions|options|drafts|ideas)\b/);
-  if (digit) {
-    const n = parseInt(digit[1], 10);
-    if (n >= 1 && n <= 20) return n;
-  }
   const words: Record<string, number> = {
     one: 1, two: 2, three: 3, four: 4, five: 5,
     six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   };
-  const wordMatch = t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:linkedin\s+)?(?:post|posts|variants|versions|options|drafts|ideas)\b/);
-  if (wordMatch) return words[wordMatch[1]];
-  if (/\ba\s+couple\s+(?:of\s+)?(?:linkedin\s+)?(?:post|posts)\b/.test(t)) return 2;
-  if (/\ba\s+few\s+(?:linkedin\s+)?(?:post|posts)\b/.test(t)) return 3;
+  // digit form: "3 posts", "write 5 linkedin", or bare "write 3"
+  const digit = t.match(/\b(\d{1,2})\s*(?:more\s+)?(?:linkedin\s+)?(?:post|posts|variants|versions|options|drafts|ideas)?\b/);
+  if (digit) {
+    const n = parseInt(digit[1], 10);
+    if (n >= 1 && n <= 20 && /\b(write|draft|create|compose|generate|make|give|need|want|another|more|post|posts|linkedin)\b/.test(t)) return n;
+  }
+  const wordMatch = t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+)?(?:linkedin\s+)?(?:post|posts|variants|versions|options|drafts|ideas)?\b/);
+  if (wordMatch) {
+    // Only accept bare word count when authoring/post context present.
+    if (/\b(post|posts|linkedin|variants|versions|options|drafts|ideas)\b/.test(t) || /\b(write|draft|create|compose|generate|make|give)\b/.test(t)) {
+      return words[wordMatch[1]];
+    }
+  }
+  if (/\ba\s+couple\s+(?:of\s+)?(?:linkedin\s+)?(?:post|posts)?\b/.test(t)) return 2;
+  if (/\ba\s+few\s+(?:linkedin\s+)?(?:post|posts)?\b/.test(t)) return 3;
   return 1;
 }
 

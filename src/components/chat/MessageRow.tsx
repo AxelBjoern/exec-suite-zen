@@ -194,6 +194,67 @@ function ModelPill({ model }: { model: string }) {
   );
 }
 
+function splitPostsClient(text: string): string[] {
+  const parts = text
+    .split(/\n(?:---+|\*\*\*+)\n|\n(?=#{1,4}\s*Post\s*\d+)|\n(?=\*\*Post\s*\d+)/i)
+    .map((p) => p.replace(/^#{1,4}\s*Post\s*\d+\s*[:\-]?\s*/i, "").replace(/^\*\*Post\s*\d+\*\*\s*[:\-]?\s*/i, "").trim())
+    .filter((p) => p.length >= 20);
+  return parts.length ? parts : [text.trim()];
+}
+
+function looksLikeLinkedInDraft(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 200) return false;
+  if (/\?\s*$/.test(t)) return false;
+  if (/^(you'?ve already|here you go|to publish|copy post|the posts are|i can'?t|📨|✅)/i.test(t)) return false;
+  return /#\w+/.test(t) || /\n---+\n/.test(t) || /###\s*Post\s*\d/i.test(t) || /\*\*Post\s*\d/i.test(t);
+}
+
+function AddToOutboundButton({ content }: { content: string }) {
+  const fileDrafts = useServerFn(fileLinkedInDrafts);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  if (!looksLikeLinkedInDraft(content)) return null;
+  const n = splitPostsClient(content).length;
+
+  async function handleClick() {
+    if (busy || done) return;
+    setBusy(true);
+    const t = toast.loading("Adding to Outbound…");
+    try {
+      const res: any = await fileDrafts({ data: { text: content } });
+      toast.dismiss(t);
+      const count = res?.count ?? 0;
+      if (count > 0) {
+        setDone(true);
+        toast.success(`Added ${count} post${count === 1 ? "" : "s"} to Outbound`, {
+          action: { label: "Review", onClick: () => { window.location.href = "/outbound"; } },
+        });
+      } else {
+        toast.error(res?.errors?.[0] ?? "Nothing was filed");
+      }
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e?.message ?? "Failed to add to Outbound");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy || done}
+      className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors disabled:opacity-60"
+      title="File this draft to Outbound as pending"
+    >
+      {busy ? <VdnxLoader size="xs" /> : done ? <Check className="h-3 w-3" /> : <SendIcon className="h-3 w-3" />}
+      {done ? "Added ✓" : busy ? "Adding…" : n > 1 ? `Add ${n} posts to Outbound` : "Add to Outbound"}
+    </button>
+  );
+}
+
 function SendPlanButton({ content }: { content: string }) {
   const filePlan = useServerFn(filePlanFromChat);
   const [busy, setBusy] = useState(false);

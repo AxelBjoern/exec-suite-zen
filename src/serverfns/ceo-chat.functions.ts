@@ -1328,11 +1328,17 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           }
 
           if (intent.missing?.length) {
+            if (intent.kind === "linkedin") {
+              return await saveAssistant(
+                `📨 I couldn't find drafted LinkedIn posts in this thread. Say **"draft 3 posts about X"** and I'll write them, then say **"post these"** to file.`,
+              );
+            }
             const ask = intent.missing.join(", ");
             return await saveAssistant(
-              `📨 I can ${intent.kind === "linkedin" ? "file this LinkedIn post" : intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
+              `📨 I can ${intent.kind === "reminder" ? "file this reminder" : "send this email"} — but I still need: **${ask}**. What should I use?`,
             );
           }
+
 
           const { fileOutboundFromChat } = await import("@/lib/outbound.functions");
           const userId = handlerContext.userId;

@@ -461,7 +461,7 @@ export const fileLinkedInDrafts = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId, claims } = context as { userId: string; claims: { email?: string } };
     const { splitPosts } = await import("@/server/chat-intent.server");
-    const chunks = splitPosts(data.text).filter((p) => p.trim().length >= 50);
+    const chunks = splitPosts(data.text).filter((p) => p.trim().length >= 30);
     const posts = chunks.length ? chunks : [data.text.trim()];
     const ids: string[] = [];
     const errors: string[] = [];

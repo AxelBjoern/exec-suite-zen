@@ -1382,8 +1382,9 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
     const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
+    const hasGithubUrl = /github\.com\/[^/\s]+\/[^/\s?#]+/i.test(data.content);
     let vdnxOverview = "";
-    if (detectsVdnxRepoIntent(data.content)) {
+    if (detectsVdnxRepoIntent(data.content) && !hasGithubUrl) {
       try {
         vdnxOverview = await getVdnxRepoOverview();
       } catch (e) {
@@ -1391,9 +1392,26 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    // Load the operator's saved GitHub PAT (if any) so tools can read their private repos.
+    const { getUserGithubToken } = await import("@/server/user-github.server");
+    const ghToken = await getUserGithubToken(context.userId);
+
+    // If the operator pasted a github URL, hint the tool loop at the parsed repo.
+    let repoHint = "";
+    if (hasGithubUrl) {
+      try {
+        const { parseRepoTarget } = await import("@/server/github.server");
+        const { repo, path } = parseRepoTarget(data.content.match(/github\.com\/[^\s)]+/i)![0]);
+        repoHint = `The operator referenced GitHub repo \`${repo}\`${path ? ` (path: ${path})` : ""}. Use the list_vdnx_dir/read_vdnx_file/search_vdnx_code tools with \`repo: "${repo}"\` to ground your answer in real files. ${ghToken ? "The operator's personal GitHub token is attached automatically." : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
+      } catch {
+        /* noop */
+      }
+    }
+
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
+      ...(repoHint ? [{ role: "system" as const, content: repoHint }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {
@@ -1415,6 +1433,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       messages,
       model: resolvedModel,
       temperature: 0.6,
+      githubToken: ghToken,
       ...(isLinkedInAuthoring ? { max_tokens: 16000 } : {}),
     });
 

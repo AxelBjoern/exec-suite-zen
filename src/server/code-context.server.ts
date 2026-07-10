@@ -158,3 +158,71 @@ export async function gatherVdnxContext(opts: {
 
   return { contextBlock: block, files, summary };
 }
+
+// ── VDNX repo intent detection + overview auto-inject ───────────────────────
+
+const VDNX_INTENT_RE =
+  /\bvdnx\s*(repo|repository|source|code|codebase|project)\b|\bvdnx\s+(?:src|app|edge|supabase)\b|\b(?:analyz|review|audit|inspect|read|check|look at|examine|explore|explain)\b[^.]{0,60}\bvdnx\b|\bin\s+(?:the\s+)?vdnx\b/i;
+
+export function detectsVdnxRepoIntent(prompt: string): boolean {
+  if (!prompt) return false;
+  return VDNX_INTENT_RE.test(prompt);
+}
+
+let overviewCache: { at: number; block: string } | null = null;
+const OVERVIEW_TTL_MS = 5 * 60_000;
+
+export async function getVdnxRepoOverview(): Promise<string> {
+  if (!process.env.GITHUB_TOKEN || !process.env.VDNX_REPO) return "";
+  const now = Date.now();
+  if (overviewCache && now - overviewCache.at < OVERVIEW_TTL_MS) return overviewCache.block;
+
+  const parts: string[] = [];
+  const grab = async (fn: () => Promise<string>) => {
+    try { return await fn(); } catch (e: any) { return `(unavailable: ${e?.message ?? "error"})`; }
+  };
+
+  const [rootList, srcList, pkg, readme] = await Promise.all([
+    grab(async () => {
+      const d = await listRepoDir("");
+      return d.entries.map(e => `${e.type === "dir" ? "📁" : "📄"} ${e.name}`).join("\n");
+    }),
+    grab(async () => {
+      const d = await listRepoDir("src");
+      return d.entries.map(e => `${e.type === "dir" ? "📁" : "📄"} ${e.name}`).join("\n");
+    }),
+    grab(async () => {
+      const f = await readRepoFile("package.json");
+      return f.content.slice(0, 2000);
+    }),
+    grab(async () => {
+      const f = await readRepoFile("README.md");
+      return f.content.slice(0, 2000);
+    }),
+  ]);
+
+  parts.push(
+    "=== VDNX REPO OVERVIEW (live) ===",
+    `Repo: ${process.env.VDNX_REPO}`,
+    "",
+    "--- root/ ---",
+    rootList,
+    "",
+    "--- src/ ---",
+    srcList,
+    "",
+    "--- package.json (excerpt) ---",
+    pkg,
+    "",
+    "--- README.md (excerpt) ---",
+    readme,
+    "=== END VDNX REPO OVERVIEW ===",
+    "",
+    "You have live read-only access to this repo via tools: list_vdnx_dir(path), read_vdnx_file(path), search_vdnx_code(query). USE them to ground every claim in actual file contents. NEVER ask the operator to paste repo context — fetch it yourself.",
+  );
+
+  const block = parts.join("\n");
+  overviewCache = { at: now, block };
+  return block;
+}
+

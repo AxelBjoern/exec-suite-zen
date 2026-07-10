@@ -152,6 +152,19 @@ async function runWebTool(name: string, args: any): Promise<unknown> {
         markdown: (page.markdown ?? "").slice(0, 6000),
       };
     }
+    if (name === "list_vdnx_dir") {
+      return await listRepoDir(String(args?.path ?? ""));
+    }
+    if (name === "read_vdnx_file") {
+      const p = String(args?.path ?? "").trim();
+      if (!p) return { error: "path is required" };
+      return await readRepoFile(p);
+    }
+    if (name === "search_vdnx_code") {
+      const q = String(args?.query ?? "").trim();
+      if (!q) return { error: "query is required" };
+      return await searchRepoCode(q);
+    }
     return { error: `unknown tool: ${name}` };
   } catch (e: any) {
     return { error: e?.message ?? "tool failed" };

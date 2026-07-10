@@ -1,22 +1,21 @@
-## Goal
-After saving a GitHub PAT, immediately probe a private repo the user names and confirm read access in the same UI action.
+## Fix: chat says "Repo inaccessible" while settings test succeeds
 
-## Changes
+**Root cause:** In `src/serverfns/ceo-chat.functions.ts` the `hasGithubUrl` branch passes the raw suffixed slug (e.g. `AxelBjoern/natax-sales-nexus-a3c1d323`) to the LLM with only a "if private you'll get 404" hint. Settings' test works because it eagerly probes and falls back to the alias (`natax-sales-nexus`). The chat leaves alias resolution up to the model, which refuses instead of retrying.
 
-**1. `src/server/user-github.server.ts`** — add `testUserRepoAccess(userId, repoUrl)`:
-- Parse `owner/repo` from a full GitHub URL (strip `.git`, trailing slash).
-- Load the user's decrypted token (`getUserGithubToken`).
-- Call `GET /repos/{owner}/{repo}` and `GET /repos/{owner}/{repo}/contents` (root) via `gh()` from `github.server.ts`.
-- Return `{ ok, private, defaultBranch, fileCount, error? }` — never throw for 4xx; return a clean error string (401/403/404 mapped to friendly hints).
+## Change
 
-**2. `src/lib/user-github.functions.ts`** — add `testMyRepoAccess` server function (auth-gated) wrapping the helper. Also extend `saveMyGithubToken` to accept optional `testRepoUrl` and return `{ status, test }` in one round-trip.
+Edit `src/serverfns/ceo-chat.functions.ts` around the current lines 1401–1411 (`repoHint` block). When `hasGithubUrl && ghToken`:
 
-**3. `src/routes/_authenticated/settings/connections.tsx`** — in `GithubCard`:
-- Add an optional **"Test repo URL"** input (persists in `localStorage` as `vdnx.gh.testRepo`) shown next to the token field with placeholder `https://github.com/owner/repo`.
-- On **Save token**, pass the test URL. On success show a green inline result: `✓ Read access confirmed — private repo, N files at root (main)`. On failure show a red inline result with the mapped hint (e.g. "Token valid but repo not visible — grant this repo to the fine-grained PAT").
-- Add a **"Test again"** button (visible when connected) that calls `testMyRepoAccess` without re-saving.
+1. Parse the pasted URL, probe `/repos/{slug}` server-side. On 404, call `findReadableRepoAlias` (already exported) and pivot to the resolved slug. Track an `aliasNote` string.
+2. Eagerly fetch a root `listRepoDir` + first README via `readRepoFile` on the resolved slug (mirrors `/repo` overview). Cap README at 4000 chars.
+3. Inject a new `system` message `repoOverview` alongside the existing `repoHint`, with an explicit line: **"You HAVE read access to this repo (confirmed above). NEVER say the repo is inaccessible."**
+4. On fetch failure, inject the real error text and instruct the model to report it verbatim instead of a generic refusal.
+5. Update `repoHint` to point the LLM at the **resolved** slug for any deeper tool calls.
 
-## Notes
-- Read-only: uses only `GET` endpoints — respects the VDNX read-only GitHub rule.
-- No schema changes.
-- Existing token save flow keeps working if the test URL is left blank (test is skipped, previous behavior).
+No changes to schemas, UI, or other files. `resolveReadableRepo` continues to backstop tool calls the model makes on the pasted slug.
+
+## Verification
+
+- Paste `https://github.com/AxelBjoern/natax-sales-nexus-a3c1d323` in the CEO chat → expect executive overview grounded in the real repo (root listing + README excerpt), not "Repo inaccessible."
+- Without a saved token, behavior is unchanged (existing hint still shown).
+- Real 401/404 from GitHub surfaces the exact reason instead of a refusal.

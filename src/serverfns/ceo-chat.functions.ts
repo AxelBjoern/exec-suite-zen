@@ -1398,13 +1398,46 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const { getUserGithubToken } = await import("@/server/user-github.server");
     const ghToken = await getUserGithubToken(context.userId);
 
-    // If the operator pasted a github URL, hint the tool loop at the parsed repo.
+    // If the operator pasted a github URL, pre-resolve the readable slug and eagerly
+    // ground the model with a root listing + README excerpt (mirrors /repo overview).
     let repoHint = "";
+    let repoOverview = "";
     if (hasGithubUrl) {
       try {
-        const { parseRepoTarget } = await import("@/server/github.server");
-        const { repo, path } = parseRepoTarget(data.content.match(/github\.com\/[^\s)]+/i)![0]);
-        repoHint = `The operator referenced GitHub repo \`${repo}\`${path ? ` (path: ${path})` : ""}. Use the list_vdnx_dir/read_vdnx_file/search_vdnx_code tools with \`repo: "${repo}"\` to ground your answer in real files. ${ghToken ? "The operator's personal GitHub token is attached automatically." : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
+        const { parseRepoTarget, findReadableRepoAlias, listRepoDir, readRepoFile } = await import("@/server/github.server");
+        const { repo: pastedRepo, path } = parseRepoTarget(data.content.match(/github\.com\/[^\s)]+/i)![0]);
+        let resolvedRepo = pastedRepo;
+        let aliasNote = "";
+        if (ghToken) {
+          try {
+            const probe = await fetch(`https://api.github.com/repos/${pastedRepo}`, {
+              headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${ghToken}`, "User-Agent": "VDNX-Agent-Bridge" },
+            });
+            if (probe.status === 404) {
+              const alias = await findReadableRepoAlias(pastedRepo, ghToken);
+              if (alias && alias.toLowerCase() !== pastedRepo.toLowerCase()) {
+                resolvedRepo = alias;
+                aliasNote = ` (resolved from pasted \`${pastedRepo}\`)`;
+              }
+            }
+          } catch { /* noop */ }
+          try {
+            const r = await listRepoDir(path || "", resolvedRepo, ghToken);
+            const lines = r.entries.map((e) => `- ${e.type === "dir" ? "📁" : "📄"} \`${e.path}\``).join("\n");
+            let readme = "";
+            const readmeEntry = r.entries.find((e) => /^readme(\.|$)/i.test(e.name));
+            if (readmeEntry) {
+              try {
+                const f = await readRepoFile(readmeEntry.path, resolvedRepo, ghToken);
+                readme = `\n\n--- README (\`${f.path}\`) ---\n${f.content.slice(0, 4000)}`;
+              } catch { /* noop */ }
+            }
+            repoOverview = `=== REPO CONTEXT (live from GitHub) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\n\n--- root listing ---\n${lines || "_(empty)_"}${readme}\n=== END REPO CONTEXT ===\n\nYou HAVE read access to this repo (confirmed above). Use list_vdnx_dir/read_vdnx_file/search_vdnx_code with \`repo: "${resolvedRepo}"\` for deeper reads. NEVER say the repo is inaccessible — it is.`;
+          } catch (e: any) {
+            repoOverview = `=== REPO CONTEXT (fetch failed) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\nError: ${e?.message ?? "unknown"}\n=== END REPO CONTEXT ===\n\nReport this exact error to the operator; do not say "Repo inaccessible" as a generic refusal.`;
+          }
+        }
+        repoHint = `The operator referenced GitHub repo \`${resolvedRepo}\`${aliasNote}${path ? ` (path: ${path})` : ""}. ${ghToken ? `Use the tools with \`repo: "${resolvedRepo}"\` for any deeper reads.` : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
       } catch {
         /* noop */
       }
@@ -1413,6 +1446,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
+      ...(repoOverview ? [{ role: "system" as const, content: repoOverview }] : []),
       ...(repoHint ? [{ role: "system" as const, content: repoHint }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {

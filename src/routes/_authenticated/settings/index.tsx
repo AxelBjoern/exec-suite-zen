@@ -3,8 +3,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { Settings as SettingsIcon, Plug, Mail, Linkedin, Github, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
+import { getMyGithubStatus } from "@/lib/user-github.functions";
 import { ensureOwnerRole } from "@/lib/outbound.functions";
 import {
   listAutoApproveRules,

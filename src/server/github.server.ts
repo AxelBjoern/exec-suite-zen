@@ -24,29 +24,38 @@ function normalizeRepo(repo?: string | null): string {
   return slug;
 }
 
-function headers(explicitToken?: string): Record<string, string> {
+function cleanToken(explicitToken?: string | null): string | undefined {
+  const token = (explicitToken ?? process.env.GITHUB_TOKEN ?? "")
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .replace(/^token\s+/i, "")
+    .replace(/^['\"]|['\"]$/g, "");
+  return token || undefined;
+}
+
+function headers(explicitToken?: string | null): Record<string, string> {
   const h: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "VDNX-Agent-Bridge",
   };
-  const token = explicitToken || process.env.GITHUB_TOKEN;
+  const token = cleanToken(explicitToken);
   if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
 async function gh(path: string, repoForError?: string, token?: string): Promise<any> {
+  const hasToken = !!cleanToken(token);
   const res = await fetch(`${API}${path}`, { headers: headers(token) });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     if (res.status === 404) {
-      const hint = token
+      const hint = hasToken
         ? `Your personal GitHub token can't see ${repoForError ?? "this repo"} (or it doesn't exist).`
         : `Repo ${repoForError ?? "target"} not found. If it's private, add a personal GitHub token in Settings → Connections.`;
       throw new Error(`GitHub 404: ${hint}`);
     }
     if (res.status === 401 || res.status === 403) {
-      const hasToken = !!(token || process.env.GITHUB_TOKEN);
       const hint = hasToken
         ? `GitHub rejected the token for ${repoForError ?? "this repo"} — check scopes (needs 'repo' or fine-grained Contents:Read).`
         : `Unauthenticated request rejected. Add a personal GitHub token in Settings → Connections to read private repos.`;

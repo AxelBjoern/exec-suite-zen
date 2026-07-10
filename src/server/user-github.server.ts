@@ -4,7 +4,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { verifyGithubToken, parseRepoTarget } from "@/server/github.server";
+import { verifyGithubToken, parseRepoTarget, findReadableRepoAlias } from "@/server/github.server";
 
 function encKey(): Buffer {
   const raw = process.env.GITHUB_TOKEN_ENC_KEY;
@@ -106,6 +106,7 @@ export async function getUserGithubToken(userId: string | null | undefined): Pro
 export type RepoAccessTest = {
   ok: boolean;
   repo: string;
+  resolvedFrom: string | null;
   private: boolean | null;
   defaultBranch: string | null;
   fileCount: number | null;
@@ -115,14 +116,15 @@ export type RepoAccessTest = {
 export async function testUserRepoAccess(userId: string, repoUrl: string): Promise<RepoAccessTest> {
   const token = await getUserGithubToken(userId);
   if (!token) {
-    return { ok: false, repo: repoUrl, private: null, defaultBranch: null, fileCount: null, error: "No GitHub token saved yet." };
+    return { ok: false, repo: repoUrl, resolvedFrom: null, private: null, defaultBranch: null, fileCount: null, error: "No GitHub token saved yet." };
   }
   let slug = repoUrl;
   try {
     slug = parseRepoTarget(repoUrl).repo;
   } catch (e: any) {
-    return { ok: false, repo: repoUrl, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Invalid repo URL" };
+    return { ok: false, repo: repoUrl, resolvedFrom: null, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Invalid repo URL" };
   }
+  const requestedSlug = slug;
 
   const h: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -132,18 +134,25 @@ export async function testUserRepoAccess(userId: string, repoUrl: string): Promi
   };
 
   try {
-    const repoRes = await fetch(`https://api.github.com/repos/${slug}`, { headers: h });
+    let repoRes = await fetch(`https://api.github.com/repos/${slug}`, { headers: h });
+    if (repoRes.status === 404) {
+      const alias = await findReadableRepoAlias(slug, token);
+      if (alias && alias.toLowerCase() !== slug.toLowerCase()) {
+        slug = alias;
+        repoRes = await fetch(`https://api.github.com/repos/${slug}`, { headers: h });
+      }
+    }
     if (!repoRes.ok) {
       const body = await repoRes.text().catch(() => "");
       const hint =
         repoRes.status === 404
-          ? `Token can't see ${slug}. If fine-grained, grant this repo access with Contents: Read-only. If classic PAT, needs 'repo' scope.`
+          ? `Token can't see ${slug}. If fine-grained, grant this exact repo access with Contents: Read-only. If classic PAT, needs 'repo' scope.`
           : repoRes.status === 401
           ? "Token rejected (401). Regenerate the PAT and try again."
           : repoRes.status === 403
           ? "Token forbidden (403). Check SSO authorization or scopes."
           : `GitHub ${repoRes.status}: ${body.slice(0, 160)}`;
-      return { ok: false, repo: slug, private: null, defaultBranch: null, fileCount: null, error: hint };
+      return { ok: false, repo: slug, resolvedFrom: slug !== requestedSlug ? requestedSlug : null, private: null, defaultBranch: null, fileCount: null, error: hint };
     }
     const repoJson: any = await repoRes.json();
 
@@ -157,12 +166,13 @@ export async function testUserRepoAccess(userId: string, repoUrl: string): Promi
     return {
       ok: true,
       repo: slug,
+      resolvedFrom: slug !== requestedSlug ? requestedSlug : null,
       private: !!repoJson?.private,
       defaultBranch: repoJson?.default_branch ?? null,
       fileCount,
       error: null,
     };
   } catch (e: any) {
-    return { ok: false, repo: slug, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Network error" };
+    return { ok: false, repo: slug, resolvedFrom: slug !== requestedSlug ? requestedSlug : null, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Network error" };
   }
 }

@@ -80,6 +80,7 @@ function Card({
 type RepoTest = {
   ok: boolean;
   repo: string;
+  resolvedFrom: string | null;
   private: boolean | null;
   defaultBranch: string | null;
   fileCount: number | null;
@@ -233,6 +234,11 @@ function GithubCard() {
                 <strong>{testResult.defaultBranch ?? "?"}</strong>
                 {testResult.fileCount != null ? ` · ${testResult.fileCount} entries at root` : ""}
               </div>
+              {testResult.resolvedFrom && (
+                <div className="mt-1 font-mono text-[11px] opacity-80">
+                  matched from requested repo {testResult.resolvedFrom}
+                </div>
+              )}
             </>
           ) : (
             <>

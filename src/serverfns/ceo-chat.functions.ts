@@ -1089,36 +1089,38 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         if (!target) throw new Error("Missing repo. Use owner/repo or a GitHub URL.");
 
         const { repo, path } = parseRepoTarget(target);
+        const { getUserGithubToken } = await import("@/server/user-github.server");
+        const ghToken = await getUserGithubToken(context.userId);
 
         let contextBlock = "";
         let userInstruction = "";
 
         if (verb === "ls" || verb === "list") {
-          const r = await listRepoDir(path, repo);
+          const r = await listRepoDir(path, repo, ghToken ?? undefined);
           const lines = r.entries.map((e) => `- ${e.type === "dir" ? "📁" : "📄"} \`${e.path}\`${e.size ? ` (${e.size}b)` : ""}`).join("\n");
           contextBlock = `Listing \`${r.repo}/${r.path || ""}\`:\n\n${lines || "_(empty)_"}`;
           userInstruction = `Summarize what this directory contains and what the repo likely does at a glance.`;
         } else if (verb === "cat" || verb === "read") {
           if (!path) throw new Error("/repo cat needs a file path.");
-          const f = await readRepoFile(path, repo);
+          const f = await readRepoFile(path, repo, ghToken ?? undefined);
           contextBlock = `File \`${f.repo}/${f.path}\` (${f.size} bytes${f.truncated ? ", truncated" : ""}):\n\n\`\`\`\n${f.content}\n\`\`\``;
           userInstruction = `Explain what this file does. Call out key entry points, risky parts, and suggested improvements (CEO-grade, terse).`;
         } else if (verb === "search" || verb === "find") {
           const q = extra || path;
           if (!q) throw new Error("/repo search needs a query.");
-          const r = await searchRepoCode(q, repo);
+          const r = await searchRepoCode(q, repo, ghToken ?? undefined);
           const lines = r.matches.map((m) => `- \`${m.path}\`${m.snippet ? ` — ${m.snippet.replace(/\s+/g, " ").slice(0, 160)}` : ""}`).join("\n");
           contextBlock = `Code search in \`${r.repo}\` for \`${r.query}\`:\n\n${lines || "_(no matches)_"}`;
           userInstruction = `Synthesize what these matches tell us. Recommend which files to open next.`;
         } else {
           // overview: list root + try README
-          const r = await listRepoDir(path || "", repo);
+          const r = await listRepoDir(path || "", repo, ghToken ?? undefined);
           const lines = r.entries.map((e) => `- ${e.type === "dir" ? "📁" : "📄"} \`${e.path}\``).join("\n");
           let readme = "";
           const readmeEntry = r.entries.find((e) => /^readme(\.|$)/i.test(e.name));
           if (readmeEntry) {
             try {
-              const f = await readRepoFile(readmeEntry.path, repo);
+              const f = await readRepoFile(readmeEntry.path, repo, ghToken ?? undefined);
               readme = `\n\n### README (\`${f.path}\`)\n\n${f.content.slice(0, 4000)}`;
             } catch { /* ignore */ }
           }

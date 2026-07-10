@@ -1369,8 +1369,20 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       systemPrompt = `${rule}\n\n${CEO_SYSTEM}`;
     }
 
+    // ── VDNX repo grounding: auto-inject live overview + directive ─────────
+    const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
+    let vdnxOverview = "";
+    if (detectsVdnxRepoIntent(data.content)) {
+      try {
+        vdnxOverview = await getVdnxRepoOverview();
+      } catch (e) {
+        console.error("[vdnx overview]", e);
+      }
+    }
+
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
+      ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {

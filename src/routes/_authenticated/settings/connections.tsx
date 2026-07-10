@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink } from "lucide-react";
 import { getConnectorStatus } from "@/lib/connections.functions";
-import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken } from "@/lib/user-github.functions";
+import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken, testMyRepoAccess } from "@/lib/user-github.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

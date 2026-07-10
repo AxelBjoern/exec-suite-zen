@@ -1375,7 +1375,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       (mentionsPost && parsedCount >= 2) ||
       numericPostAsk ||
       (prevWasLinkedIn && (authoringVerb || numericPostAsk));
-    let systemPrompt = CEO_SYSTEM;
+    let systemPrompt = ceoSystem;
     let postCount = 1;
     if (isLinkedInAuthoring) {
       postCount = parsedCount;
@@ -1383,28 +1383,41 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         postCount === 1
           ? `=== LINKEDIN AUTHORING (MANDATORY) ===\nReturn EXACTLY 1 full LinkedIn post as plain markdown. No preamble, no meta commentary, no "here you go", no numbering, no '### Post 1' header. Just the post body (hook + body + CTA + 3–6 hashtags), 800–1600 chars.`
           : `=== LINKEDIN AUTHORING (MANDATORY) ===\nProduce EXACTLY ${postCount} full LinkedIn posts. No preamble, no meta commentary, no "here you go", no summary, no refusals.\nFormat strictly:\n### Post 1\n<full post body with hashtags>\n---\n### Post 2\n<full post body with hashtags>\n---\n… up to ### Post ${postCount}.\nEvery post must stand alone (hook + body + CTA + 3–6 hashtags), 800–1600 chars. Never say "you already wrote these" — always output the ${postCount} posts.`;
-      systemPrompt = `${rule}\n\n${CEO_SYSTEM}`;
+      systemPrompt = `${rule}\n\n${ceoSystem}`;
     }
 
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
     const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
     const GH_URL_RE = /https?:\/\/github\.com\/[^\s)]+/i;
-    const hasGithubUrl = GH_URL_RE.test(data.content);
-    // Remember: if any earlier user message in this conversation referenced a github URL,
+    const GH_SLUG_RE = /(?:^|[\s(])([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=$|[\s),.!?])/i;
+    const extractGithubTarget = (text: string): string | null => {
+      const url = text.match(GH_URL_RE)?.[0];
+      if (url) return url;
+      const slug = text.match(GH_SLUG_RE)?.[1];
+      if (!slug) return null;
+      const [owner] = slug.split("/");
+      if (["api", "app", "auth", "components", "lib", "public", "routes", "server", "src"].includes(owner.toLowerCase())) return null;
+      if (!/\b(github|repo|repository|private|token|read|scan|rescan|analy[sz]e|code)\b/i.test(text)) return null;
+      return slug;
+    };
+    const currentGithubTarget = extractGithubTarget(data.content);
+    const hasGithubTarget = !!currentGithubTarget;
+    // Remember: if any earlier user message in this conversation referenced a github URL or owner/repo,
     // keep grounding follow-ups against it so the model doesn't "forget" the repo/token.
-    let stickyGithubUrl: string | null = null;
-    if (!hasGithubUrl && Array.isArray(history)) {
+    let stickyGithubTarget: string | null = null;
+    if (!hasGithubTarget && Array.isArray(history)) {
       for (let i = history.length - 1; i >= 0; i--) {
         const m: any = history[i];
         if (m?.role !== "user") continue;
         const src = typeof m.content === "string" ? m.content : "";
-        const found = src.match(GH_URL_RE);
-        if (found) { stickyGithubUrl = found[0]; break; }
+        const found = extractGithubTarget(src);
+        if (found) { stickyGithubTarget = found; break; }
       }
     }
-    const effectiveHasGithubUrl = hasGithubUrl || !!stickyGithubUrl;
+    const activeGithubTarget = currentGithubTarget ?? stickyGithubTarget;
+    const effectiveHasGithubTarget = !!activeGithubTarget;
     let vdnxOverview = "";
-    if (detectsVdnxRepoIntent(data.content) && !effectiveHasGithubUrl) {
+    if (detectsVdnxRepoIntent(data.content) && !effectiveHasGithubTarget) {
       try {
         vdnxOverview = await getVdnxRepoOverview();
       } catch (e) {
@@ -1416,15 +1429,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const { getUserGithubToken } = await import("@/server/user-github.server");
     const ghToken = await getUserGithubToken(context.userId);
 
-    // If the operator pasted a github URL (now or earlier in this conversation), pre-resolve
+    // If the operator pasted a github URL/slug (now or earlier in this conversation), pre-resolve
     // the readable slug and eagerly ground the model with a root listing + README excerpt.
     let repoHint = "";
     let repoOverview = "";
-    if (effectiveHasGithubUrl) {
+    if (effectiveHasGithubTarget) {
       try {
         const { parseRepoTarget, findReadableRepoAlias, listRepoDir, readRepoFile } = await import("@/server/github.server");
-        const urlSource = hasGithubUrl ? data.content.match(GH_URL_RE)![0] : stickyGithubUrl!;
-        const { repo: pastedRepo, path } = parseRepoTarget(urlSource);
+        const { repo: pastedRepo, path } = parseRepoTarget(activeGithubTarget!);
         let resolvedRepo = pastedRepo;
         let aliasNote = "";
         if (ghToken) {
@@ -1462,6 +1474,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    const hasLiveRepoContext = repoOverview.startsWith("=== REPO CONTEXT (live from GitHub via saved token)");
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
@@ -1477,9 +1490,13 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
             ],
           };
         }
+        const historicalContent =
+          hasLiveRepoContext && m.role === "assistant" && /repo[^\n]{0,80}inaccessible|inaccessible[^\n]{0,80}repo|GitHub 404|private-blocked/i.test(m.content)
+            ? "[Stale repo-access failure omitted: live saved-token access is now confirmed in the current system context.]"
+            : m.content;
         return {
           role: m.role as "user" | "assistant",
-          content: m.id === userRow.id ? userContentForModel : m.content,
+          content: m.id === userRow.id ? userContentForModel : historicalContent,
         };
       }),
     ];

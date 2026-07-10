@@ -1388,9 +1388,23 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
     const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
-    const hasGithubUrl = /github\.com\/[^/\s]+\/[^/\s?#]+/i.test(data.content);
+    const GH_URL_RE = /https?:\/\/github\.com\/[^\s)]+/i;
+    const hasGithubUrl = GH_URL_RE.test(data.content);
+    // Remember: if any earlier user message in this conversation referenced a github URL,
+    // keep grounding follow-ups against it so the model doesn't "forget" the repo/token.
+    let stickyGithubUrl: string | null = null;
+    if (!hasGithubUrl && Array.isArray(history)) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const m: any = history[i];
+        if (m?.role !== "user") continue;
+        const src = typeof m.content === "string" ? m.content : "";
+        const found = src.match(GH_URL_RE);
+        if (found) { stickyGithubUrl = found[0]; break; }
+      }
+    }
+    const effectiveHasGithubUrl = hasGithubUrl || !!stickyGithubUrl;
     let vdnxOverview = "";
-    if (detectsVdnxRepoIntent(data.content) && !hasGithubUrl) {
+    if (detectsVdnxRepoIntent(data.content) && !effectiveHasGithubUrl) {
       try {
         vdnxOverview = await getVdnxRepoOverview();
       } catch (e) {
@@ -1402,14 +1416,15 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const { getUserGithubToken } = await import("@/server/user-github.server");
     const ghToken = await getUserGithubToken(context.userId);
 
-    // If the operator pasted a github URL, pre-resolve the readable slug and eagerly
-    // ground the model with a root listing + README excerpt (mirrors /repo overview).
+    // If the operator pasted a github URL (now or earlier in this conversation), pre-resolve
+    // the readable slug and eagerly ground the model with a root listing + README excerpt.
     let repoHint = "";
     let repoOverview = "";
-    if (hasGithubUrl) {
+    if (effectiveHasGithubUrl) {
       try {
         const { parseRepoTarget, findReadableRepoAlias, listRepoDir, readRepoFile } = await import("@/server/github.server");
-        const { repo: pastedRepo, path } = parseRepoTarget(data.content.match(/github\.com\/[^\s)]+/i)![0]);
+        const urlSource = hasGithubUrl ? data.content.match(GH_URL_RE)![0] : stickyGithubUrl!;
+        const { repo: pastedRepo, path } = parseRepoTarget(urlSource);
         let resolvedRepo = pastedRepo;
         let aliasNote = "";
         if (ghToken) {

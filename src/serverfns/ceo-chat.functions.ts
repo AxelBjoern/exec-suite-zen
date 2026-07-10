@@ -1198,10 +1198,14 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
-    // Auto-fetch URLs pasted into a normal message (skip @mention dispatch and slash commands).
+    // Auto-fetch URLs pasted into a normal message (skip @mention dispatch, slash commands,
+    // and GitHub repo URLs — those must use the saved PAT/alias-aware repo bridge below.
+    // Public web fetching private GitHub URLs returns 404 and poisons the model into
+    // saying "repo inaccessible" even when Settings confirmed token access.
+    const isGithubRepoUrl = (url: string) => /github\.com\/[^/\s]+\/[^/\s?#]+/i.test(url);
     const isMention = /^@(board|[a-z]+)\s+/i.test(data.content);
     if (!isMention) {
-      const urls = extractUrls(data.content).slice(0, 3);
+      const urls = extractUrls(data.content).filter((u) => !isGithubRepoUrl(u)).slice(0, 3);
       if (urls.length) {
         const pages = await Promise.all(
           urls.map(async (u) => {
@@ -1432,7 +1436,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
                 readme = `\n\n--- README (\`${f.path}\`) ---\n${f.content.slice(0, 4000)}`;
               } catch { /* noop */ }
             }
-            repoOverview = `=== REPO CONTEXT (live from GitHub) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\n\n--- root listing ---\n${lines || "_(empty)_"}${readme}\n=== END REPO CONTEXT ===\n\nYou HAVE read access to this repo (confirmed above). Use list_vdnx_dir/read_vdnx_file/search_vdnx_code with \`repo: "${resolvedRepo}"\` for deeper reads. NEVER say the repo is inaccessible — it is.`;
+            repoOverview = `=== REPO CONTEXT (live from GitHub via saved token) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\n\n--- root listing ---\n${lines || "_(empty)_"}${readme}\n=== END REPO CONTEXT ===\n\nYou HAVE read access to this repo (confirmed above). The pasted repo may be an alias/suffixed URL; the readable repo is \`${resolvedRepo}\`. Use list_vdnx_dir/read_vdnx_file/search_vdnx_code with \`repo: "${resolvedRepo}"\` for deeper reads. NEVER say the repo is inaccessible, private-blocked, or needs public access when this live context is present.`;
           } catch (e: any) {
             repoOverview = `=== REPO CONTEXT (fetch failed) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\nError: ${e?.message ?? "unknown"}\n=== END REPO CONTEXT ===\n\nReport this exact error to the operator; do not say "Repo inaccessible" as a generic refusal.`;
           }

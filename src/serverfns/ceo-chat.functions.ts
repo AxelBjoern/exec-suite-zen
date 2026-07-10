@@ -1463,18 +1463,22 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
                 readme = `\n\n--- README (\`${f.path}\`) ---\n${f.content.slice(0, 4000)}`;
               } catch { /* noop */ }
             }
-            repoOverview = `=== REPO CONTEXT (live from GitHub via saved token) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\n\n--- root listing ---\n${lines || "_(empty)_"}${readme}\n=== END REPO CONTEXT ===\n\nYou HAVE read access to this repo (confirmed above). The pasted repo may be an alias/suffixed URL; the readable repo is \`${resolvedRepo}\`. Use list_vdnx_dir/read_vdnx_file/search_vdnx_code with \`repo: "${resolvedRepo}"\` for deeper reads. NEVER say the repo is inaccessible, private-blocked, or needs public access when this live context is present.`;
+            repoOverview = `=== REPO CONTEXT (live from GitHub via saved token) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\nAccepted pasted target: \`${pastedRepo}\`\n\n--- root listing ---\n${lines || "_(empty)_"}${readme}\n=== END REPO CONTEXT ===\n\nAUTHORITATIVE REPO RULES:\n- Saved-token read access is CONFIRMED by the live root listing above.\n- Treat \`${pastedRepo}\` as an accepted alias for \`${resolvedRepo}\`; do not call it wrong, missing, deleted, or inaccessible.\n- Do NOT ask the operator to confirm analyzing \`${resolvedRepo}\`; proceed automatically.\n- Use list_vdnx_dir/read_vdnx_file/search_vdnx_code with \`repo: "${resolvedRepo}"\` for deeper reads.\n- NEVER say the repo is inaccessible, private-blocked, nonexistent, or needs public access when this live context is present.`;
           } catch (e: any) {
             repoOverview = `=== REPO CONTEXT (fetch failed) ===\nRepo: \`${resolvedRepo}\`${aliasNote}\nError: ${e?.message ?? "unknown"}\n=== END REPO CONTEXT ===\n\nReport this exact error to the operator; do not say "Repo inaccessible" as a generic refusal.`;
           }
         }
-        repoHint = `The operator referenced GitHub repo \`${resolvedRepo}\`${aliasNote}${path ? ` (path: ${path})` : ""}. ${ghToken ? `Use the tools with \`repo: "${resolvedRepo}"\` for any deeper reads.` : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
+        repoHint = `The operator referenced GitHub repo \`${resolvedRepo}\`${aliasNote}${path ? ` (path: ${path})` : ""}. ${ghToken ? `Saved GitHub token is loaded. If the pasted target was \`${pastedRepo}\`, treat it as an alias and use \`repo: "${resolvedRepo}"\` for any deeper reads without asking for confirmation.` : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
       } catch {
         /* noop */
       }
     }
 
     const hasLiveRepoContext = repoOverview.startsWith("=== REPO CONTEXT (live from GitHub via saved token)");
+    const finalRepoDirective = hasLiveRepoContext
+      ? `FINAL AUTHORITATIVE REPO CONTEXT: live saved-token access is confirmed. The requested repo target is readable through the resolved repo shown above. Ignore any earlier assistant message claiming the repo does not exist, is inaccessible, needs confirmation, or cannot be scanned. Continue the analysis now using GitHub read tools if needed.`
+      : "";
+    const staleRepoFailureRe = /repo[^\n]{0,120}inaccessible|inaccessible[^\n]{0,120}repo|GitHub 404|private-blocked|does not exist|only repo that exists|previously readable|cannot be scanned|confirm (?:we|you) should analy[sz]e|name is incorrec/i;
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
@@ -1491,7 +1495,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           };
         }
         const historicalContent =
-          hasLiveRepoContext && m.role === "assistant" && /repo[^\n]{0,80}inaccessible|inaccessible[^\n]{0,80}repo|GitHub 404|private-blocked/i.test(m.content)
+          hasLiveRepoContext && m.role === "assistant" && staleRepoFailureRe.test(m.content)
             ? "[Stale repo-access failure omitted: live saved-token access is now confirmed in the current system context.]"
             : m.content;
         return {
@@ -1499,6 +1503,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           content: m.id === userRow.id ? userContentForModel : historicalContent,
         };
       }),
+      ...(finalRepoDirective ? [{ role: "system" as const, content: finalRepoDirective }] : []),
     ];
 
     let reply = await runChatWithWebTools({

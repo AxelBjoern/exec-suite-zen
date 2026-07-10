@@ -1383,7 +1383,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         postCount === 1
           ? `=== LINKEDIN AUTHORING (MANDATORY) ===\nReturn EXACTLY 1 full LinkedIn post as plain markdown. No preamble, no meta commentary, no "here you go", no numbering, no '### Post 1' header. Just the post body (hook + body + CTA + 3–6 hashtags), 800–1600 chars.`
           : `=== LINKEDIN AUTHORING (MANDATORY) ===\nProduce EXACTLY ${postCount} full LinkedIn posts. No preamble, no meta commentary, no "here you go", no summary, no refusals.\nFormat strictly:\n### Post 1\n<full post body with hashtags>\n---\n### Post 2\n<full post body with hashtags>\n---\n… up to ### Post ${postCount}.\nEvery post must stand alone (hook + body + CTA + 3–6 hashtags), 800–1600 chars. Never say "you already wrote these" — always output the ${postCount} posts.`;
-      systemPrompt = `${rule}\n\n${CEO_SYSTEM}`;
+      systemPrompt = `${rule}\n\n${ceoSystem}`;
     }
 
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
@@ -1474,6 +1474,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    const hasLiveRepoContext = repoOverview.startsWith("=== REPO CONTEXT (live from GitHub via saved token)");
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
@@ -1489,9 +1490,13 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
             ],
           };
         }
+        const historicalContent =
+          hasLiveRepoContext && m.role === "assistant" && /repo[^\n]{0,80}inaccessible|inaccessible[^\n]{0,80}repo|GitHub 404|private-blocked/i.test(m.content)
+            ? "[Stale repo-access failure omitted: live saved-token access is now confirmed in the current system context.]"
+            : m.content;
         return {
           role: m.role as "user" | "assistant",
-          content: m.id === userRow.id ? userContentForModel : m.content,
+          content: m.id === userRow.id ? userContentForModel : historicalContent,
         };
       }),
     ];

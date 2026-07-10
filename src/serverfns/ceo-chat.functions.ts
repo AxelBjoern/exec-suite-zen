@@ -89,10 +89,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "list_vdnx_dir",
-      description: "List files/folders in the VDNX repo at a given path. Use '' for root. Use this to ground any VDNX-code question.",
+      description: "List files/folders in a GitHub repo at the given path. Defaults to the VDNX repo when 'repo' is omitted. Pass 'repo' as 'owner/name' to target another repo (uses the operator's personal GitHub token when saved).",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "Repo-relative path. '' = root." } },
+        properties: {
+          path: { type: "string", description: "Repo-relative path. '' = root." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["path"],
         additionalProperties: false,
       },
@@ -102,10 +105,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "read_vdnx_file",
-      description: "Read a file from the VDNX repo. Content truncated at ~8k chars. Use this to ground claims about specific files.",
+      description: "Read a file from a GitHub repo. Content truncated at ~8k chars. Defaults to VDNX; pass 'repo' for another repo.",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "Repo-relative file path." } },
+        properties: {
+          path: { type: "string", description: "Repo-relative file path." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["path"],
         additionalProperties: false,
       },
@@ -115,10 +121,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "search_vdnx_code",
-      description: "GitHub code search across the VDNX repo. Returns up to 10 matches with snippets. Use to locate symbols/files.",
+      description: "GitHub code search. Defaults to VDNX; pass 'repo' for another repo.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "Code search query." } },
+        properties: {
+          query: { type: "string", description: "Code search query." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["query"],
         additionalProperties: false,
       },

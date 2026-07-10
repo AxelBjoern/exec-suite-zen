@@ -85,6 +85,45 @@ const WEB_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_vdnx_dir",
+      description: "List files/folders in the VDNX repo at a given path. Use '' for root. Use this to ground any VDNX-code question.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string", description: "Repo-relative path. '' = root." } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_vdnx_file",
+      description: "Read a file from the VDNX repo. Content truncated at ~8k chars. Use this to ground claims about specific files.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string", description: "Repo-relative file path." } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_vdnx_code",
+      description: "GitHub code search across the VDNX repo. Returns up to 10 matches with snippets. Use to locate symbols/files.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Code search query." } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
 ] as const;
 
 async function runWebTool(name: string, args: any): Promise<unknown> {
@@ -112,6 +151,19 @@ async function runWebTool(name: string, args: any): Promise<unknown> {
         description: page.description,
         markdown: (page.markdown ?? "").slice(0, 6000),
       };
+    }
+    if (name === "list_vdnx_dir") {
+      return await listRepoDir(String(args?.path ?? ""));
+    }
+    if (name === "read_vdnx_file") {
+      const p = String(args?.path ?? "").trim();
+      if (!p) return { error: "path is required" };
+      return await readRepoFile(p);
+    }
+    if (name === "search_vdnx_code") {
+      const q = String(args?.query ?? "").trim();
+      if (!q) return { error: "query is required" };
+      return await searchRepoCode(q);
     }
     return { error: `unknown tool: ${name}` };
   } catch (e: any) {
@@ -1317,8 +1369,20 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       systemPrompt = `${rule}\n\n${CEO_SYSTEM}`;
     }
 
+    // ── VDNX repo grounding: auto-inject live overview + directive ─────────
+    const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
+    let vdnxOverview = "";
+    if (detectsVdnxRepoIntent(data.content)) {
+      try {
+        vdnxOverview = await getVdnxRepoOverview();
+      } catch (e) {
+        console.error("[vdnx overview]", e);
+      }
+    }
+
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
+      ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {

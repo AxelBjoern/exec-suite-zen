@@ -32,6 +32,8 @@ function SettingsPage() {
 
   const settings = useQuery({ queryKey: ["my-settings"], queryFn: () => get() });
   const connectorStatus = useQuery({ queryKey: ["connector-status"], queryFn: () => status() });
+  const githubStatusFn = useServerFn(getMyGithubStatus);
+  const githubStatus = useQuery({ queryKey: ["my-github"], queryFn: () => githubStatusFn() });
 
   const [email, setEmail] = useState(false);
   const [li, setLi] = useState(false);

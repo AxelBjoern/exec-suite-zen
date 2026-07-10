@@ -1,42 +1,22 @@
-# Per-user GitHub read access
+## Goal
+After saving a GitHub PAT, immediately probe a private repo the user names and confirm read access in the same UI action.
 
-Right now the chat only sees repos the workspace `GITHUB_TOKEN` can read (that's why `AxelBjoern/natax-sales-nexus-a3c1d323` came back as "no context" — it's private and outside VDNX_REPO's scope). Fix: let each signed-in user attach their own GitHub Personal Access Token, and have the GitHub helpers prefer that token when the caller is authenticated.
+## Changes
 
-## What we'll build
+**1. `src/server/user-github.server.ts`** — add `testUserRepoAccess(userId, repoUrl)`:
+- Parse `owner/repo` from a full GitHub URL (strip `.git`, trailing slash).
+- Load the user's decrypted token (`getUserGithubToken`).
+- Call `GET /repos/{owner}/{repo}` and `GET /repos/{owner}/{repo}/contents` (root) via `gh()` from `github.server.ts`.
+- Return `{ ok, private, defaultBranch, fileCount, error? }` — never throw for 4xx; return a clean error string (401/403/404 mapped to friendly hints).
 
-1. **Table `user_github_tokens`** (Cloud migration)
-   - `user_id uuid PK` → `auth.users`
-   - `token_ciphertext text` (encrypted with `GITHUB_TOKEN_ENC_KEY` via `pgsodium`-style AES-GCM in a server helper — we'll use Node `crypto` in the server fn, not pgsodium, to keep it simple)
-   - `token_hint text` (last 4 chars, for UI)
-   - `scopes text[]`, `login text`, `created_at`, `updated_at`
-   - RLS: user can only select/insert/update/delete their own row. GRANTs to `authenticated` + `service_role`.
+**2. `src/lib/user-github.functions.ts`** — add `testMyRepoAccess` server function (auth-gated) wrapping the helper. Also extend `saveMyGithubToken` to accept optional `testRepoUrl` and return `{ status, test }` in one round-trip.
 
-2. **Secret** `GITHUB_TOKEN_ENC_KEY` (generated, 64-char) for at-rest encryption of PATs.
+**3. `src/routes/_authenticated/settings/connections.tsx`** — in `GithubCard`:
+- Add an optional **"Test repo URL"** input (persists in `localStorage` as `vdnx.gh.testRepo`) shown next to the token field with placeholder `https://github.com/owner/repo`.
+- On **Save token**, pass the test URL. On success show a green inline result: `✓ Read access confirmed — private repo, N files at root (main)`. On failure show a red inline result with the mapped hint (e.g. "Token valid but repo not visible — grant this repo to the fine-grained PAT").
+- Add a **"Test again"** button (visible when connected) that calls `testMyRepoAccess` without re-saving.
 
-3. **Server helpers** `src/server/user-github.server.ts`
-   - `saveUserGithubToken({ userId, token })` → validates via `GET /user`, stores scopes + login + last-4, encrypts token.
-   - `getUserGithubToken(userId)` → decrypts and returns raw token or null.
-   - `deleteUserGithubToken(userId)`.
-
-4. **Wire into `src/server/github.server.ts`**
-   - `headers()` becomes `headers(token?)`; accept an explicit token param through `listRepoDir` / `readRepoFile` / `searchRepoCode` / `parseRepoTarget` flows.
-   - Add a thin `withUserToken(userId, fn)` wrapper used by the chat tools: resolves user PAT, falls back to `GITHUB_TOKEN`.
-   - Keep read-only guarantee — no new write endpoints (respects core memory rule).
-
-5. **Chat tool loop (`src/server/code-context.server.ts` + `src/serverfns/ceo-chat.functions.ts`)**
-   - Pass `userId` from `requireSupabaseAuth` context into the tool executors so `list_vdnx_dir` / `read_vdnx_file` / `search_vdnx_code` use the user's PAT.
-   - Extend intent detection: when the prompt contains a `github.com/<owner>/<repo>` URL, parse it via `parseRepoTarget` and target that repo (not just VDNX). Add a `repo` arg to each tool schema (optional, defaults to VDNX_REPO).
-   - If the user has no PAT and the target repo 404/403s, return a friendly message telling them to add a PAT in Settings → Connections.
-
-6. **UI: Settings → Connections** (`src/routes/_authenticated/settings/connections.tsx`)
-   - New card "GitHub (personal)" alongside Gmail/LinkedIn.
-   - Server fns: `getUserGithubStatus`, `saveUserGithubToken`, `deleteUserGithubToken`.
-   - Input for `ghp_…` / `github_pat_…`, "Save", "Disconnect". Show `login`, scopes, and last-4 when connected.
-   - Link to GitHub PAT docs with recommended scope: `repo` (or fine-grained "Contents: Read" for chosen repos).
-
-## Out of scope
-- No write / push / PR endpoints for user tokens (still forbidden by core rule).
-- No org-wide OAuth app — PAT only for now; we can upgrade later.
-
-## Result
-Ask in chat: "read https://github.com/AxelBjoern/natax-sales-nexus-a3c1d323" → tools use axel's PAT, fetch the repo, ground the analysis in real files. Other users are unaffected and still see only what their own PAT (or the workspace token) allows.
+## Notes
+- Read-only: uses only `GET` endpoints — respects the VDNX read-only GitHub rule.
+- No schema changes.
+- Existing token save flow keeps working if the test URL is left blank (test is skipped, previous behavior).

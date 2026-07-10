@@ -135,7 +135,7 @@ const WEB_TOOLS = [
   },
 ] as const;
 
-async function runWebTool(name: string, args: any): Promise<unknown> {
+async function runWebTool(name: string, args: any, ghToken?: string | null): Promise<unknown> {
   try {
     if (name === "web_search") {
       const q = String(args?.query ?? "").trim();
@@ -161,18 +161,19 @@ async function runWebTool(name: string, args: any): Promise<unknown> {
         markdown: (page.markdown ?? "").slice(0, 6000),
       };
     }
+    const repoArg = args?.repo ? String(args.repo) : undefined;
     if (name === "list_vdnx_dir") {
-      return await listRepoDir(String(args?.path ?? ""));
+      return await listRepoDir(String(args?.path ?? ""), repoArg, ghToken ?? undefined);
     }
     if (name === "read_vdnx_file") {
       const p = String(args?.path ?? "").trim();
       if (!p) return { error: "path is required" };
-      return await readRepoFile(p);
+      return await readRepoFile(p, repoArg, ghToken ?? undefined);
     }
     if (name === "search_vdnx_code") {
       const q = String(args?.query ?? "").trim();
       if (!q) return { error: "query is required" };
-      return await searchRepoCode(q);
+      return await searchRepoCode(q, repoArg, ghToken ?? undefined);
     }
     return { error: `unknown tool: ${name}` };
   } catch (e: any) {
@@ -186,6 +187,7 @@ async function runChatWithWebTools(opts: {
   temperature?: number;
   max_tokens?: number;
   disableTools?: boolean;
+  githubToken?: string | null;
 }): Promise<string> {
   const msgs: any[] = [...opts.messages];
   const MAX_ITERS = 4;
@@ -225,7 +227,7 @@ async function runChatWithWebTools(opts: {
     for (const tc of toolCalls) {
       let args: any = {};
       try { args = JSON.parse(tc.function?.arguments ?? "{}"); } catch { args = {}; }
-      const result = await runWebTool(tc.function?.name ?? "", args);
+      const result = await runWebTool(tc.function?.name ?? "", args, opts.githubToken);
       msgs.push({
         role: "tool",
         tool_call_id: tc.id,

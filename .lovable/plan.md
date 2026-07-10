@@ -1,21 +1,30 @@
-## Fix: chat says "Repo inaccessible" while settings test succeeds
+## Problem
+Settings already confirms the pasted repo `AxelBjoern/natax-sales-nexus-a3c1d323` maps to the readable private repo `AxelBjoern/natax-sales-nexus`, but chat still lets the model treat the pasted slug as a separate missing repo and asks for confirmation.
 
-**Root cause:** In `src/serverfns/ceo-chat.functions.ts` the `hasGithubUrl` branch passes the raw suffixed slug (e.g. `AxelBjoern/natax-sales-nexus-a3c1d323`) to the LLM with only a "if private you'll get 404" hint. Settings' test works because it eagerly probes and falls back to the alias (`natax-sales-nexus`). The chat leaves alias resolution up to the model, which refuses instead of retrying.
+## Fix plan
+1. **Make alias resolution authoritative**
+   - When a pasted repo returns 404 but `findReadableRepoAlias` finds a readable match, treat the pasted repo as an alias, not as a failure.
+   - The chat should proceed with the resolved repo automatically.
 
-## Change
+2. **Stop the model from re-litigating the pasted slug**
+   - Move/duplicate the live repo context instruction after conversation history so it overrides old assistant messages.
+   - Add an explicit rule: `AxelBjoern/natax-sales-nexus-a3c1d323` is an accepted alias for `AxelBjoern/natax-sales-nexus`; do not ask for confirmation.
 
-Edit `src/serverfns/ceo-chat.functions.ts` around the current lines 1401–1411 (`repoHint` block). When `hasGithubUrl && ghToken`:
+3. **Filter stale wrong repo replies**
+   - Extend the stale-history filter to remove previous assistant messages saying:
+     - “does not exist”
+     - “only repo that exists”
+     - “cannot be scanned”
+     - “confirm we should analyze the clean repo”
+   - Only filter these when live saved-token repo context is confirmed.
 
-1. Parse the pasted URL, probe `/repos/{slug}` server-side. On 404, call `findReadableRepoAlias` (already exported) and pivot to the resolved slug. Track an `aliasNote` string.
-2. Eagerly fetch a root `listRepoDir` + first README via `readRepoFile` on the resolved slug (mirrors `/repo` overview). Cap README at 4000 chars.
-3. Inject a new `system` message `repoOverview` alongside the existing `repoHint`, with an explicit line: **"You HAVE read access to this repo (confirmed above). NEVER say the repo is inaccessible."**
-4. On fetch failure, inject the real error text and instruct the model to report it verbatim instead of a generic refusal.
-5. Update `repoHint` to point the LLM at the **resolved** slug for any deeper tool calls.
+4. **Fix agent GitHub tools too**
+   - Update `github.list_dir`, `github.read_file`, and `github.search_code` to use the signed-in user’s saved GitHub token via `owner_user_id`.
+   - Update descriptions from “public repo” to “GitHub repo readable with saved token”.
 
-No changes to schemas, UI, or other files. `resolveReadableRepo` continues to backstop tool calls the model makes on the pasted slug.
+5. **Keep read-only guarantees**
+   - No push, commit, PR, branch, or mutating GitHub API calls.
+   - Only read endpoints remain enabled.
 
-## Verification
-
-- Paste `https://github.com/AxelBjoern/natax-sales-nexus-a3c1d323` in the CEO chat → expect executive overview grounded in the real repo (root listing + README excerpt), not "Repo inaccessible."
-- Without a saved token, behavior is unchanged (existing hint still shown).
-- Real 401/404 from GitHub surfaces the exact reason instead of a refusal.
+## Expected result
+You can paste `AxelBjoern/natax-sales-nexus-a3c1d323`, and chat will automatically analyze `AxelBjoern/natax-sales-nexus` using your saved token without claiming the pasted repo is wrong or asking you to confirm.

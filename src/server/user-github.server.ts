@@ -63,9 +63,7 @@ export async function getUserGithubStatus(userId: string): Promise<UserGithubSta
 export async function saveUserGithubTokenValue(userId: string, token: string): Promise<UserGithubStatus> {
   const clean = token.trim();
   if (!clean) throw new Error("Token is required");
-  if (!/^(ghp_|github_pat_|gho_|ghs_|ghr_)/.test(clean)) {
-    throw new Error("That doesn't look like a GitHub token (expected ghp_… or github_pat_…).");
-  }
+  // Accept any non-empty token; verifyGithubToken below is the real gate.
   const info = await verifyGithubToken(clean);
   const { ciphertext, iv, tag } = encrypt(clean);
   const hint = clean.slice(-4);

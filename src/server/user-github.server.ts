@@ -4,7 +4,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { verifyGithubToken } from "@/server/github.server";
+import { verifyGithubToken, parseRepoTarget } from "@/server/github.server";
 
 function encKey(): Buffer {
   const raw = process.env.GITHUB_TOKEN_ENC_KEY;
@@ -100,5 +100,69 @@ export async function getUserGithubToken(userId: string | null | undefined): Pro
   } catch (e) {
     console.error("[user-github] decrypt failed", e);
     return null;
+  }
+}
+
+export type RepoAccessTest = {
+  ok: boolean;
+  repo: string;
+  private: boolean | null;
+  defaultBranch: string | null;
+  fileCount: number | null;
+  error: string | null;
+};
+
+export async function testUserRepoAccess(userId: string, repoUrl: string): Promise<RepoAccessTest> {
+  const token = await getUserGithubToken(userId);
+  if (!token) {
+    return { ok: false, repo: repoUrl, private: null, defaultBranch: null, fileCount: null, error: "No GitHub token saved yet." };
+  }
+  let slug = repoUrl;
+  try {
+    slug = parseRepoTarget(repoUrl).repo;
+  } catch (e: any) {
+    return { ok: false, repo: repoUrl, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Invalid repo URL" };
+  }
+
+  const h: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "VDNX-Agent-Bridge",
+    Authorization: `Bearer ${token}`,
+  };
+
+  try {
+    const repoRes = await fetch(`https://api.github.com/repos/${slug}`, { headers: h });
+    if (!repoRes.ok) {
+      const body = await repoRes.text().catch(() => "");
+      const hint =
+        repoRes.status === 404
+          ? `Token can't see ${slug}. If fine-grained, grant this repo access with Contents: Read-only. If classic PAT, needs 'repo' scope.`
+          : repoRes.status === 401
+          ? "Token rejected (401). Regenerate the PAT and try again."
+          : repoRes.status === 403
+          ? "Token forbidden (403). Check SSO authorization or scopes."
+          : `GitHub ${repoRes.status}: ${body.slice(0, 160)}`;
+      return { ok: false, repo: slug, private: null, defaultBranch: null, fileCount: null, error: hint };
+    }
+    const repoJson: any = await repoRes.json();
+
+    const contentsRes = await fetch(`https://api.github.com/repos/${slug}/contents/`, { headers: h });
+    let fileCount: number | null = null;
+    if (contentsRes.ok) {
+      const arr = await contentsRes.json().catch(() => null);
+      if (Array.isArray(arr)) fileCount = arr.length;
+    }
+
+    return {
+      ok: true,
+      repo: slug,
+      private: !!repoJson?.private,
+      defaultBranch: repoJson?.default_branch ?? null,
+      fileCount,
+      error: null,
+    };
+  } catch (e: any) {
+    return { ok: false, repo: slug, private: null, defaultBranch: null, fileCount: null, error: e?.message ?? "Network error" };
   }
 }

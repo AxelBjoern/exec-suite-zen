@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink } from "lucide-react";
 import { getConnectorStatus } from "@/lib/connections.functions";
-import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken } from "@/lib/user-github.functions";
+import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken, testMyRepoAccess } from "@/lib/user-github.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -77,28 +77,61 @@ function Card({
   );
 }
 
+type RepoTest = {
+  ok: boolean;
+  repo: string;
+  private: boolean | null;
+  defaultBranch: string | null;
+  fileCount: number | null;
+  error: string | null;
+};
+
 function GithubCard() {
   const qc = useQueryClient();
   const statusFn = useServerFn(getMyGithubStatus);
   const saveFn = useServerFn(saveMyGithubToken);
   const deleteFn = useServerFn(deleteMyGithubToken);
+  const testFn = useServerFn(testMyRepoAccess);
   const { data, isLoading } = useQuery({ queryKey: ["my-github"], queryFn: () => statusFn() });
   const [token, setToken] = useState("");
+  const [testRepo, setTestRepo] = useState("");
+  const [testResult, setTestResult] = useState<RepoTest | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("vdnx.gh.testRepo");
+      if (saved) setTestRepo(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("vdnx.gh.testRepo", testRepo);
+    } catch {}
+  }, [testRepo]);
 
   const save = useMutation({
-    mutationFn: (t: string) => saveFn({ data: { token: t } }),
-    onSuccess: () => {
+    mutationFn: (args: { token: string; testRepoUrl: string }) =>
+      saveFn({ data: { token: args.token, testRepoUrl: args.testRepoUrl } }),
+    onSuccess: (res) => {
       toast.success("GitHub token saved");
       setToken("");
+      setTestResult((res as any)?.test ?? null);
       qc.invalidateQueries({ queryKey: ["my-github"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to save token"),
+  });
+
+  const test = useMutation({
+    mutationFn: (url: string) => testFn({ data: { repoUrl: url } }),
+    onSuccess: (res) => setTestResult(res as RepoTest),
+    onError: (e: any) => toast.error(e?.message ?? "Test failed"),
   });
 
   const remove = useMutation({
     mutationFn: () => deleteFn(),
     onSuccess: () => {
       toast.success("GitHub token removed");
+      setTestResult(null);
       qc.invalidateQueries({ queryKey: ["my-github"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to remove token"),
@@ -137,24 +170,82 @@ function GithubCard() {
         </div>
       )}
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-4 space-y-2">
         <Input
           type="password"
           placeholder="ghp_… or github_pat_…"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          className="h-8 flex-1 text-xs font-mono"
+          className="h-8 text-xs font-mono"
           autoComplete="off"
         />
-        <Button size="sm" className="h-8 text-xs" disabled={!token.trim() || save.isPending} onClick={() => save.mutate(token.trim())}>
-          {save.isPending ? "Saving…" : connected ? "Replace token" : "Save token"}
-        </Button>
-        {connected && (
-          <Button size="sm" variant="outline" className="h-8 text-xs" disabled={remove.isPending} onClick={() => remove.mutate()}>
-            {remove.isPending ? "Removing…" : "Disconnect"}
+        <Input
+          type="text"
+          placeholder="Test repo URL — https://github.com/owner/repo (optional but recommended)"
+          value={testRepo}
+          onChange={(e) => setTestRepo(e.target.value)}
+          className="h-8 text-xs font-mono"
+          autoComplete="off"
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            className="h-8 text-xs"
+            disabled={!token.trim() || save.isPending}
+            onClick={() => save.mutate({ token: token.trim(), testRepoUrl: testRepo.trim() })}
+          >
+            {save.isPending ? "Saving & testing…" : connected ? "Replace token & test" : "Save token & test"}
           </Button>
-        )}
+          {connected && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={!testRepo.trim() || test.isPending}
+              onClick={() => test.mutate(testRepo.trim())}
+            >
+              {test.isPending ? "Testing…" : "Test again"}
+            </Button>
+          )}
+          {connected && (
+            <Button size="sm" variant="outline" className="h-8 text-xs" disabled={remove.isPending} onClick={() => remove.mutate()}>
+              {remove.isPending ? "Removing…" : "Disconnect"}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {testResult && (
+        <div
+          className={`mt-3 rounded-md border p-3 text-xs ${
+            testResult.ok
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400"
+          }`}
+        >
+          {testResult.ok ? (
+            <>
+              <div className="flex items-center gap-1 font-semibold">
+                <CheckCircle2 className="h-3 w-3" /> Read access confirmed
+              </div>
+              <div className="mt-1 font-mono text-[11px] opacity-90">
+                {testResult.repo} · {testResult.private ? "private" : "public"} · default branch{" "}
+                <strong>{testResult.defaultBranch ?? "?"}</strong>
+                {testResult.fileCount != null ? ` · ${testResult.fileCount} entries at root` : ""}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 font-semibold">
+                <XCircle className="h-3 w-3" /> Read access failed
+              </div>
+              <div className="mt-1 font-mono text-[11px] opacity-90">
+                {testResult.repo}: {testResult.error}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <p className="mt-3 text-xs text-muted-foreground">
         Create a token at{" "}

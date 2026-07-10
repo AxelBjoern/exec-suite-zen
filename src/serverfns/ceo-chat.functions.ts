@@ -89,10 +89,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "list_vdnx_dir",
-      description: "List files/folders in the VDNX repo at a given path. Use '' for root. Use this to ground any VDNX-code question.",
+      description: "List files/folders in a GitHub repo at the given path. Defaults to the VDNX repo when 'repo' is omitted. Pass 'repo' as 'owner/name' to target another repo (uses the operator's personal GitHub token when saved).",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "Repo-relative path. '' = root." } },
+        properties: {
+          path: { type: "string", description: "Repo-relative path. '' = root." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["path"],
         additionalProperties: false,
       },
@@ -102,10 +105,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "read_vdnx_file",
-      description: "Read a file from the VDNX repo. Content truncated at ~8k chars. Use this to ground claims about specific files.",
+      description: "Read a file from a GitHub repo. Content truncated at ~8k chars. Defaults to VDNX; pass 'repo' for another repo.",
       parameters: {
         type: "object",
-        properties: { path: { type: "string", description: "Repo-relative file path." } },
+        properties: {
+          path: { type: "string", description: "Repo-relative file path." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["path"],
         additionalProperties: false,
       },
@@ -115,10 +121,13 @@ const WEB_TOOLS = [
     type: "function",
     function: {
       name: "search_vdnx_code",
-      description: "GitHub code search across the VDNX repo. Returns up to 10 matches with snippets. Use to locate symbols/files.",
+      description: "GitHub code search. Defaults to VDNX; pass 'repo' for another repo.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "Code search query." } },
+        properties: {
+          query: { type: "string", description: "Code search query." },
+          repo: { type: "string", description: "Optional 'owner/name'. Omit for VDNX." },
+        },
         required: ["query"],
         additionalProperties: false,
       },
@@ -126,7 +135,7 @@ const WEB_TOOLS = [
   },
 ] as const;
 
-async function runWebTool(name: string, args: any): Promise<unknown> {
+async function runWebTool(name: string, args: any, ghToken?: string | null): Promise<unknown> {
   try {
     if (name === "web_search") {
       const q = String(args?.query ?? "").trim();
@@ -152,18 +161,19 @@ async function runWebTool(name: string, args: any): Promise<unknown> {
         markdown: (page.markdown ?? "").slice(0, 6000),
       };
     }
+    const repoArg = args?.repo ? String(args.repo) : undefined;
     if (name === "list_vdnx_dir") {
-      return await listRepoDir(String(args?.path ?? ""));
+      return await listRepoDir(String(args?.path ?? ""), repoArg, ghToken ?? undefined);
     }
     if (name === "read_vdnx_file") {
       const p = String(args?.path ?? "").trim();
       if (!p) return { error: "path is required" };
-      return await readRepoFile(p);
+      return await readRepoFile(p, repoArg, ghToken ?? undefined);
     }
     if (name === "search_vdnx_code") {
       const q = String(args?.query ?? "").trim();
       if (!q) return { error: "query is required" };
-      return await searchRepoCode(q);
+      return await searchRepoCode(q, repoArg, ghToken ?? undefined);
     }
     return { error: `unknown tool: ${name}` };
   } catch (e: any) {
@@ -177,6 +187,7 @@ async function runChatWithWebTools(opts: {
   temperature?: number;
   max_tokens?: number;
   disableTools?: boolean;
+  githubToken?: string | null;
 }): Promise<string> {
   const msgs: any[] = [...opts.messages];
   const MAX_ITERS = 4;
@@ -216,7 +227,7 @@ async function runChatWithWebTools(opts: {
     for (const tc of toolCalls) {
       let args: any = {};
       try { args = JSON.parse(tc.function?.arguments ?? "{}"); } catch { args = {}; }
-      const result = await runWebTool(tc.function?.name ?? "", args);
+      const result = await runWebTool(tc.function?.name ?? "", args, opts.githubToken);
       msgs.push({
         role: "tool",
         tool_call_id: tc.id,
@@ -1371,8 +1382,9 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
 
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
     const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
+    const hasGithubUrl = /github\.com\/[^/\s]+\/[^/\s?#]+/i.test(data.content);
     let vdnxOverview = "";
-    if (detectsVdnxRepoIntent(data.content)) {
+    if (detectsVdnxRepoIntent(data.content) && !hasGithubUrl) {
       try {
         vdnxOverview = await getVdnxRepoOverview();
       } catch (e) {
@@ -1380,9 +1392,26 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       }
     }
 
+    // Load the operator's saved GitHub PAT (if any) so tools can read their private repos.
+    const { getUserGithubToken } = await import("@/server/user-github.server");
+    const ghToken = await getUserGithubToken(context.userId);
+
+    // If the operator pasted a github URL, hint the tool loop at the parsed repo.
+    let repoHint = "";
+    if (hasGithubUrl) {
+      try {
+        const { parseRepoTarget } = await import("@/server/github.server");
+        const { repo, path } = parseRepoTarget(data.content.match(/github\.com\/[^\s)]+/i)![0]);
+        repoHint = `The operator referenced GitHub repo \`${repo}\`${path ? ` (path: ${path})` : ""}. Use the list_vdnx_dir/read_vdnx_file/search_vdnx_code tools with \`repo: "${repo}"\` to ground your answer in real files. ${ghToken ? "The operator's personal GitHub token is attached automatically." : "No personal GitHub token is saved — if the repo is private you'll get 404; tell the operator to add one in Settings → Connections."}`;
+      } catch {
+        /* noop */
+      }
+    }
+
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
+      ...(repoHint ? [{ role: "system" as const, content: repoHint }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {
           return {
@@ -1404,6 +1433,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       messages,
       model: resolvedModel,
       temperature: 0.6,
+      githubToken: ghToken,
       ...(isLinkedInAuthoring ? { max_tokens: 16000 } : {}),
     });
 

@@ -1144,6 +1144,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_github_tokens: {
+        Row: {
+          created_at: string
+          login: string | null
+          scopes: string[]
+          token_ciphertext: string
+          token_hint: string
+          token_iv: string
+          token_tag: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          login?: string | null
+          scopes?: string[]
+          token_ciphertext: string
+          token_hint: string
+          token_iv: string
+          token_tag: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          login?: string | null
+          scopes?: string[]
+          token_ciphertext?: string
+          token_hint?: string
+          token_iv?: string
+          token_tag?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

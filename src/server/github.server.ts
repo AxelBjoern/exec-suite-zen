@@ -66,8 +66,62 @@ async function gh(path: string, repoForError?: string, token?: string): Promise<
   return res.json();
 }
 
-export async function listRepoDir(path = "", repo?: string, token?: string): Promise<{ repo: string; path: string; entries: { name: string; path: string; type: string; size?: number }[] }> {
+function repoNameBase(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\.git$/i, "")
+    .replace(/-[a-f0-9]{8}$/i, "")
+    .replace(/-[a-f0-9]{12,}$/i, "");
+}
+
+function repoNamesMatch(requested: string, accessible: string): boolean {
+  const want = requested.toLowerCase();
+  const got = accessible.toLowerCase();
+  const wantBase = repoNameBase(want);
+  const gotBase = repoNameBase(got);
+  return want === got || wantBase === gotBase || want.startsWith(`${got}-`) || got.startsWith(`${want}-`);
+}
+
+export async function findReadableRepoAlias(repo: string, token?: string | null): Promise<string | null> {
+  const clean = cleanToken(token);
+  if (!clean) return null;
+
   const slug = normalizeRepo(repo);
+  const [owner, requestedName] = slug.split("/");
+  const ownerLc = owner.toLowerCase();
+
+  for (let page = 1; page <= 3; page++) {
+    const res = await fetch(
+      `${API}/user/repos?per_page=100&page=${page}&affiliation=owner,collaborator,organization_member`,
+      { headers: headers(clean) },
+    );
+    if (!res.ok) return null;
+    const repos = await res.json().catch(() => []);
+    if (!Array.isArray(repos) || repos.length === 0) return null;
+
+    const match = repos.find((r: any) => {
+      const repoOwner = String(r?.owner?.login ?? "").toLowerCase();
+      const repoName = String(r?.name ?? "");
+      return repoOwner === ownerLc && repoNamesMatch(requestedName, repoName);
+    });
+    if (match?.full_name) return String(match.full_name);
+  }
+
+  return null;
+}
+
+async function resolveReadableRepo(repo: string, token?: string | null): Promise<string> {
+  const slug = normalizeRepo(repo);
+  if (!cleanToken(token)) return slug;
+
+  const res = await fetch(`${API}/repos/${slug}`, { headers: headers(token) });
+  if (res.ok || res.status !== 404) return slug;
+
+  return (await findReadableRepoAlias(slug, token)) ?? slug;
+}
+
+export async function listRepoDir(path = "", repo?: string, token?: string): Promise<{ repo: string; path: string; entries: { name: string; path: string; type: string; size?: number }[] }> {
+  const slug = await resolveReadableRepo(normalizeRepo(repo), token);
   const clean = path.replace(/^\/+|\/+$/g, "");
   const data = await gh(`/repos/${slug}/contents/${encodeURI(clean)}`, slug, token);
   if (!Array.isArray(data)) {
@@ -81,7 +135,7 @@ export async function listRepoDir(path = "", repo?: string, token?: string): Pro
 }
 
 export async function readRepoFile(path: string, repo?: string, token?: string): Promise<{ repo: string; path: string; content: string; truncated: boolean; size: number }> {
-  const slug = normalizeRepo(repo);
+  const slug = await resolveReadableRepo(normalizeRepo(repo), token);
   const clean = path.replace(/^\/+/, "");
   if (!clean) throw new Error("path is required");
   const data = await gh(`/repos/${slug}/contents/${encodeURI(clean)}`, slug, token);
@@ -96,7 +150,7 @@ export async function readRepoFile(path: string, repo?: string, token?: string):
 }
 
 export async function searchRepoCode(query: string, repo?: string, token?: string): Promise<{ repo: string; query: string; matches: { path: string; snippet?: string }[] }> {
-  const slug = normalizeRepo(repo);
+  const slug = await resolveReadableRepo(normalizeRepo(repo), token);
   const q = `${query} repo:${slug}`;
   const data = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=10`, slug, token);
   const items = Array.isArray(data?.items) ? data.items : [];

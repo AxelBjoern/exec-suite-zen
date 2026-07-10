@@ -1446,6 +1446,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...(vdnxOverview ? [{ role: "system" as const, content: vdnxOverview }] : []),
+      ...(repoOverview ? [{ role: "system" as const, content: repoOverview }] : []),
       ...(repoHint ? [{ role: "system" as const, content: repoHint }] : []),
       ...(history ?? []).map((m): ChatMessage => {
         if (m.id === userRow.id && imageParts.length) {

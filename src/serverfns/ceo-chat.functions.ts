@@ -85,6 +85,45 @@ const WEB_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_vdnx_dir",
+      description: "List files/folders in the VDNX repo at a given path. Use '' for root. Use this to ground any VDNX-code question.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string", description: "Repo-relative path. '' = root." } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_vdnx_file",
+      description: "Read a file from the VDNX repo. Content truncated at ~8k chars. Use this to ground claims about specific files.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string", description: "Repo-relative file path." } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_vdnx_code",
+      description: "GitHub code search across the VDNX repo. Returns up to 10 matches with snippets. Use to locate symbols/files.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Code search query." } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
 ] as const;
 
 async function runWebTool(name: string, args: any): Promise<unknown> {

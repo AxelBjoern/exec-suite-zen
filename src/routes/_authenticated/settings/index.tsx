@@ -104,6 +104,17 @@ function SettingsPage() {
               Manage →
             </Link>
           </li>
+          <li className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2">
+              <Github className="h-4 w-4" />
+              GitHub — {githubStatus.data?.connected
+                ? <strong>{githubStatus.data.login ?? "personal token"}</strong>
+                : <span className="text-muted-foreground">no personal token</span>}
+            </span>
+            <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
+              Manage →
+            </Link>
+          </li>
         </ul>
       </section>
 

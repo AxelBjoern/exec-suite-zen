@@ -3,8 +3,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Plug, Mail, Linkedin, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { Settings as SettingsIcon, Plug, Mail, Linkedin, Github, Palette, Cpu, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { getMySettings, updateMySettings, getConnectorStatus } from "@/lib/connections.functions";
+import { getMyGithubStatus } from "@/lib/user-github.functions";
 import { ensureOwnerRole } from "@/lib/outbound.functions";
 import {
   listAutoApproveRules,
@@ -31,6 +32,8 @@ function SettingsPage() {
 
   const settings = useQuery({ queryKey: ["my-settings"], queryFn: () => get() });
   const connectorStatus = useQuery({ queryKey: ["connector-status"], queryFn: () => status() });
+  const githubStatusFn = useServerFn(getMyGithubStatus);
+  const githubStatus = useQuery({ queryKey: ["my-github"], queryFn: () => githubStatusFn() });
 
   const [email, setEmail] = useState(false);
   const [li, setLi] = useState(false);
@@ -96,6 +99,17 @@ function SettingsPage() {
             <span className="flex items-center gap-2">
               <Linkedin className="h-4 w-4" />
               LinkedIn — {linkedinConnected ? <strong>workspace connector</strong> : <span className="text-muted-foreground">not connected</span>}
+            </span>
+            <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
+              Manage →
+            </Link>
+          </li>
+          <li className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2">
+              <Github className="h-4 w-4" />
+              GitHub — {githubStatus.data?.connected
+                ? <strong>{githubStatus.data.login ?? "personal token"}</strong>
+                : <span className="text-muted-foreground">no personal token</span>}
             </span>
             <Link to="/settings/connections" className="text-xs font-semibold uppercase tracking-wider text-primary hover:opacity-80">
               Manage →

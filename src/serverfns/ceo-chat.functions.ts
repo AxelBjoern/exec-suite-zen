@@ -262,7 +262,7 @@ async function runChatWithWebTools(opts: {
     model: opts.model,
     ...(opts.max_tokens ? { max_tokens: opts.max_tokens } : {}),
   });
-  return (json?.choices?.[0]?.message?.content ?? "").trim() || "(no reply)";
+  return sanitizeModelText(json?.choices?.[0]?.message?.content ?? "") || "(no reply)";
 }
 
 // ── Document generation (PDF / DOCX) ────────────────────────────────────────

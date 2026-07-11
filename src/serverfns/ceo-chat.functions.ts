@@ -268,7 +268,21 @@ async function runChatWithWebTools(opts: {
     const msg = json?.choices?.[0]?.message;
     const toolCalls = msg?.tool_calls;
     if (!toolCalls?.length) {
-      return sanitizeModelText(msg?.content ?? "") || "(no reply)";
+      const rawContent: string = msg?.content ?? "";
+      // Detect DeepSeek DSML tool-calls leaked as plain text and execute them.
+      const dsml = parseDsmlToolCalls(rawContent);
+      if (dsml.length && i < MAX_ITERS - 1) {
+        msgs.push({ role: "assistant", content: sanitizeModelText(rawContent) || "" });
+        for (const call of dsml) {
+          const result = await runWebTool(call.name, call.arguments, opts.githubToken);
+          msgs.push({
+            role: "user",
+            content: `Tool result for ${call.name}(${JSON.stringify(call.arguments).slice(0, 200)}):\n${JSON.stringify(result).slice(0, 12000)}`,
+          });
+        }
+        continue;
+      }
+      return sanitizeModelText(rawContent) || "(no reply)";
     }
     msgs.push({ role: "assistant", content: msg.content ?? "", tool_calls: toolCalls });
     for (const tc of toolCalls) {

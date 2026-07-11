@@ -196,7 +196,35 @@ function sanitizeModelText(s: string): string {
   out = out.replace(/<\/?(?:arg_key|arg_value|tool_response|tool_calls?)>/gi, "");
   // Remove <function=...>...</function> style (some models).
   out = out.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, "");
+  // Remove DeepSeek DSML tool-call blocks (｜ = U+FF5C, also ASCII | defensively).
+  const BAR = "[\\uFF5C|]";
+  out = out.replace(new RegExp(`<${BAR}DSML${BAR}tool_calls${BAR}?>[\\s\\S]*?<\\/${BAR}DSML${BAR}tool_calls${BAR}?>`, "gi"), "");
+  out = out.replace(new RegExp(`<${BAR}DSML${BAR}[\\s\\S]*$`, "gi"), "");
   return out.trim();
+}
+
+/**
+ * Parse DeepSeek DSML tool-call markup that leaks as plain text when
+ * native OpenAI tool-calling isn't used by the endpoint.
+ */
+function parseDsmlToolCalls(s: string): Array<{ name: string; arguments: Record<string, any> }> {
+  if (!s || !/DSML/.test(s)) return [];
+  const BAR = "[\\uFF5C|]";
+  const invokeRe = new RegExp(`<${BAR}DSML${BAR}invoke\\s+name="([^"]+)"\\s*>([\\s\\S]*?)<\\/${BAR}DSML${BAR}invoke${BAR}?>`, "gi");
+  const out: Array<{ name: string; arguments: Record<string, any> }> = [];
+  let im: RegExpExecArray | null;
+  while ((im = invokeRe.exec(s))) {
+    const name = im[1];
+    const inner = im[2];
+    const args: Record<string, any> = {};
+    const paramRe = new RegExp(`<${BAR}DSML${BAR}parameter\\s+name="([^"]+)"[^>]*>([\\s\\S]*?)<\\/${BAR}DSML${BAR}parameter${BAR}?>`, "gi");
+    let pm: RegExpExecArray | null;
+    while ((pm = paramRe.exec(inner))) {
+      args[pm[1]] = pm[2].trim();
+    }
+    out.push({ name, arguments: args });
+  }
+  return out;
 }
 
 

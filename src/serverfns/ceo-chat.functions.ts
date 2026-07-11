@@ -181,6 +181,25 @@ async function runWebTool(name: string, args: any, ghToken?: string | null): Pro
   }
 }
 
+/**
+ * Strip Hermes/Nous-style XML tool-call syntax that some models (Hermes 4, DeepSeek)
+ * emit as plain text when the endpoint doesn't support native OpenAI tool calling.
+ * Users would otherwise see raw `<tool_call>read_vdnx_file<arg_key>...` blocks.
+ */
+function sanitizeModelText(s: string): string {
+  if (!s) return s;
+  let out = s;
+  // Remove <tool_call>...</tool_call> (with or without closing tag, greedy fallback to end).
+  out = out.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+  out = out.replace(/<tool_call>[\s\S]*$/gi, "");
+  // Remove stray <arg_key>/<arg_value>/<tool_response> fragments.
+  out = out.replace(/<\/?(?:arg_key|arg_value|tool_response|tool_calls?)>/gi, "");
+  // Remove <function=...>...</function> style (some models).
+  out = out.replace(/<function=[^>]*>[\s\S]*?<\/function>/gi, "");
+  return out.trim();
+}
+
+
 async function runChatWithWebTools(opts: {
   messages: ChatMessage[];
   model: string;

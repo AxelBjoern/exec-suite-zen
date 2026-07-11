@@ -1,30 +1,29 @@
-## Problem
-Settings already confirms the pasted repo `AxelBjoern/natax-sales-nexus-a3c1d323` maps to the readable private repo `AxelBjoern/natax-sales-nexus`, but chat still lets the model treat the pasted slug as a separate missing repo and asks for confirmation.
+## What the error is
 
-## Fix plan
-1. **Make alias resolution authoritative**
-   - When a pasted repo returns 404 but `findReadableRepoAlias` finds a readable match, treat the pasted repo as an alias, not as a failure.
-   - The chat should proceed with the resolved repo automatically.
+That blob is DeepSeek's native tool-call markup (`<｜DSML｜tool_calls>` / `<｜DSML｜invoke>` / `<｜DSML｜parameter>`) leaking into the assistant message as plain text. It happens because:
 
-2. **Stop the model from re-litigating the pasted slug**
-   - Move/duplicate the live repo context instruction after conversation history so it overrides old assistant messages.
-   - Add an explicit rule: `AxelBjoern/natax-sales-nexus-a3c1d323` is an accepted alias for `AxelBjoern/natax-sales-nexus`; do not ask for confirmation.
+1. DeepSeek V4 emits tool calls in DSML syntax (using the special `｜` bar characters) when the OpenRouter endpoint doesn't route them as native `tool_calls`.
+2. Our current `sanitizeModelText` in `src/serverfns/ceo-chat.functions.ts` only strips Hermes/Nous-style `<tool_call>…</tool_call>` and `<function=…>` fragments. It doesn't recognize the DSML tags, so they render verbatim in chat.
+3. The model actually wanted to call `list_vdnx_dir` / `read_vdnx_file` against the repo — those tools exist, but the loop never sees them because they arrived as text, not as a `tool_calls` array.
 
-3. **Filter stale wrong repo replies**
-   - Extend the stale-history filter to remove previous assistant messages saying:
-     - “does not exist”
-     - “only repo that exists”
-     - “cannot be scanned”
-     - “confirm we should analyze the clean repo”
-   - Only filter these when live saved-token repo context is confirmed.
+## Fix plan (read-only, chat only)
 
-4. **Fix agent GitHub tools too**
-   - Update `github.list_dir`, `github.read_file`, and `github.search_code` to use the signed-in user’s saved GitHub token via `owner_user_id`.
-   - Update descriptions from “public repo” to “GitHub repo readable with saved token”.
+1. **Extend `sanitizeModelText`** in `src/serverfns/ceo-chat.functions.ts`
+   - Strip any `<｜DSML｜tool_calls>…</｜DSML｜tool_calls>` block (and stray `<｜DSML｜invoke>` / `<｜DSML｜parameter>` fragments) from the final visible content, same way we strip Hermes XML.
+   - Handle both the special `｜` (U+FF5C) and the ASCII `|` variants defensively.
 
-5. **Keep read-only guarantees**
-   - No push, commit, PR, branch, or mutating GitHub API calls.
-   - Only read endpoints remain enabled.
+2. **Parse and execute leaked DSML calls before sanitizing**
+   - Before returning content, detect DSML `invoke` blocks, convert each to `{ name, arguments }`, and feed them through the existing tool-execution loop (same path as native `tool_calls`), so `list_vdnx_dir` / `read_vdnx_file` actually run and the model gets a chance to answer using the results.
+   - After execution, continue the normal loop until the model returns a clean natural-language reply.
+   - If parsing fails, fall back to just stripping the block (step 1) so the user never sees raw markup.
+
+3. **Streaming path**
+   - Apply the same DSML detection + strip in `streamCeoMessage` so tokens containing DSML fragments don't flash in the UI mid-stream, and the final buffered text stays clean.
+
+4. **No other behavior changes**
+   - Keep repo alias resolution, sticky GitHub context, saved-token usage, and stale-history filter untouched.
+   - Read-only: no new GitHub writes, no new tools, no schema changes.
 
 ## Expected result
-You can paste `AxelBjoern/natax-sales-nexus-a3c1d323`, and chat will automatically analyze `AxelBjoern/natax-sales-nexus` using your saved token without claiming the pasted repo is wrong or asking you to confirm.
+
+The DSML blob disappears from chat. The model's intended calls to `list_vdnx_dir` and `read_vdnx_file` on `AxelBjoern/natax-sales-nexus` execute via your saved token, and you get a normal written answer instead of raw tool-call syntax.

@@ -240,7 +240,7 @@ async function runChatWithWebTools(opts: {
     const msg = json?.choices?.[0]?.message;
     const toolCalls = msg?.tool_calls;
     if (!toolCalls?.length) {
-      return (msg?.content ?? "").trim() || "(no reply)";
+      return sanitizeModelText(msg?.content ?? "") || "(no reply)";
     }
     msgs.push({ role: "assistant", content: msg.content ?? "", tool_calls: toolCalls });
     for (const tc of toolCalls) {

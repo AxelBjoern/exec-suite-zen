@@ -144,7 +144,23 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
-  const [swarmActive, setSwarmActive] = useState<boolean>(false);
+  // Slice 2: tri-state chat mode. `single` is the byte-identical default;
+  // `swarm` maps 1:1 to the legacy swarmActive branch; `auto` runs the
+  // classifier and dispatches to whichever the router picks.
+  const CHAT_MODE_KEY = "vdnx.chat.mode";
+  const [chatMode, setChatMode] = useState<ChatMode>(() => {
+    if (typeof window === "undefined") return "single";
+    const v = localStorage.getItem(CHAT_MODE_KEY);
+    return v === "auto" || v === "swarm" ? v : "single";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem(CHAT_MODE_KEY, chatMode);
+  }, [chatMode]);
+  const swarmActive = chatMode === "swarm";
+  const classifyFn = useServerFn(classifyChatMode);
+  // Transient chip shown next to the currently streaming/pending reply
+  // whenever Auto routes a message. Cleared once the reply is persisted.
+  const [autoDecision, setAutoDecision] = useState<{ mode: "single" | "swarm"; reason: string } | null>(null);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
 

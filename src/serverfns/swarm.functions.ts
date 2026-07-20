@@ -225,7 +225,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
       ...data.models,
       data.synthModel,
       ...(data.agents ?? []).map((a) => a.model).filter(Boolean),
-    ]));
+    ].filter((slug): slug is string => typeof slug === "string" && slug.length > 0)));
     const available = await loadAvailableSwarmModels(supabase, requested);
     const allowed = allowedSetFrom(available);
     const cleaned = normalizeModels(data.models, DEFAULT_MAX_PARALLEL, allowed);

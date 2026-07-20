@@ -774,7 +774,7 @@ export const listCeoConversations = createServerFn({ method: "GET" }).handler(
   async () => {
     const { data, error } = await supabaseAdmin
       .from("ceo_conversations")
-      .select("id, title, created_at, updated_at")
+      .select("id, title, created_at, updated_at, project_id")
       .order("updated_at", { ascending: false })
       .limit(200);
     if (error) throw error;
@@ -790,7 +790,7 @@ export const createCeoConversation = createServerFn({ method: "POST" })
     const { data: row, error } = await supabaseAdmin
       .from("ceo_conversations")
       .insert({ title: data.title })
-      .select("id, title, created_at, updated_at")
+      .select("id, title, created_at, updated_at, project_id")
       .single();
     if (error) throw error;
     return row;

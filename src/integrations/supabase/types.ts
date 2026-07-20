@@ -945,6 +945,8 @@ export type Database = {
           latency_ms: number | null
           model_label: string | null
           model_slug: string
+          role: string | null
+          role_label: string | null
           run_id: string
           status: string
           tokens_in: number | null
@@ -959,6 +961,8 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug: string
+          role?: string | null
+          role_label?: string | null
           run_id: string
           status?: string
           tokens_in?: number | null
@@ -973,6 +977,8 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug?: string
+          role?: string | null
+          role_label?: string | null
           run_id?: string
           status?: string
           tokens_in?: number | null
@@ -1296,6 +1302,7 @@ export type Database = {
           auto_send_linkedin: boolean
           chat_model_allowlist: string[] | null
           design_rules: string | null
+          swarm_agents: Json | null
           swarm_max_parallel: number | null
           swarm_models: string[] | null
           swarm_synth_model: string | null
@@ -1307,6 +1314,7 @@ export type Database = {
           auto_send_linkedin?: boolean
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          swarm_agents?: Json | null
           swarm_max_parallel?: number | null
           swarm_models?: string[] | null
           swarm_synth_model?: string | null
@@ -1318,6 +1326,7 @@ export type Database = {
           auto_send_linkedin?: boolean
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          swarm_agents?: Json | null
           swarm_max_parallel?: number | null
           swarm_models?: string[] | null
           swarm_synth_model?: string | null

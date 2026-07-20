@@ -176,7 +176,8 @@ export const runSwarm = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = admin as any;
 
     // Load user config, merge with per-call overrides
     const { data: cfg } = await supabase

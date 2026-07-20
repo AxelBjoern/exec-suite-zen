@@ -164,7 +164,44 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 pl-[52px] flex-wrap">
+                      <div className="mt-2 grid grid-cols-[52px_1fr] gap-x-2 gap-y-1.5">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground pt-1.5">Fallback</div>
+                        <Select
+                          value={a.fallbackModel ?? "__none__"}
+                          onValueChange={(v) =>
+                            updateAgent(a.role, { fallbackModel: v === "__none__" ? null : v })
+                          }
+                        >
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__" className="text-xs">None (fail on primary error)</SelectItem>
+                            {(cfg?.available ?? [])
+                              .filter((m) => m.slug !== a.model)
+                              .map((m) => (
+                                <SelectItem key={m.slug} value={m.slug} className="text-xs">
+                                  {m.label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground pt-1">Timeout</div>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            min={15}
+                            max={180}
+                            step={5}
+                            value={[timeoutS]}
+                            onValueChange={(v) =>
+                              updateAgent(a.role, { timeoutMs: Math.round((v[0] ?? 100) * 1000) })
+                            }
+                            className="flex-1"
+                          />
+                          <span className="text-[11px] font-mono w-10 text-right">{timeoutS}s</span>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center gap-1.5 pl-[52px] flex-wrap">
                         <span
                           className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-500"
                           title={`Primary attempt uses ${availableLabel(a.model)} with a ${timeoutS}s timeout`}
@@ -189,7 +226,7 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground mt-2">
-                Enable at least 2 roles. Each runs its own model with a role-specific system prompt in parallel. If the primary times out or errors, the fallback runs automatically.
+                Enable at least 2 roles. Primary runs for up to its timeout; on timeout or error, the fallback model runs automatically (default 100s primary, DeepSeek V4 Flash fallback).
               </p>
             </div>
           )}

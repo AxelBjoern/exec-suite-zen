@@ -20,6 +20,7 @@ export const BUILTIN_SWARM_MODELS: { slug: string; label: string }[] = [
   { slug: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", label: "Nemotron 3 Nano Omni 30B" },
 ];
 export const ALLOWED_SWARM_MODELS = BUILTIN_SWARM_MODELS;
+export const ALLOWED_SET = new Set(BUILTIN_SWARM_MODELS.map((m) => m.slug));
 export const LABEL_BY_SLUG = new Map(BUILTIN_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
 
 export type SwarmModelOption = { slug: string; label: string };
@@ -45,6 +46,20 @@ export function labelForModel(slug: string, available?: SwarmModelOption[]): str
 export function allowedSetFrom(available: SwarmModelOption[]): Set<string> {
   return new Set(available.map((m) => m.slug));
 }
+export async function loadAvailableSwarmModels(
+  supabase: any,
+  keep: string[] = [],
+): Promise<SwarmModelOption[]> {
+  const select = "slug,name";
+  const [{ data: eligible }, { data: kept }] = await Promise.all([
+    supabase.from("base_models").select(select).eq("swarm_eligible", true),
+    keep.length
+      ? supabase.from("base_models").select(select).in("slug", keep)
+      : Promise.resolve({ data: [] }),
+  ]);
+  return uniqueModelOptions([...(eligible ?? []), ...(kept ?? [])], keep);
+}
+
 // Tuned defaults (benchmark: Opus best synth on reasoning + tone; top-4 drafters
 // span reasoning styles for genuine diversity without heavy overlap).
 export const DEFAULT_SWARM_MODELS = [

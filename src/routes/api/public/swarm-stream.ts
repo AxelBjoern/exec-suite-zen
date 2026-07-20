@@ -11,11 +11,11 @@ import {
   type DraftResult,
 } from "@/server/swarm-core.server";
 import {
-  ALLOWED_SET,
   DEFAULT_MAX_PARALLEL,
   DEFAULT_SWARM_MODELS,
   DEFAULT_SYNTH_MODEL,
-  LABEL_BY_SLUG,
+  labelForModel,
+  loadAvailableSwarmModels,
   normalizeAgents,
   normalizeModels,
   type SwarmRole,
@@ -61,17 +61,18 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           .maybeSingle();
 
         const cap = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
-        const synthModel =
-          body.synthModel && ALLOWED_SET.has(body.synthModel)
-            ? body.synthModel
-            : cfg?.swarm_synth_model && ALLOWED_SET.has(cfg.swarm_synth_model)
-              ? cfg.swarm_synth_model
-              : DEFAULT_SYNTH_MODEL;
-        const synthLabel = LABEL_BY_SLUG.get(synthModel) ?? synthModel;
+        const rawModels = body.models?.length ? body.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS);
+        const rawSynth = body.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
+        const rawAgents = normalizeAgents(body.agents ?? cfg?.swarm_agents);
+        const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
+        const available = await loadAvailableSwarmModels(admin, keep);
+        const allowed = new Set(available.map((m) => m.slug));
+        const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
+        const synthLabel = labelForModel(synthModel, available);
 
-        const agentsResolved = normalizeAgents(body.agents ?? cfg?.swarm_agents);
+        const agentsResolved = normalizeAgents(body.agents ?? cfg?.swarm_agents, allowed);
         const activeAgents = agentsResolved
-          .filter((a) => a.enabled && ALLOWED_SET.has(a.model))
+          .filter((a) => a.enabled && allowed.has(a.model))
           .slice(0, cap);
 
         type FanUnit = {
@@ -89,13 +90,10 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             systemPrompt: a.systemPrompt,
             role: a.role,
             roleLabel: a.label,
-            label: LABEL_BY_SLUG.get(a.model) ?? a.model,
+            label: labelForModel(a.model, available),
           }));
         } else {
-          const models = normalizeModels(
-            body.models?.length ? body.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS),
-            cap,
-          );
+          const models = normalizeModels(rawModels, cap, allowed);
           if (models.length < 2) {
             return new Response("Swarm requires at least 2 models. Configure in the Swarm menu.", { status: 400 });
           }
@@ -106,7 +104,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             systemPrompt: drafterSystem,
             role: null,
             roleLabel: null,
-            label: LABEL_BY_SLUG.get(m) ?? m,
+            label: labelForModel(m, available),
           }));
         }
 

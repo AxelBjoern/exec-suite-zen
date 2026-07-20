@@ -745,6 +745,11 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
         newPending={newConvoMutation.isPending}
         onRename={handleRename}
         onDelete={handleDelete}
+        projects={chatProjects}
+        onNewProject={handleNewProject}
+        onEditProject={handleEditProject}
+        onDeleteProject={handleDeleteProject}
+        onAssignProject={handleAssignProject}
       />
 
       {/* ── Main: chat panel ───────────────────────────────────────────── */}

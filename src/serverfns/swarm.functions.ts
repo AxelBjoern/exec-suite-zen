@@ -15,8 +15,8 @@ export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [
   { slug: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { slug: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", label: "Nemotron 3 Nano Omni 30B" },
 ];
-const ALLOWED_SET = new Set(ALLOWED_SWARM_MODELS.map((m) => m.slug));
-const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
+export const ALLOWED_SET = new Set(ALLOWED_SWARM_MODELS.map((m) => m.slug));
+export const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
 
 // Tuned defaults (benchmark: Opus best synth on reasoning + tone; top-4 drafters
 // span reasoning styles for genuine diversity without heavy overlap).

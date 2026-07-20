@@ -339,23 +339,28 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 .single();
               if (runRow) {
                 await admin.from("swarm_drafts").insert(
-                  drafts.map((d) => ({
-                    run_id: runRow.id,
-                    user_id: userId,
-                    model_slug: d.model,
-                    model_label: d.label,
-                    role: d.role ?? null,
-                    role_label: d.roleLabel ?? null,
-                    content: d.content,
-                    status: d.status,
-                    error: d.error ?? null,
-                    latency_ms: d.latency_ms,
-                    tokens_in: d.tokens_in ?? null,
-                    tokens_out: d.tokens_out ?? null,
-                    attempted_models: d.attempted_models ?? [d.model],
-                    used_fallback: d.used_fallback ?? false,
-                    primary_error: d.primary_error ?? null,
-                  })),
+                  drafts.map((d) => {
+                    const cr = confByModel.get(d.model + "|" + d.label);
+                    return {
+                      run_id: runRow.id,
+                      user_id: userId,
+                      model_slug: d.model,
+                      model_label: d.label,
+                      role: d.role ?? null,
+                      role_label: d.roleLabel ?? null,
+                      content: d.content,
+                      status: d.status,
+                      error: d.error ?? null,
+                      latency_ms: d.latency_ms,
+                      tokens_in: d.tokens_in ?? null,
+                      tokens_out: d.tokens_out ?? null,
+                      attempted_models: d.attempted_models ?? [d.model],
+                      used_fallback: d.used_fallback ?? false,
+                      primary_error: d.primary_error ?? null,
+                      confidence: cr?.confidence ?? null,
+                      rationale: cr?.rationale ?? null,
+                    };
+                  }),
                 );
               }
 
@@ -363,6 +368,20 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 .from("ceo_conversations")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", convId);
+
+              send("breakdown", {
+                items: drafts.map((d) => {
+                  const cr = confByModel.get(d.model + "|" + d.label);
+                  return {
+                    model: d.model,
+                    label: d.label,
+                    role: d.role ?? null,
+                    role_label: d.roleLabel ?? null,
+                    confidence: cr?.confidence ?? null,
+                    rationale: cr?.rationale ?? null,
+                  };
+                }),
+              });
 
               send("message", {
                 ...savedMsg,

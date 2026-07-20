@@ -251,6 +251,8 @@ function SwarmDrafts({ runId }: { runId: string }) {
   const avgConfidence = scored.length
     ? Math.round(scored.reduce((s, d) => s + (d.confidence ?? 0), 0) / scored.length)
     : null;
+  const fallbackCount = drafts.filter((d) => d.used_fallback).length;
+  const errorCount = drafts.filter((d) => d.status !== "ok").length;
 
   return (
     <div className="mt-2 rounded-md border border-border/60 bg-muted/20">
@@ -262,6 +264,16 @@ function SwarmDrafts({ runId }: { runId: string }) {
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         <Users className="h-3 w-3" />
         Quality breakdown
+        {fallbackCount > 0 && (
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-500">
+            {fallbackCount} fallback
+          </span>
+        )}
+        {errorCount > 0 && (
+          <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-500">
+            {errorCount} error
+          </span>
+        )}
         {avgConfidence !== null && (
           <span className={`ml-auto text-[10px] font-mono ${confidenceTone(avgConfidence).text}`}>
             avg {avgConfidence}%

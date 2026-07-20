@@ -304,13 +304,34 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
 
 
   const mutation = useMutation({
-    mutationFn: async (vars: { content: string; attachmentIds: string[]; swarm?: boolean }) => {
+    mutationFn: async (vars: {
+      content: string;
+      attachmentIds: string[];
+      mode: ChatMode;
+    }) => {
       const controller = new AbortController();
       abortRef.current = controller;
       const targetConvoId = activeId; // snapshot at submit time
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
-      const saved = vars.swarm
+
+      // Slice 2 — Auto router: classify then dispatch. Classifier failures
+      // return { mode:"single" } so behavior degrades to the current default.
+      let effectiveSwarm = vars.mode === "swarm";
+      if (vars.mode === "auto") {
+        try {
+          const decision = await classifyFn({ data: { content: vars.content } });
+          setAutoDecision(decision);
+          effectiveSwarm = decision.mode === "swarm";
+        } catch {
+          setAutoDecision({ mode: "single", reason: "Router error — defaulted to single" });
+          effectiveSwarm = false;
+        }
+      } else {
+        setAutoDecision(null);
+      }
+
+      const saved = effectiveSwarm
         ? await streamSwarm({
             content: vars.content,
             conversationId: targetConvoId,

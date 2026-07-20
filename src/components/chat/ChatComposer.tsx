@@ -27,6 +27,8 @@ type Props = {
   onStop: () => void;
   onFiles: (files: FileList | null) => void;
   onGenerateDoc: (kind: "pdf" | "docx") => void;
+  swarmSlot?: React.ReactNode;
+  swarmActive?: boolean;
 };
 
 export function ChatComposer({
@@ -43,6 +45,8 @@ export function ChatComposer({
   onStop,
   onFiles,
   onGenerateDoc,
+  swarmSlot,
+  swarmActive,
 }: Props) {
   return (
     <div className="border-t border-border/40 bg-card/40 backdrop-blur pb-[env(safe-area-inset-bottom)]">
@@ -123,10 +127,10 @@ export function ChatComposer({
                 onFiles(dt.files);
               }
             }}
-            placeholder="Message the CEO… (Enter to send, Shift+Enter for newline)"
+            placeholder={swarmActive ? "Swarm mode — multiple models will draft, one will synthesize…" : "Message the CEO… (Enter to send, Shift+Enter for newline)"}
             rows={2}
             disabled={pending}
-            className="w-full resize-none bg-transparent pt-3 pb-12 px-3 pr-14 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+            className={`w-full resize-none bg-transparent pt-3 pb-12 px-3 pr-14 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60 ${swarmActive ? "ring-1 ring-primary/40 rounded-xl" : ""}`}
           />
           <input
             ref={fileInputRef}
@@ -197,6 +201,7 @@ export function ChatComposer({
             >
               <ClipboardPaste className="h-4 w-4" />
             </Button>
+            {swarmSlot && <div className="ml-1 pl-1 border-l border-border/60">{swarmSlot}</div>}
           </div>
           {pending ? (
             <button

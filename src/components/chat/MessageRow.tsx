@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Copy, Check, Send as SendIcon } from "lucide-react";
+import { FileText, Copy, Check, Send as SendIcon, Users, ChevronDown, ChevronRight } from "lucide-react";
 import { VdnxLoader } from "@/components/VdnxLoader";
 import { ArtifactPill, type DocArtifact } from "@/components/ArtifactDrawer";
 import { filePlanFromChat, fileLinkedInDrafts } from "@/lib/outbound.functions";
+import { getSwarmDrafts } from "@/serverfns/swarm.functions";
 import { copyToClipboard, formatBytes, type Attachment } from "@/lib/chat-helpers";
 
 export function MessageRow({
@@ -17,6 +19,7 @@ export function MessageRow({
   modelUsed,
   onOpenArtifact,
   linkedInAuthoring = false,
+  swarmRun = null,
 }: {
   role: "user" | "assistant";
   content: string;
@@ -25,6 +28,7 @@ export function MessageRow({
   modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
   linkedInAuthoring?: boolean;
+  swarmRun?: { id: string; synth_model: string; drafter_models: string[]; status: string } | null;
 }) {
 
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));
@@ -179,8 +183,66 @@ export function MessageRow({
           <AddToOutboundButton content={content} force={linkedInAuthoring} />
           <SendPlanButton content={content} />
           {modelUsed && <ModelPill model={modelUsed} />}
+          {swarmRun && <SwarmBadge run={swarmRun} />}
         </div>
+        {swarmRun && <SwarmDrafts runId={swarmRun.id} />}
       </div>
+    </div>
+  );
+}
+
+function SwarmBadge({ run }: { run: { synth_model: string; drafter_models: string[] } }) {
+  const short = (s: string) => s.split("/").pop() ?? s;
+  return (
+    <span
+      title={`Swarm: ${run.drafter_models.map(short).join(", ")} → ${short(run.synth_model)}`}
+      className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+    >
+      <Users className="h-3 w-3" />
+      Swarm · {run.drafter_models.length}
+    </span>
+  );
+}
+
+function SwarmDrafts({ runId }: { runId: string }) {
+  const [open, setOpen] = useState(false);
+  const load = useServerFn(getSwarmDrafts);
+  const { data: drafts = [], isLoading } = useQuery({
+    queryKey: ["swarm-drafts", runId],
+    queryFn: () => load({ data: { runId } }),
+    enabled: open,
+  });
+  return (
+    <div className="mt-2 rounded-md border border-border/60 bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <Users className="h-3 w-3" />
+        View swarm drafts
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          {isLoading && <VdnxLoader size="xs" />}
+          {(drafts as any[]).map((d) => (
+            <div key={d.id} className="rounded border border-border/50 bg-background/40 p-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-mono text-muted-foreground">{d.model.split("/").pop()}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {d.status === "ok" ? `${d.latency_ms ?? "—"}ms` : d.status}
+                </span>
+              </div>
+              <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-6">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {d.status === "ok" ? (d.content ?? "") : `⚠️ ${d.error ?? d.status}`}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

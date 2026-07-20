@@ -9,12 +9,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getSwarmConfig, saveSwarmConfig } from "@/serverfns/swarm.functions";
 
 type Props = {
   active: boolean;
   onToggle: (on: boolean) => void;
   disabled?: boolean;
+};
+
+type AgentCfg = {
+  role: string;
+  label: string;
+  model: string;
+  enabled: boolean;
+  systemPrompt: string;
 };
 
 export function SwarmPopover({ active, onToggle, disabled }: Props) {
@@ -24,20 +40,23 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
   const { data: cfg } = useQuery({ queryKey: ["swarm-config"], queryFn: () => load() });
 
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"agents" | "models">("agents");
   const [models, setModels] = useState<string[]>([]);
   const [synth, setSynth] = useState<string>("");
   const [maxParallel, setMaxParallel] = useState<number>(4);
+  const [agents, setAgents] = useState<AgentCfg[]>([]);
 
   useEffect(() => {
     if (!cfg) return;
     setModels(cfg.models);
     setSynth(cfg.synthModel);
     setMaxParallel(cfg.maxParallel);
+    setAgents(((cfg as any).agents ?? []) as AgentCfg[]);
   }, [cfg]);
 
   const saveM = useMutation({
     mutationFn: async () =>
-      save({ data: { models, synthModel: synth, maxParallel } }),
+      save({ data: { models, synthModel: synth, maxParallel, agents } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["swarm-config"] });
       toast.success("Swarm settings saved");
@@ -49,8 +68,13 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
   const toggleModel = (slug: string) => {
     setModels((prev) => (prev.includes(slug) ? prev.filter((m) => m !== slug) : [...prev, slug]));
   };
-  const canEnable = (cfg?.models.length ?? 0) >= 2;
-  const activeCount = cfg?.models.length ?? 0;
+  const updateAgent = (role: string, patch: Partial<AgentCfg>) => {
+    setAgents((prev) => prev.map((a) => (a.role === role ? { ...a, ...patch } : a)));
+  };
+
+  const enabledAgentCount = agents.filter((a) => a.enabled).length;
+  const canEnable = enabledAgentCount >= 2 || (cfg?.models.length ?? 0) >= 2;
+  const activeCount = enabledAgentCount >= 2 ? enabledAgentCount : (cfg?.models.length ?? 0);
 
   return (
     <div className="flex items-center gap-1">
@@ -63,9 +87,9 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
         className="h-8 px-2 gap-1.5 text-xs"
         title={
           !canEnable
-            ? "Configure at least 2 swarm models first"
+            ? "Enable at least 2 agents (or pick 2 drafters) first"
             : active
-              ? `Swarm ON — ${activeCount} models will draft, synthesized by ${cfg?.available.find((a) => a.slug === cfg?.synthModel)?.label ?? "synthesizer"}`
+              ? `Swarm ON — ${activeCount} agents will draft, synthesized by ${cfg?.available.find((a) => a.slug === cfg?.synthModel)?.label ?? "synthesizer"}`
               : "Turn on Swarm mode"
         }
       >
@@ -79,38 +103,94 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
             size="icon"
             variant="ghost"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title="Configure swarm models"
+            title="Configure swarm agents"
             aria-label="Swarm settings"
           >
             <Settings2 className="h-3.5 w-3.5" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[340px] p-4 space-y-4">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+        <PopoverContent align="end" className="w-[380px] p-4 space-y-4">
+          <div className="flex rounded-md border p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setTab("agents")}
+              className={`flex-1 rounded px-2 py-1 ${tab === "agents" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+            >
+              Agents ({enabledAgentCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("models")}
+              className={`flex-1 rounded px-2 py-1 ${tab === "models" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+            >
               Drafters ({models.length})
-            </div>
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
-              {(cfg?.available ?? []).map((m) => (
-                <label key={m.slug} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
-                  <Checkbox
-                    checked={models.includes(m.slug)}
-                    onCheckedChange={() => toggleModel(m.slug)}
-                  />
-                  <span className="flex-1">{m.label}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-1.5">
-              Pick 2–6. All run in parallel on the same prompt.
-            </p>
+            </button>
           </div>
+
+          {tab === "agents" && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                Per-role model
+              </div>
+              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                {agents.map((a) => (
+                  <div key={a.role} className="flex items-center gap-2">
+                    <Switch
+                      checked={a.enabled}
+                      onCheckedChange={(v) => updateAgent(a.role, { enabled: v })}
+                    />
+                    <div className="w-14 text-sm font-medium">{a.label}</div>
+                    <Select
+                      value={a.model}
+                      onValueChange={(v) => updateAgent(a.role, { model: v })}
+                    >
+                      <SelectTrigger className="h-8 flex-1 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(cfg?.available ?? []).map((m) => (
+                          <SelectItem key={m.slug} value={m.slug} className="text-xs">
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Enable at least 2 roles. Each runs its own model with a role-specific system prompt in parallel.
+              </p>
+            </div>
+          )}
+
+          {tab === "models" && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                Fallback drafters
+              </div>
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                {(cfg?.available ?? []).map((m) => (
+                  <label key={m.slug} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
+                    <Checkbox
+                      checked={models.includes(m.slug)}
+                      onCheckedChange={() => toggleModel(m.slug)}
+                    />
+                    <span className="flex-1">{m.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Used only when fewer than 2 agents are enabled.
+              </p>
+            </div>
+          )}
 
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">
               Synthesizer
             </div>
-            <RadioGroup value={synth} onValueChange={setSynth} className="space-y-1">
+            <RadioGroup value={synth} onValueChange={setSynth} className="space-y-1 max-h-[140px] overflow-y-auto pr-1">
               {(cfg?.available ?? []).map((m) => (
                 <label key={m.slug} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
                   <RadioGroupItem value={m.slug} />
@@ -118,9 +198,6 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
                 </label>
               ))}
             </RadioGroup>
-            <p className="text-[11px] text-muted-foreground mt-1.5">
-              Merges the drafts into one final answer. Claude Opus 4.7 recommended.
-            </p>
           </div>
 
           <div>
@@ -147,7 +224,7 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
               type="button"
               size="sm"
               onClick={() => saveM.mutate()}
-              disabled={saveM.isPending || models.length < 2}
+              disabled={saveM.isPending || (enabledAgentCount < 2 && models.length < 2)}
             >
               Save
             </Button>

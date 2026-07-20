@@ -41,6 +41,7 @@ function ConnectionsPage() {
         <Card icon={Mail} label="Gmail" connected={data?.gmail ?? false} loading={isLoading} description="Used to send outbound and reminder emails." />
         <Card icon={Linkedin} label="LinkedIn" connected={data?.linkedin ?? false} loading={isLoading} description="Used to publish LinkedIn posts (with optional image)." />
         <GithubCard />
+        <ChannelInboxCard />
       </div>
 
       <section className="mt-8 rounded-lg border border-border bg-panel p-5 text-sm text-muted-foreground">

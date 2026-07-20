@@ -733,6 +733,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
                   modelUsed={(m as any).model_used ?? null}
                   onOpenArtifact={setOpenArtifact}
                   linkedInAuthoring={linkedInAuthoring}
+                  swarmRun={swarmRunByMessage.get(m.id) ?? null}
                 />
               );
             })}

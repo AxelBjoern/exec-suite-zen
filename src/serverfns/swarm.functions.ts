@@ -106,10 +106,12 @@ export function normalizeAgents(raw: any): SwarmAgent[] {
   return list;
 }
 
-// SYNTH_SYSTEM and draftOne now live in `@/server/swarm-core.server` to keep
-// server-only imports out of this client-reachable module. Re-exporting is
-// safe (types + values are only read from server-side callers).
-export { SYNTH_SYSTEM, draftOne, synthesize, type DraftResult } from "@/server/swarm-core.server";
+// SYNTH_SYSTEM, DraftResult, draftOne, and synthesize live in
+// `@/server/swarm-core.server`. Do not re-export them here at module scope —
+// import-protection blocks any `.server.ts` symbol from a client-reachable
+// module. Callers should either import from `@/server/swarm-core.server`
+// directly (in other server-only files) or, inside a `createServerFn`
+// handler, use `await import("@/server/swarm-core.server")`.
 
 export function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
   const list = (models ?? []).filter((m) => typeof m === "string" && ALLOWED_SET.has(m));

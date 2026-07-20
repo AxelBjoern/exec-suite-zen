@@ -31,6 +31,15 @@ export type SwarmStreamDraftEvent = {
   tokens_out: number | null;
 };
 
+export type SwarmStreamBreakdownItem = {
+  model: string;
+  label: string;
+  role: string | null;
+  role_label: string | null;
+  confidence: number | null;
+  rationale: string | null;
+};
+
 export type StreamSwarmOpts = {
   content: string;
   conversationId?: string | null;
@@ -39,6 +48,7 @@ export type StreamSwarmOpts = {
   onRun?: (info: SwarmStreamRunEvent) => void;
   onDraft?: (d: SwarmStreamDraftEvent) => void;
   onSynthStart?: (info: { synth_model: string; synth_label: string; ok_count: number }) => void;
+  onBreakdown?: (items: SwarmStreamBreakdownItem[]) => void;
 };
 
 export async function streamSwarm(opts: StreamSwarmOpts): Promise<any> {

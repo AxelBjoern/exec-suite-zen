@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Copy, Check, Send as SendIcon } from "lucide-react";
+import { FileText, Copy, Check, Send as SendIcon, Users, ChevronDown, ChevronRight } from "lucide-react";
 import { VdnxLoader } from "@/components/VdnxLoader";
 import { ArtifactPill, type DocArtifact } from "@/components/ArtifactDrawer";
 import { filePlanFromChat, fileLinkedInDrafts } from "@/lib/outbound.functions";
+import { getSwarmDrafts } from "@/serverfns/swarm.functions";
 import { copyToClipboard, formatBytes, type Attachment } from "@/lib/chat-helpers";
 
 export function MessageRow({

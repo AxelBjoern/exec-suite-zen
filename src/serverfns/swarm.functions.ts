@@ -142,11 +142,27 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
       : DEFAULT_SYNTH_MODEL;
     const maxParallel = Math.min(6, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
     const agents = normalizeAgents(data?.swarm_agents);
+
+    // Filter `available` to models the user has flagged swarm_eligible.
+    // Always keep currently-selected slugs (drafters, synth, agent models) so
+    // an existing config never renders "unknown".
+    const { data: eligibleRows } = await supabase
+      .from("base_models")
+      .select("slug")
+      .eq("swarm_eligible", true);
+    const eligibleSet = new Set<string>((eligibleRows ?? []).map((r: any) => r.slug));
+    const keep = new Set<string>([
+      ...models,
+      synth,
+      ...agents.map((a) => a.model),
+    ]);
+    const available = ALLOWED_SWARM_MODELS.filter((m) => eligibleSet.has(m.slug) || keep.has(m.slug));
+
     return {
       models: models.length >= 2 ? models : DEFAULT_SWARM_MODELS,
       synthModel: synth,
       maxParallel,
-      available: ALLOWED_SWARM_MODELS,
+      available: available.length ? available : ALLOWED_SWARM_MODELS,
       agents,
       roleDefaults: SWARM_ROLE_DEFAULTS,
     };

@@ -1,12 +1,37 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Plus,
+  X,
+  MessageSquare,
+  Pencil,
+  Trash2,
+  ExternalLink,
+  FolderPlus,
+  Folder,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatRelative, type Conversation } from "@/lib/chat-helpers";
+import type { ChatProject } from "@/serverfns/chat-projects.functions";
+
+type ConversationWithProject = Conversation & { project_id?: string | null };
 
 type Props = {
   isOwner: boolean;
-  conversations: Conversation[];
+  conversations: ConversationWithProject[];
   activeId: string | null;
   setActiveId: (id: string) => void;
   sidebarOpen: boolean;
@@ -15,6 +40,11 @@ type Props = {
   newPending: boolean;
   onRename: (c: Conversation) => void;
   onDelete: (c: Conversation) => void;
+  projects: ChatProject[];
+  onNewProject: () => void;
+  onEditProject: (p: ChatProject) => void;
+  onDeleteProject: (p: ChatProject) => void;
+  onAssignProject: (c: Conversation, projectId: string | null) => void;
 };
 
 export function ConversationSidebar({
@@ -28,7 +58,116 @@ export function ConversationSidebar({
   newPending,
   onRename,
   onDelete,
+  projects,
+  onNewProject,
+  onEditProject,
+  onDeleteProject,
+  onAssignProject,
 }: Props) {
+  const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({});
+  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+
+  const unassigned = conversations.filter((c) => !c.project_id || !projectMap.has(c.project_id));
+  const grouped = projects.map((p) => ({
+    project: p,
+    items: conversations.filter((c) => c.project_id === p.id),
+  }));
+
+  const renderConversation = (c: ConversationWithProject) => {
+    const active = c.id === activeId;
+    return (
+      <div
+        key={c.id}
+        className={`group relative mx-2 mb-1 rounded-md transition-colors ${
+          active ? "bg-primary/10 border border-primary/30" : "hover:bg-muted/50 border border-transparent"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setActiveId(c.id);
+            setSidebarOpen(false);
+          }}
+          className="w-full text-left px-3 py-2 pr-20"
+        >
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <div className="text-sm font-medium truncate">{c.title}</div>
+          </div>
+          <div className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
+            {formatRelative(c.updated_at)}
+          </div>
+        </button>
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
+                aria-label="Assign project"
+                title="Move to project"
+              >
+                <Folder className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel className="text-xs">Move to project</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onAssignProject(c, null)}>
+                <span className="text-xs">No project</span>
+              </DropdownMenuItem>
+              {projects.map((p) => (
+                <DropdownMenuItem key={p.id} onClick={() => onAssignProject(c, p.id)}>
+                  <Folder className="h-3 w-3 mr-2" />
+                  <span className="text-xs truncate">{p.name}</span>
+                </DropdownMenuItem>
+              ))}
+              {projects.length === 0 && (
+                <DropdownMenuItem disabled>
+                  <span className="text-xs text-muted-foreground">No projects yet</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <a
+            href={`/chat/${c.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
+            aria-label="Open in new tab"
+            title="Open in new tab"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRename(c);
+            }}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
+            aria-label="Rename"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(c);
+            }}
+            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-background/80"
+            aria-label="Delete"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       {sidebarOpen && (
@@ -79,78 +218,82 @@ export function ConversationSidebar({
             <X className="h-4 w-4" />
           </Button>
         </div>
+
         <div className="flex-1 overflow-y-auto py-2">
-          {conversations.length === 0 && (
+          <div className="px-3 pb-2 flex items-center justify-between">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Projects
+            </div>
+            <button
+              type="button"
+              onClick={onNewProject}
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              title="New project"
+              aria-label="New project"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {grouped.map(({ project, items }) => {
+            const open = openProjects[project.id] ?? true;
+            return (
+              <div key={project.id} className="mb-1">
+                <div className="group mx-2 flex items-center gap-1 px-2 py-1 rounded hover:bg-muted/40">
+                  <button
+                    type="button"
+                    onClick={() => setOpenProjects((s) => ({ ...s, [project.id]: !open }))}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={open ? "Collapse" : "Expand"}
+                  >
+                    {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  </button>
+                  <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="flex-1 text-xs font-medium truncate" title={project.system_prompt || undefined}>
+                    {project.name}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{items.length}</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+                        aria-label="Project actions"
+                      >
+                        <MoreHorizontal className="h-3 w-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEditProject(project)}>
+                        <Pencil className="h-3 w-3 mr-2" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onDeleteProject(project)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3 mr-2" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                {open && items.map(renderConversation)}
+                {open && items.length === 0 && (
+                  <div className="mx-4 mb-1 px-2 py-1 text-[10px] text-muted-foreground/70 italic">
+                    Empty — assign a chat via the folder icon.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Chats
+          </div>
+          {unassigned.length === 0 && conversations.length === 0 && (
             <div className="px-4 py-8 text-center text-xs text-muted-foreground">
               No conversations yet. Start chatting or click <Plus className="inline h-3 w-3" /> to create one.
             </div>
           )}
-          {conversations.map((c) => {
-            const active = c.id === activeId;
-            return (
-              <div
-                key={c.id}
-                className={`group relative mx-2 mb-1 rounded-md transition-colors ${
-                  active
-                    ? "bg-primary/10 border border-primary/30"
-                    : "hover:bg-muted/50 border border-transparent"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveId(c.id);
-                    setSidebarOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 pr-14"
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <div className="text-sm font-medium truncate">{c.title}</div>
-                  </div>
-                  <div className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
-                    {formatRelative(c.updated_at)}
-                  </div>
-                </button>
-                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                  <a
-                    href={`/chat/${c.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
-                    aria-label="Open in new tab"
-                    title="Open in new tab"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename(c);
-                    }}
-                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
-                    aria-label="Rename"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(c);
-                    }}
-                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-background/80"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-
-              </div>
-            );
-          })}
+          {unassigned.map(renderConversation)}
         </div>
       </aside>
     </>

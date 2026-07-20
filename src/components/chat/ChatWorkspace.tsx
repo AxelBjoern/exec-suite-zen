@@ -14,6 +14,14 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { routeAutoModel } from "@/lib/chat-router.functions";
+import {
+  listChatProjects,
+  createChatProject,
+  updateChatProject,
+  deleteChatProject,
+  assignConversationToProject,
+  type ChatProject,
+} from "@/serverfns/chat-projects.functions";
 import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 
@@ -102,6 +110,66 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     queryKey: ["ceo-conversations"],
     queryFn: () => listConvos() as Promise<Conversation[]>,
   });
+
+  // Slice B — Projects (workspace memory). Additive: conversations without a
+  // project keep working exactly as today.
+  const listProjectsFn = useServerFn(listChatProjects);
+  const createProjectFn = useServerFn(createChatProject);
+  const updateProjectFn = useServerFn(updateChatProject);
+  const deleteProjectFn = useServerFn(deleteChatProject);
+  const assignProjectFn = useServerFn(assignConversationToProject);
+  const { data: chatProjects = [] } = useQuery<ChatProject[]>({
+    queryKey: ["chat-projects"],
+    queryFn: () => listProjectsFn() as Promise<ChatProject[]>,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const createProjectMut = useMutation({
+    mutationFn: (v: { name: string; system_prompt: string }) => createProjectFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat-projects"] }),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to create project"),
+  });
+  const updateProjectMut = useMutation({
+    mutationFn: (v: { id: string; name?: string; system_prompt?: string }) => updateProjectFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chat-projects"] }),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to update project"),
+  });
+  const deleteProjectMut = useMutation({
+    mutationFn: (id: string) => deleteProjectFn({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chat-projects"] });
+      qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed to delete project"),
+  });
+  const assignProjectMut = useMutation({
+    mutationFn: (v: { conversationId: string; projectId: string | null }) => assignProjectFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ceo-conversations"] }),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to move conversation"),
+  });
+
+  function handleNewProject() {
+    const name = window.prompt("Project name?")?.trim();
+    if (!name) return;
+    const system_prompt = window.prompt(
+      "Project system prompt (optional) — prepended to every reply in this project:",
+      "",
+    ) ?? "";
+    createProjectMut.mutate({ name, system_prompt });
+  }
+  function handleEditProject(p: ChatProject) {
+    const name = window.prompt("Project name", p.name)?.trim();
+    if (name === undefined) return;
+    const system_prompt = window.prompt("Project system prompt", p.system_prompt) ?? p.system_prompt;
+    updateProjectMut.mutate({ id: p.id, name: name || p.name, system_prompt });
+  }
+  function handleDeleteProject(p: ChatProject) {
+    if (!window.confirm(`Delete project "${p.name}"? Conversations stay, they just become unassigned.`)) return;
+    deleteProjectMut.mutate(p.id);
+  }
+  function handleAssignProject(c: Conversation, projectId: string | null) {
+    assignProjectMut.mutate({ conversationId: c.id, projectId });
+  }
 
   // If no active id, default to the most recent conversation
   useEffect(() => {
@@ -677,6 +745,11 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
         newPending={newConvoMutation.isPending}
         onRename={handleRename}
         onDelete={handleDelete}
+        projects={chatProjects}
+        onNewProject={handleNewProject}
+        onEditProject={handleEditProject}
+        onDeleteProject={handleDeleteProject}
+        onAssignProject={handleAssignProject}
       />
 
       {/* ── Main: chat panel ───────────────────────────────────────────── */}

@@ -23,6 +23,7 @@ export type Conversation = {
   title: string;
   created_at: string;
   updated_at: string;
+  project_id?: string | null;
 };
 
 export const MODEL_STORAGE_KEY = "ceo-chat-model";

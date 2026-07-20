@@ -443,6 +443,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          project_id: string | null
           title: string
           updated_at: string
           user_id: string | null
@@ -450,6 +451,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          project_id?: string | null
           title?: string
           updated_at?: string
           user_id?: string | null
@@ -457,11 +459,20 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          project_id?: string | null
           title?: string
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ceo_conversations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "chat_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       channel_bindings: {
         Row: {
@@ -499,6 +510,33 @@ export type Database = {
           owner_id?: string
           updated_at?: string
           verified_at?: string | null
+        }
+        Relationships: []
+      }
+      chat_projects: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          system_prompt: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          system_prompt?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          system_prompt?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

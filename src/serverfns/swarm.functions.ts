@@ -410,6 +410,8 @@ export const runSwarm = createServerFn({ method: "POST" })
           user_id: userId,
           model_slug: d.model,
           model_label: d.label,
+          role: d.role ?? null,
+          role_label: d.roleLabel ?? null,
           content: d.content,
           status: d.status,
           error: d.error ?? null,

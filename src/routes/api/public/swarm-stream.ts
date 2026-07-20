@@ -4,10 +4,10 @@
 // message. Persists the run + drafts + messages identically to runSwarm.
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
 import {
-  SYNTH_SYSTEM,
   draftOne,
+  synthesizeWithBreakdown,
+  type DraftBreakdown,
   type DraftResult,
 } from "@/server/swarm-core.server";
 import {
@@ -271,6 +271,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
               const models = units.map((u) => u.model);
               let finalContent = "";
               let swarmStatus: "ok" | "degraded" | "failed" = "ok";
+              let breakdown: DraftBreakdown[] = [];
 
               send("synth_start", { synth_model: synthModel, synth_label: synthLabel, ok_count: okDrafts.length });
 
@@ -281,26 +282,18 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 swarmStatus = "failed";
               } else {
                 if (okDrafts.length < drafts.length) swarmStatus = "degraded";
-                const draftBlock = okDrafts
-                  .map((d, i) => {
-                    const header = d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label;
-                    return `## Draft ${String.fromCharCode(65 + i)} (${header})\n\n${d.content}`;
-                  })
-                  .join("\n\n---\n\n");
                 try {
-                  const synthJson = await chatCompletion({
-                    model: resolveTextChatModel(synthModel),
-                    temperature: 0.3,
-                    messages: [
-                      { role: "system", content: SYNTH_SYSTEM },
-                      {
-                        role: "user",
-                        content: `USER PROMPT:\n${augmentedContent}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
-                      },
-                    ],
-                  });
-                  finalContent =
-                    synthJson?.choices?.[0]?.message?.content?.trim() || okDrafts[0].content;
+                  const result = await synthesizeWithBreakdown(
+                    synthModel,
+                    augmentedContent,
+                    okDrafts.map((d) => ({
+                      model: d.model,
+                      label: d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label,
+                      content: d.content,
+                    })),
+                  );
+                  finalContent = result.answer || okDrafts[0].content;
+                  breakdown = result.breakdown;
                 } catch (e: any) {
                   finalContent =
                     okDrafts[0].content +
@@ -308,6 +301,14 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                   swarmStatus = "degraded";
                 }
               }
+
+              // Map breakdown back to drafts by A/B/C order (matches okDrafts order)
+              const confByModel = new Map<string, { confidence: number; rationale: string }>();
+              breakdown.forEach((b, i) => {
+                const d = okDrafts[i];
+                if (d) confByModel.set(d.model + "|" + d.label, { confidence: b.confidence, rationale: b.rationale });
+              });
+
 
               // Persist assistant message
               const { data: savedMsg, error: mErr } = await admin
@@ -338,23 +339,28 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 .single();
               if (runRow) {
                 await admin.from("swarm_drafts").insert(
-                  drafts.map((d) => ({
-                    run_id: runRow.id,
-                    user_id: userId,
-                    model_slug: d.model,
-                    model_label: d.label,
-                    role: d.role ?? null,
-                    role_label: d.roleLabel ?? null,
-                    content: d.content,
-                    status: d.status,
-                    error: d.error ?? null,
-                    latency_ms: d.latency_ms,
-                    tokens_in: d.tokens_in ?? null,
-                    tokens_out: d.tokens_out ?? null,
-                    attempted_models: d.attempted_models ?? [d.model],
-                    used_fallback: d.used_fallback ?? false,
-                    primary_error: d.primary_error ?? null,
-                  })),
+                  drafts.map((d) => {
+                    const cr = confByModel.get(d.model + "|" + d.label);
+                    return {
+                      run_id: runRow.id,
+                      user_id: userId,
+                      model_slug: d.model,
+                      model_label: d.label,
+                      role: d.role ?? null,
+                      role_label: d.roleLabel ?? null,
+                      content: d.content,
+                      status: d.status,
+                      error: d.error ?? null,
+                      latency_ms: d.latency_ms,
+                      tokens_in: d.tokens_in ?? null,
+                      tokens_out: d.tokens_out ?? null,
+                      attempted_models: d.attempted_models ?? [d.model],
+                      used_fallback: d.used_fallback ?? false,
+                      primary_error: d.primary_error ?? null,
+                      confidence: cr?.confidence ?? null,
+                      rationale: cr?.rationale ?? null,
+                    };
+                  }),
                 );
               }
 
@@ -362,6 +368,20 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 .from("ceo_conversations")
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", convId);
+
+              send("breakdown", {
+                items: drafts.map((d) => {
+                  const cr = confByModel.get(d.model + "|" + d.label);
+                  return {
+                    model: d.model,
+                    label: d.label,
+                    role: d.role ?? null,
+                    role_label: d.roleLabel ?? null,
+                    confidence: cr?.confidence ?? null,
+                    rationale: cr?.rationale ?? null,
+                  };
+                }),
+              });
 
               send("message", {
                 ...savedMsg,

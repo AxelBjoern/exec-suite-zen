@@ -1462,7 +1462,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
           .from("chat_projects")
           .select("system_prompt")
           .eq("id", projectId)
-          .eq("user_id", context.userId)
+          .eq("user_id", handlerContext.userId ?? "")
           .maybeSingle();
         const p = (proj?.system_prompt ?? "").trim();
         if (p) {

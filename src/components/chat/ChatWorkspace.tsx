@@ -355,6 +355,10 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const saved: any = r.saved ?? null;
       markInFlight(targetKey, false);
       setPendingFor(targetKey, null);
+      setLiveDrafts(null);
+      setLiveSynthLabel(null);
+      setLiveSynthRunning(false);
+      setExpandedLiveDraft(null);
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server

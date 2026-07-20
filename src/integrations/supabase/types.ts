@@ -272,6 +272,7 @@ export type Database = {
           owner_id: string | null
           provider: string
           slug: string
+          supports_tools: boolean
           swarm_eligible: boolean
           updated_at: string
         }
@@ -285,6 +286,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           slug: string
+          supports_tools?: boolean
           swarm_eligible?: boolean
           updated_at?: string
         }
@@ -298,6 +300,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           slug?: string
+          supports_tools?: boolean
           swarm_eligible?: boolean
           updated_at?: string
         }
@@ -1052,6 +1055,7 @@ export type Database = {
       }
       swarm_drafts: {
         Row: {
+          attempted_models: string[]
           confidence: number | null
           content: string | null
           created_at: string
@@ -1060,6 +1064,7 @@ export type Database = {
           latency_ms: number | null
           model_label: string | null
           model_slug: string
+          primary_error: string | null
           rationale: string | null
           role: string | null
           role_label: string | null
@@ -1067,9 +1072,11 @@ export type Database = {
           status: string
           tokens_in: number | null
           tokens_out: number | null
+          used_fallback: boolean
           user_id: string
         }
         Insert: {
+          attempted_models?: string[]
           confidence?: number | null
           content?: string | null
           created_at?: string
@@ -1078,6 +1085,7 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug: string
+          primary_error?: string | null
           rationale?: string | null
           role?: string | null
           role_label?: string | null
@@ -1085,9 +1093,11 @@ export type Database = {
           status?: string
           tokens_in?: number | null
           tokens_out?: number | null
+          used_fallback?: boolean
           user_id: string
         }
         Update: {
+          attempted_models?: string[]
           confidence?: number | null
           content?: string | null
           created_at?: string
@@ -1096,6 +1106,7 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug?: string
+          primary_error?: string | null
           rationale?: string | null
           role?: string | null
           role_label?: string | null
@@ -1103,6 +1114,7 @@ export type Database = {
           status?: string
           tokens_in?: number | null
           tokens_out?: number | null
+          used_fallback?: boolean
           user_id?: string
         }
         Relationships: [

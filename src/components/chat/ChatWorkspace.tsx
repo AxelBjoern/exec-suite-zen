@@ -53,9 +53,6 @@ import { MessageRow } from "@/components/chat/MessageRow";
 import { SwarmPopover } from "@/components/chat/SwarmPopover";
 import { runSwarm, getSwarmRunsForConversation } from "@/serverfns/swarm.functions";
 import { streamSwarm, type SwarmStreamRunEvent, type SwarmStreamDraftEvent, type SwarmStreamDrafter } from "@/lib/swarm-stream";
-import { streamChat, isStreamEligible, ChatStreamFallback } from "@/lib/chat-stream";
-import { ChatModeToggle, type ChatMode } from "@/components/chat/ChatModeToggle";
-import { classifyChatMode } from "@/serverfns/chat-router.functions";
 
 export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const navigate = useNavigate();
@@ -144,23 +141,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
-  // Slice 2: tri-state chat mode. `single` is the byte-identical default;
-  // `swarm` maps 1:1 to the legacy swarmActive branch; `auto` runs the
-  // classifier and dispatches to whichever the router picks.
-  const CHAT_MODE_KEY = "vdnx.chat.mode";
-  const [chatMode, setChatMode] = useState<ChatMode>(() => {
-    if (typeof window === "undefined") return "single";
-    const v = localStorage.getItem(CHAT_MODE_KEY);
-    return v === "auto" || v === "swarm" ? v : "single";
-  });
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem(CHAT_MODE_KEY, chatMode);
-  }, [chatMode]);
-  const swarmActive = chatMode === "swarm";
-  const classifyFn = useServerFn(classifyChatMode);
-  // Transient chip shown next to the currently streaming/pending reply
-  // whenever Auto routes a message. Cleared once the reply is persisted.
-  const [autoDecision, setAutoDecision] = useState<{ mode: "single" | "swarm"; reason: string } | null>(null);
+  const [swarmActive, setSwarmActive] = useState(false);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
 
@@ -179,10 +160,6 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const [liveSynthLabel, setLiveSynthLabel] = useState<string | null>(null);
   const [liveSynthRunning, setLiveSynthRunning] = useState(false);
   const [expandedLiveDraft, setExpandedLiveDraft] = useState<number | null>(null);
-  // Slice 1: token-streaming for plain conversational replies. Non-null while
-  // an assistant reply is streaming; cleared once the final saved message
-  // lands in the persisted history.
-  const [liveStream, setLiveStream] = useState<{ text: string; model: string } | null>(null);
   const { data: swarmRuns = [] } = useQuery({
     queryKey: ["swarm-runs", activeId],
     queryFn: () => swarmRunsFn({ data: { conversationId: activeId } }),
@@ -307,7 +284,6 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     mutationFn: async (vars: {
       content: string;
       attachmentIds: string[];
-      mode: ChatMode;
     }) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -315,23 +291,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
 
-      // Slice 2 — Auto router: classify then dispatch. Classifier failures
-      // return { mode:"single" } so behavior degrades to the current default.
-      let effectiveSwarm = vars.mode === "swarm";
-      if (vars.mode === "auto") {
-        try {
-          const decision = await classifyFn({ data: { content: vars.content } });
-          setAutoDecision(decision);
-          effectiveSwarm = decision.mode === "swarm";
-        } catch {
-          setAutoDecision({ mode: "single", reason: "Router error — defaulted to single" });
-          effectiveSwarm = false;
-        }
-      } else {
-        setAutoDecision(null);
-      }
-
-      const saved = effectiveSwarm
+      const saved = swarmActive
         ? await streamSwarm({
             content: vars.content,
             conversationId: targetConvoId,
@@ -374,54 +334,15 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
             },
             onSynthStart: () => setLiveSynthRunning(true),
           })
-        : await (async () => {
-            // Slice 1: try token-streaming path first for plain conversational
-            // messages. Any failure (including HTTP 409 "not eligible" from the
-            // server, network error, or upstream failure) falls back to the
-            // untouched legacy sendCeoMessage flow, preserving all existing
-            // behavior (slash commands, @dispatch, repo grounding, LinkedIn).
-            const eligible = isStreamEligible({
+        : await send({
+            data: {
               content: vars.content,
-              attachmentCount: vars.attachmentIds.length,
               model,
-              swarm: false,
-            });
-            if (eligible) {
-              try {
-                setLiveStream({ text: "", model });
-                const finalMsg = await streamChat({
-                  content: vars.content,
-                  conversationId: targetConvoId,
-                  model,
-                  signal: controller.signal,
-                  onStart: (info) => setLiveStream({ text: "", model: info.model }),
-                  onToken: (delta) =>
-                    setLiveStream((prev) =>
-                      prev ? { ...prev, text: prev.text + delta } : prev,
-                    ),
-                });
-                return finalMsg;
-              } catch (err: any) {
-                setLiveStream(null);
-                // Abort: propagate so outer onError handles it.
-                if (err?.name === "AbortError") throw err;
-                // Any other failure → fall through to legacy path silently.
-                if (!(err instanceof ChatStreamFallback)) {
-                  // eslint-disable-next-line no-console
-                  console.warn("[chat-stream] fallback:", err?.message);
-                }
-              }
-            }
-            return await send({
-              data: {
-                content: vars.content,
-                model,
-                attachmentIds: vars.attachmentIds,
-                conversationId: targetConvoId,
-              },
-              signal: controller.signal,
-            });
-          })();
+              attachmentIds: vars.attachmentIds,
+              conversationId: targetConvoId,
+            },
+            signal: controller.signal,
+          });
       return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {
@@ -444,8 +365,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       setLiveSynthLabel(null);
       setLiveSynthRunning(false);
       setExpandedLiveDraft(null);
-      setLiveStream(null);
-      setAutoDecision(null);
+
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server
@@ -675,7 +595,6 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     mutation.mutate({
       content: text,
       attachmentIds: attachments.map((a) => a.id),
-      mode: chatMode,
     });
   }
 
@@ -888,13 +807,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               />
             )}
 
-            {autoDecision && (mutation.isPending || liveStream || liveDrafts) && (
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">Auto</span>
-                <span>→ {autoDecision.mode}</span>
-                <span className="text-muted-foreground/70">· {autoDecision.reason}</span>
-              </div>
-            )}
+
 
 
             {liveDrafts && liveDrafts.length > 0 && (
@@ -947,14 +860,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               </div>
             )}
 
-            {liveStream && (
-              <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap text-foreground">
-                {liveStream.text}
-                <span className="inline-block ml-0.5 w-1.5 h-4 align-middle bg-primary/70 animate-pulse" />
-              </div>
-            )}
-
-            {showThinking && !liveDrafts && !liveStream && (
+            {showThinking && !liveDrafts && (
               <div className="pl-1"><VdnxLoader size="sm" label="CEO THINKING" /></div>
             )}
 
@@ -980,18 +886,11 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onGenerateDoc={handleGenerateDoc}
           swarmActive={swarmActive}
           swarmSlot={
-            <div className="flex items-center gap-2">
-              <ChatModeToggle
-                mode={chatMode}
-                onChange={(m) => setChatMode(m)}
-                disabled={mutation.isPending}
-              />
-              <SwarmPopover
-                active={swarmActive}
-                onToggle={(on) => setChatMode(on ? "swarm" : "single")}
-                disabled={mutation.isPending}
-              />
-            </div>
+            <SwarmPopover
+              active={swarmActive}
+              onToggle={setSwarmActive}
+              disabled={mutation.isPending}
+            />
           }
         />
       </div>

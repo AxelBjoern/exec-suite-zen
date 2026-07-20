@@ -275,8 +275,14 @@ export const runSwarm = createServerFn({ method: "POST" })
 
     const runStarted = Date.now();
 
+    // Load server-only helpers lazily (see note at top of file).
+    const { draftOne, synthesize, type DraftResult: _DraftResult } = await import(
+      "@/server/swarm-core.server"
+    ) as typeof import("@/server/swarm-core.server");
+    type Draft = Awaited<ReturnType<typeof draftOne>> & { role?: any; roleLabel?: string | null };
+
     // Fan out in parallel — one draft per unit (per role, if agents mode)
-    const drafts: DraftResult[] = await Promise.all(
+    const drafts: Draft[] = await Promise.all(
       units.map(async (u) => {
         const r = await draftOne(u.model, data.content, u.systemPrompt);
         return { ...r, role: u.role, roleLabel: u.roleLabel };
@@ -303,19 +309,7 @@ export const runSwarm = createServerFn({ method: "POST" })
         })
         .join("\n\n---\n\n");
       try {
-        const synthJson = await chatCompletion({
-          model: resolveTextChatModel(synthModel),
-          temperature: 0.3,
-          messages: [
-            { role: "system", content: SYNTH_SYSTEM },
-            {
-              role: "user",
-              content: `USER PROMPT:\n${data.content}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
-            },
-          ],
-        });
-        finalContent = synthJson?.choices?.[0]?.message?.content?.trim() ||
-          okDrafts[0].content;
+        finalContent = (await synthesize(synthModel, data.content, draftBlock)) || okDrafts[0].content;
       } catch (e: any) {
         // Synth failed → return the strongest draft
         finalContent = okDrafts[0].content +

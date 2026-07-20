@@ -287,12 +287,46 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
       const saved = vars.swarm
-        ? await swarmFn({
-            data: {
-              content: vars.content,
-              conversationId: targetConvoId,
-            },
+        ? await streamSwarm({
+            content: vars.content,
+            conversationId: targetConvoId,
             signal: controller.signal,
+            onRun: (info) => {
+              setLiveDrafts(
+                info.drafters.map((d, i) => ({
+                  index: i,
+                  model: d.model,
+                  label: d.label,
+                  role: d.role,
+                  role_label: d.role_label,
+                  status: "pending",
+                  content: "",
+                  error: null,
+                  latency_ms: null,
+                })),
+              );
+              setLiveSynthLabel(info.synth_label);
+              setLiveSynthRunning(false);
+              setExpandedLiveDraft(null);
+            },
+            onDraft: (d) => {
+              setLiveDrafts((prev) =>
+                prev
+                  ? prev.map((row) =>
+                      row.index === d.index
+                        ? {
+                            ...row,
+                            status: d.status,
+                            content: d.content,
+                            error: d.error,
+                            latency_ms: d.latency_ms,
+                          }
+                        : row,
+                    )
+                  : prev,
+              );
+            },
+            onSynthStart: () => setLiveSynthRunning(true),
           })
         : await send({
             data: {

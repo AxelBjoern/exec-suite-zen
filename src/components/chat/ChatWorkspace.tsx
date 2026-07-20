@@ -284,7 +284,6 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     mutationFn: async (vars: {
       content: string;
       attachmentIds: string[];
-      mode: ChatMode;
     }) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -292,23 +291,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
 
-      // Slice 2 — Auto router: classify then dispatch. Classifier failures
-      // return { mode:"single" } so behavior degrades to the current default.
-      let effectiveSwarm = vars.mode === "swarm";
-      if (vars.mode === "auto") {
-        try {
-          const decision = await classifyFn({ data: { content: vars.content } });
-          setAutoDecision(decision);
-          effectiveSwarm = decision.mode === "swarm";
-        } catch {
-          setAutoDecision({ mode: "single", reason: "Router error — defaulted to single" });
-          effectiveSwarm = false;
-        }
-      } else {
-        setAutoDecision(null);
-      }
-
-      const saved = effectiveSwarm
+      const saved = swarmActive
         ? await streamSwarm({
             content: vars.content,
             conversationId: targetConvoId,
@@ -351,54 +334,15 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
             },
             onSynthStart: () => setLiveSynthRunning(true),
           })
-        : await (async () => {
-            // Slice 1: try token-streaming path first for plain conversational
-            // messages. Any failure (including HTTP 409 "not eligible" from the
-            // server, network error, or upstream failure) falls back to the
-            // untouched legacy sendCeoMessage flow, preserving all existing
-            // behavior (slash commands, @dispatch, repo grounding, LinkedIn).
-            const eligible = isStreamEligible({
+        : await send({
+            data: {
               content: vars.content,
-              attachmentCount: vars.attachmentIds.length,
               model,
-              swarm: false,
-            });
-            if (eligible) {
-              try {
-                setLiveStream({ text: "", model });
-                const finalMsg = await streamChat({
-                  content: vars.content,
-                  conversationId: targetConvoId,
-                  model,
-                  signal: controller.signal,
-                  onStart: (info) => setLiveStream({ text: "", model: info.model }),
-                  onToken: (delta) =>
-                    setLiveStream((prev) =>
-                      prev ? { ...prev, text: prev.text + delta } : prev,
-                    ),
-                });
-                return finalMsg;
-              } catch (err: any) {
-                setLiveStream(null);
-                // Abort: propagate so outer onError handles it.
-                if (err?.name === "AbortError") throw err;
-                // Any other failure → fall through to legacy path silently.
-                if (!(err instanceof ChatStreamFallback)) {
-                  // eslint-disable-next-line no-console
-                  console.warn("[chat-stream] fallback:", err?.message);
-                }
-              }
-            }
-            return await send({
-              data: {
-                content: vars.content,
-                model,
-                attachmentIds: vars.attachmentIds,
-                conversationId: targetConvoId,
-              },
-              signal: controller.signal,
-            });
-          })();
+              attachmentIds: vars.attachmentIds,
+              conversationId: targetConvoId,
+            },
+            signal: controller.signal,
+          });
       return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {
@@ -421,8 +365,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       setLiveSynthLabel(null);
       setLiveSynthRunning(false);
       setExpandedLiveDraft(null);
-      setLiveStream(null);
-      setAutoDecision(null);
+
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server

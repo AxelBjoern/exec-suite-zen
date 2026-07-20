@@ -19,6 +19,7 @@ export function MessageRow({
   modelUsed,
   onOpenArtifact,
   linkedInAuthoring = false,
+  swarmRun = null,
 }: {
   role: "user" | "assistant";
   content: string;
@@ -27,6 +28,7 @@ export function MessageRow({
   modelUsed?: string | null;
   onOpenArtifact?: (a: DocArtifact) => void;
   linkedInAuthoring?: boolean;
+  swarmRun?: { id: string; synth_model: string; drafter_models: string[]; status: string } | null;
 }) {
 
   const videoAtts = attachments.filter((a) => a.url && a.mimeType?.startsWith("video/"));

@@ -187,61 +187,8 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
 
 
 // ── Run swarm ──────────────────────────────────────────────────────────────
-export type DraftResult = {
-  model: string;
-  label: string;
-  role?: SwarmRole | null;
-  roleLabel?: string | null;
-  status: "ok" | "error";
-  content: string;
-  error?: string;
-  latency_ms: number;
-  tokens_in?: number;
-  tokens_out?: number;
-};
-
-export async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
-  const label = LABEL_BY_SLUG.get(model) ?? model;
-  const started = Date.now();
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
-    const json = await Promise.race([
-      chatCompletion({
-        model: resolveTextChatModel(model),
-        temperature: 0.6,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-      }),
-      new Promise<never>((_, rej) =>
-        controller.signal.addEventListener("abort", () => rej(new Error("timeout"))),
-      ),
-    ]);
-    clearTimeout(timer);
-    const content = json?.choices?.[0]?.message?.content?.trim() || "";
-    if (!content) throw new Error("empty response");
-    return {
-      model,
-      label,
-      status: "ok",
-      content,
-      latency_ms: Date.now() - started,
-      tokens_in: json?.usage?.prompt_tokens,
-      tokens_out: json?.usage?.completion_tokens,
-    };
-  } catch (e: any) {
-    return {
-      model,
-      label,
-      status: "error",
-      content: "",
-      error: e?.message ?? String(e),
-      latency_ms: Date.now() - started,
-    };
-  }
-}
+// `DraftResult` and `draftOne` are re-exported above from
+// `@/server/swarm-core.server`.
 
 export const runSwarm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

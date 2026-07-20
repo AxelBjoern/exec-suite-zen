@@ -35,7 +35,9 @@ type BaseModel = {
   is_system: boolean;
   is_public?: boolean;
   owner_id?: string | null;
+  swarm_eligible?: boolean;
 };
+
 
 type AgentDraft = { name: string; industry: string; description: string };
 type ModelDraft = { slug: string; name: string; provider: string; description: string };

@@ -6,16 +6,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
 import {
+  SYNTH_SYSTEM,
+  draftOne,
+  type DraftResult,
+} from "@/server/swarm-core.server";
+import {
   ALLOWED_SET,
   DEFAULT_MAX_PARALLEL,
   DEFAULT_SWARM_MODELS,
   DEFAULT_SYNTH_MODEL,
   LABEL_BY_SLUG,
-  SYNTH_SYSTEM,
-  draftOne,
   normalizeAgents,
   normalizeModels,
-  type DraftResult,
   type SwarmRole,
 } from "@/serverfns/swarm.functions";
 

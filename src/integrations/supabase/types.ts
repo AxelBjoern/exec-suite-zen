@@ -992,6 +992,7 @@ export type Database = {
       }
       swarm_drafts: {
         Row: {
+          confidence: number | null
           content: string | null
           created_at: string
           error: string | null
@@ -999,6 +1000,7 @@ export type Database = {
           latency_ms: number | null
           model_label: string | null
           model_slug: string
+          rationale: string | null
           role: string | null
           role_label: string | null
           run_id: string
@@ -1008,6 +1010,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          confidence?: number | null
           content?: string | null
           created_at?: string
           error?: string | null
@@ -1015,6 +1018,7 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug: string
+          rationale?: string | null
           role?: string | null
           role_label?: string | null
           run_id: string
@@ -1024,6 +1028,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          confidence?: number | null
           content?: string | null
           created_at?: string
           error?: string | null
@@ -1031,6 +1036,7 @@ export type Database = {
           latency_ms?: number | null
           model_label?: string | null
           model_slug?: string
+          rationale?: string | null
           role?: string | null
           role_label?: string | null
           run_id?: string

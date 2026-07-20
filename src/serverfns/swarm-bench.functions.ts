@@ -3,7 +3,20 @@
 // arbiter, estimate cost, and persist to swarm_bench_runs for comparison.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+// `@/server/llm.server` cannot be imported at module scope: swarm-bench.tsx
+// pulls this file into the client graph and the import-protection plugin
+// blocks any `.server` imports from client-reachable modules. Load lazily.
+let _llmModPromise: Promise<typeof import("@/server/llm.server")> | null = null;
+async function llm() {
+  if (!_llmModPromise) _llmModPromise = import("@/server/llm.server");
+  return _llmModPromise;
+}
+async function chatCompletion(...args: Parameters<Awaited<ReturnType<typeof llm>>["chatCompletion"]>) {
+  return (await llm()).chatCompletion(...args);
+}
+async function resolveTextChatModel(id?: string | null): Promise<string> {
+  return (await llm()).resolveTextChatModel(id);
+}
 import {
   ALLOWED_SWARM_MODELS,
   DEFAULT_SWARM_MODELS,
@@ -49,7 +62,7 @@ async function runOne(model: string, prompt: string): Promise<Row> {
   const started = Date.now();
   try {
     const json = await chatCompletion({
-      model: resolveTextChatModel(model),
+      model: await resolveTextChatModel(model),
       temperature: 0.6,
       messages: [
         { role: "system", content: "You are a top-tier assistant. Give the best answer you can. Be specific, correct, useful." },
@@ -94,7 +107,7 @@ async function scoreRows(synthModel: string, prompt: string, rows: Row[]): Promi
     .join("\n\n---\n\n");
   try {
     const json = await chatCompletion({
-      model: resolveTextChatModel(synthModel),
+      model: await resolveTextChatModel(synthModel),
       temperature: 0,
       messages: [
         { role: "system", content: SCORING_SYSTEM },
@@ -179,7 +192,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
           .map((d, i) => `## Draft ${String.fromCharCode(65 + i)} (${d.label})\n\n${d.content}`)
           .join("\n\n---\n\n");
         const json = await chatCompletion({
-          model: resolveTextChatModel(synthModel),
+          model: await resolveTextChatModel(synthModel),
           temperature: 0.3,
           messages: [
             { role: "system", content: "You are the arbiter. Merge the drafts into one final answer that is more accurate, complete, and useful than any individual draft. Never mention the drafts or model names." },

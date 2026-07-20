@@ -204,14 +204,42 @@ function SwarmBadge({ run }: { run: { synth_model: string; drafter_models: strin
   );
 }
 
+type SwarmDraftRow = {
+  id: string;
+  model_slug: string;
+  model_label: string | null;
+  role: string | null;
+  role_label: string | null;
+  content: string | null;
+  status: "ok" | "error" | string;
+  error: string | null;
+  latency_ms: number | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  confidence: number | null;
+  rationale: string | null;
+};
+
+function confidenceTone(pct: number): { bar: string; text: string; label: string } {
+  if (pct >= 75) return { bar: "bg-emerald-500", text: "text-emerald-500", label: "High" };
+  if (pct >= 45) return { bar: "bg-amber-500", text: "text-amber-500", label: "Medium" };
+  return { bar: "bg-rose-500", text: "text-rose-500", label: "Low" };
+}
+
 function SwarmDrafts({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
   const load = useServerFn(getSwarmDrafts);
-  const { data: drafts = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["swarm-drafts", runId],
     queryFn: () => load({ data: { runId } }),
     enabled: open,
   });
+  const drafts: SwarmDraftRow[] = ((data as any)?.drafts ?? []) as SwarmDraftRow[];
+  const scored = drafts.filter((d) => typeof d.confidence === "number");
+  const avgConfidence = scored.length
+    ? Math.round(scored.reduce((s, d) => s + (d.confidence ?? 0), 0) / scored.length)
+    : null;
+
   return (
     <div className="mt-2 rounded-md border border-border/60 bg-muted/20">
       <button
@@ -221,26 +249,60 @@ function SwarmDrafts({ runId }: { runId: string }) {
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         <Users className="h-3 w-3" />
-        View swarm drafts
+        Quality breakdown
+        {avgConfidence !== null && (
+          <span className={`ml-auto text-[10px] font-mono ${confidenceTone(avgConfidence).text}`}>
+            avg {avgConfidence}%
+          </span>
+        )}
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-3">
           {isLoading && <VdnxLoader size="xs" />}
-          {(drafts as any[]).map((d) => (
-            <div key={d.id} className="rounded border border-border/50 bg-background/40 p-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono text-muted-foreground">{d.model.split("/").pop()}</span>
-                <span className="text-[10px] text-muted-foreground">
-                  {d.status === "ok" ? `${d.latency_ms ?? "—"}ms` : d.status}
-                </span>
+          {!isLoading && drafts.length === 0 && (
+            <div className="text-[11px] text-muted-foreground">No drafts recorded for this run.</div>
+          )}
+          {drafts.map((d) => {
+            const conf = typeof d.confidence === "number" ? Math.round(d.confidence) : null;
+            const tone = conf !== null ? confidenceTone(conf) : null;
+            const header = d.role_label ? `${d.role_label} · ${d.model_label ?? d.model_slug}` : (d.model_label ?? d.model_slug);
+            return (
+              <div key={d.id} className="rounded border border-border/50 bg-background/40 p-2">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[11px] font-semibold truncate">{header}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground truncate">
+                      {d.model_slug.split("/").pop()}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {d.status === "ok" ? `${d.latency_ms ?? "—"}ms` : d.status}
+                  </span>
+                </div>
+                {conf !== null && tone && (
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between text-[10px] mb-0.5">
+                      <span className={`font-semibold ${tone.text}`}>{tone.label} confidence</span>
+                      <span className={`font-mono ${tone.text}`}>{conf}%</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full ${tone.bar}`} style={{ width: `${conf}%` }} />
+                    </div>
+                    {d.rationale && (
+                      <div className="mt-1 text-[11px] italic text-muted-foreground leading-snug">
+                        {d.rationale}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-6">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {d.status === "ok" ? (d.content ?? "") : `⚠️ ${d.error ?? d.status}`}
+                  </ReactMarkdown>
+                </div>
               </div>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-6">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {d.status === "ok" ? (d.content ?? "") : `⚠️ ${d.error ?? d.status}`}
-                </ReactMarkdown>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

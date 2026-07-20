@@ -3,7 +3,11 @@
 // reply. All calls go through OpenRouter via src/server/llm.server.ts.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+// NOTE: Do not import `@/server/llm.server` at module scope. This file is
+// reachable from the client bundle via route imports, and the import-
+// protection plugin blocks any client-graph module from pulling server-only
+// files. Server-only swarm helpers live in `@/server/swarm-core.server` and
+// are loaded dynamically inside handler bodies.
 
 // Allowed text models (from core memory). Kling is video — excluded.
 export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [
@@ -102,15 +106,12 @@ export function normalizeAgents(raw: any): SwarmAgent[] {
   return list;
 }
 
-export const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
-
-Rules:
-- Silently reconcile disagreements. If a claim is contested and material, note the disagreement briefly ("sources differ on X"), don't pretend consensus.
-- Prefer verifiable specifics over vague generalities. Drop hallucinations.
-- Keep the strongest reasoning, examples, and structure from across the drafts. Do not lose useful detail.
-- Do not mention the drafts, the models, "draft A", or the swarm process. Write as one coherent voice.
-- Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
-- If drafts are all weak, answer from your own capability rather than parroting them.`;
+// SYNTH_SYSTEM, DraftResult, draftOne, and synthesize live in
+// `@/server/swarm-core.server`. Do not re-export them here at module scope —
+// import-protection blocks any `.server.ts` symbol from a client-reachable
+// module. Callers should either import from `@/server/swarm-core.server`
+// directly (in other server-only files) or, inside a `createServerFn`
+// handler, use `await import("@/server/swarm-core.server")`.
 
 export function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
   const list = (models ?? []).filter((m) => typeof m === "string" && ALLOWED_SET.has(m));
@@ -188,61 +189,8 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
 
 
 // ── Run swarm ──────────────────────────────────────────────────────────────
-export type DraftResult = {
-  model: string;
-  label: string;
-  role?: SwarmRole | null;
-  roleLabel?: string | null;
-  status: "ok" | "error";
-  content: string;
-  error?: string;
-  latency_ms: number;
-  tokens_in?: number;
-  tokens_out?: number;
-};
-
-export async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
-  const label = LABEL_BY_SLUG.get(model) ?? model;
-  const started = Date.now();
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
-    const json = await Promise.race([
-      chatCompletion({
-        model: resolveTextChatModel(model),
-        temperature: 0.6,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-      }),
-      new Promise<never>((_, rej) =>
-        controller.signal.addEventListener("abort", () => rej(new Error("timeout"))),
-      ),
-    ]);
-    clearTimeout(timer);
-    const content = json?.choices?.[0]?.message?.content?.trim() || "";
-    if (!content) throw new Error("empty response");
-    return {
-      model,
-      label,
-      status: "ok",
-      content,
-      latency_ms: Date.now() - started,
-      tokens_in: json?.usage?.prompt_tokens,
-      tokens_out: json?.usage?.completion_tokens,
-    };
-  } catch (e: any) {
-    return {
-      model,
-      label,
-      status: "error",
-      content: "",
-      error: e?.message ?? String(e),
-      latency_ms: Date.now() - started,
-    };
-  }
-}
+// `DraftResult` and `draftOne` are re-exported above from
+// `@/server/swarm-core.server`.
 
 export const runSwarm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -327,8 +275,15 @@ export const runSwarm = createServerFn({ method: "POST" })
 
     const runStarted = Date.now();
 
+    // Load server-only helpers lazily (see note at top of file).
+    const { draftOne, synthesizeWithBreakdown } = await import(
+      "@/server/swarm-core.server"
+    );
+    type DraftBreakdown = import("@/server/swarm-core.server").DraftBreakdown;
+    type Draft = Awaited<ReturnType<typeof draftOne>> & { role?: any; roleLabel?: string | null };
+
     // Fan out in parallel — one draft per unit (per role, if agents mode)
-    const drafts: DraftResult[] = await Promise.all(
+    const drafts: Draft[] = await Promise.all(
       units.map(async (u) => {
         const r = await draftOne(u.model, data.content, u.systemPrompt);
         return { ...r, role: u.role, roleLabel: u.roleLabel };
@@ -341,6 +296,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     let finalContent = "";
     let synthLabel = LABEL_BY_SLUG.get(synthModel) ?? synthModel;
     let swarmStatus: "ok" | "degraded" | "failed" = "ok";
+    let breakdownByModel = new Map<string, { confidence: number; rationale: string }>();
 
     if (okDrafts.length === 0) {
       finalContent = `_Swarm failed — all ${drafts.length} models errored._\n\n` +
@@ -348,28 +304,21 @@ export const runSwarm = createServerFn({ method: "POST" })
       swarmStatus = "failed";
     } else {
       if (okDrafts.length < drafts.length) swarmStatus = "degraded";
-      const draftBlock = okDrafts
-        .map((d, i) => {
-          const header = d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label;
-          return `## Draft ${String.fromCharCode(65 + i)} (${header})\n\n${d.content}`;
-        })
-        .join("\n\n---\n\n");
       try {
-        const synthJson = await chatCompletion({
-          model: resolveTextChatModel(synthModel),
-          temperature: 0.3,
-          messages: [
-            { role: "system", content: SYNTH_SYSTEM },
-            {
-              role: "user",
-              content: `USER PROMPT:\n${data.content}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
-            },
-          ],
-        });
-        finalContent = synthJson?.choices?.[0]?.message?.content?.trim() ||
-          okDrafts[0].content;
+        const { answer, breakdown } = await synthesizeWithBreakdown(
+          synthModel,
+          data.content,
+          okDrafts.map((d) => ({
+            model: d.model,
+            label: d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label,
+            content: d.content,
+          })),
+        );
+        finalContent = answer || okDrafts[0].content;
+        for (const b of breakdown as DraftBreakdown[]) {
+          breakdownByModel.set(b.model, { confidence: b.confidence, rationale: b.rationale });
+        }
       } catch (e: any) {
-        // Synth failed → return the strongest draft
         finalContent = okDrafts[0].content +
           `\n\n---\n_(Synthesizer ${synthLabel} failed: ${e?.message ?? "error"} — showing strongest draft.)_`;
         swarmStatus = "degraded";
@@ -405,20 +354,25 @@ export const runSwarm = createServerFn({ method: "POST" })
       .single();
     if (!rErr && runRow) {
       await supabaseAdmin.from("swarm_drafts").insert(
-        drafts.map((d) => ({
-          run_id: runRow.id,
-          user_id: userId,
-          model_slug: d.model,
-          model_label: d.label,
-          role: d.role ?? null,
-          role_label: d.roleLabel ?? null,
-          content: d.content,
-          status: d.status,
-          error: d.error ?? null,
-          latency_ms: d.latency_ms,
-          tokens_in: d.tokens_in ?? null,
-          tokens_out: d.tokens_out ?? null,
-        })),
+        drafts.map((d) => {
+          const b = breakdownByModel.get(d.model);
+          return {
+            run_id: runRow.id,
+            user_id: userId,
+            model_slug: d.model,
+            model_label: d.label,
+            role: d.role ?? null,
+            role_label: d.roleLabel ?? null,
+            content: d.content,
+            status: d.status,
+            error: d.error ?? null,
+            latency_ms: d.latency_ms,
+            tokens_in: d.tokens_in ?? null,
+            tokens_out: d.tokens_out ?? null,
+            confidence: b?.confidence ?? null,
+            rationale: b?.rationale ?? null,
+          };
+        }),
       );
     }
 
@@ -452,7 +406,7 @@ export const getSwarmDrafts = createServerFn({ method: "GET" })
         .maybeSingle(),
       supabase
         .from("swarm_drafts")
-        .select("id,model_slug,model_label,role,role_label,content,status,error,latency_ms,tokens_in,tokens_out")
+        .select("id,model_slug,model_label,role,role_label,content,status,error,latency_ms,tokens_in,tokens_out,confidence,rationale")
         .eq("run_id", data.runId)
         .order("created_at", { ascending: true }),
     ]);

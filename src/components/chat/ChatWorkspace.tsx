@@ -14,6 +14,14 @@ import {
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
 import { routeAutoModel } from "@/lib/chat-router.functions";
+import {
+  listChatProjects,
+  createChatProject,
+  updateChatProject,
+  deleteChatProject,
+  assignConversationToProject,
+  type ChatProject,
+} from "@/serverfns/chat-projects.functions";
 import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 

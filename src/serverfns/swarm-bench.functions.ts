@@ -18,13 +18,15 @@ async function resolveTextChatModel(id?: string | null): Promise<string> {
   return (await llm()).resolveTextChatModel(id);
 }
 import {
-  ALLOWED_SWARM_MODELS,
   DEFAULT_SWARM_MODELS,
   DEFAULT_SYNTH_MODEL,
   DEFAULT_MAX_PARALLEL,
+  labelForModel,
+  loadAvailableSwarmModels,
+  normalizeModels,
+  allowedSetFrom,
+  type SwarmModelOption,
 } from "./swarm.functions";
-
-const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
 
 // Rough per-1K-token credit prices (input+output blended). Tuned for the
 // 8 allowed models; treat as an estimate, not billing truth.
@@ -57,8 +59,8 @@ type Row = {
   quality_score?: number | null;
 };
 
-async function runOne(model: string, prompt: string): Promise<Row> {
-  const label = LABEL_BY_SLUG.get(model) ?? model;
+async function runOne(model: string, prompt: string, available: SwarmModelOption[]): Promise<Row> {
+  const label = labelForModel(model, available);
   const started = Date.now();
   try {
     const json = await chatCompletion({
@@ -152,7 +154,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
 
-    const synthModel = cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
+    const rawSynth = cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
     const maxParallel = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
 
     // Prefer the active per-role agents; otherwise the drafters list.
@@ -160,23 +162,31 @@ export const runSwarmBench = createServerFn({ method: "POST" })
     const agentModels = agents
       .filter((a: any) => a?.enabled && typeof a?.model === "string")
       .map((a: any) => a.model);
-    const drafterList: string[] = (agentModels.length >= 2
+    const requestedList: string[] = (agentModels.length >= 2
       ? agentModels
       : (Array.isArray(cfg?.swarm_models) && cfg.swarm_models.length >= 2
           ? cfg.swarm_models
           : DEFAULT_SWARM_MODELS)
-    ).slice(0, maxParallel);
+    );
+    const available = await loadAvailableSwarmModels(
+      supabase,
+      Array.from(new Set([...requestedList, rawSynth])),
+    );
+    const allowed = allowedSetFrom(available);
+    const drafterList = normalizeModels(requestedList, maxParallel, allowed);
+    if (drafterList.length < 2) throw new Error("Pick at least 2 swarm-eligible models before benchmarking.");
+    const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
 
     const started = Date.now();
 
     // Fan out drafters in parallel
-    const drafterRows = await Promise.all(drafterList.map((m) => runOne(m, data.prompt)));
+    const drafterRows = await Promise.all(drafterList.map((m) => runOne(m, data.prompt, available)));
 
     // Synthesize a "swarm" answer from ok drafts
     const oks = drafterRows.filter((r) => r.status === "ok");
     let swarmRow: Row = {
       model: `swarm:${synthModel}`,
-      label: `Swarm (${LABEL_BY_SLUG.get(synthModel) ?? synthModel})`,
+      label: `Swarm (${labelForModel(synthModel, available)})`,
       status: "error",
       content: "",
       error: "no successful drafts",
@@ -204,7 +214,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
         const tout = Number(json?.usage?.completion_tokens ?? 0);
         swarmRow = {
           model: `swarm:${synthModel}`,
-          label: `Swarm (${LABEL_BY_SLUG.get(synthModel) ?? synthModel})`,
+          label: `Swarm (${labelForModel(synthModel, available)})`,
           status: "ok",
           content,
           latency_ms: Date.now() - synthStart,

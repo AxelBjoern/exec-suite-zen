@@ -9,8 +9,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // files. Server-only swarm helpers live in `@/server/swarm-core.server` and
 // are loaded dynamically inside handler bodies.
 
-// Allowed text models (from core memory). Kling is video — excluded.
-export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [
+// Built-in defaults; user-added swarm models are loaded dynamically from base_models.
+export const BUILTIN_SWARM_MODELS: { slug: string; label: string }[] = [
   { slug: "anthropic/claude-opus-4.7", label: "Claude Opus 4.7" },
   { slug: "openai/gpt-5.3-chat", label: "ChatGPT 5.3" },
   { slug: "x-ai/grok-4.3", label: "Grok 4.3" },
@@ -19,8 +19,55 @@ export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [
   { slug: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { slug: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", label: "Nemotron 3 Nano Omni 30B" },
 ];
-export const ALLOWED_SET = new Set(ALLOWED_SWARM_MODELS.map((m) => m.slug));
-export const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
+export const ALLOWED_SWARM_MODELS = BUILTIN_SWARM_MODELS;
+export const ALLOWED_SET = new Set(BUILTIN_SWARM_MODELS.map((m) => m.slug));
+export const LABEL_BY_SLUG = new Map(BUILTIN_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
+
+export type SwarmModelOption = { slug: string; label: string };
+
+function uniqueModelOptions(rows: any[] | null | undefined, keep: string[] = []): SwarmModelOption[] {
+  const bySlug = new Map<string, SwarmModelOption>();
+  for (const row of rows ?? []) {
+    const slug = typeof row?.slug === "string" ? row.slug.trim() : "";
+    if (!slug || bySlug.has(slug)) continue;
+    bySlug.set(slug, { slug, label: String(row?.name ?? slug).trim() || slug });
+  }
+  for (const slug of keep) {
+    if (!slug || bySlug.has(slug)) continue;
+    bySlug.set(slug, { slug, label: LABEL_BY_SLUG.get(slug) ?? slug });
+  }
+  return Array.from(bySlug.values());
+}
+
+export function labelForModel(slug: string, available?: SwarmModelOption[]): string {
+  return available?.find((m) => m.slug === slug)?.label ?? LABEL_BY_SLUG.get(slug) ?? slug;
+}
+
+export function allowedSetFrom(available: SwarmModelOption[]): Set<string> {
+  return new Set(available.map((m) => m.slug));
+}
+export async function loadAvailableSwarmModels(
+  supabase: any,
+  keep: string[] = [],
+  opts?: { userId?: string; userEmail?: string | null },
+): Promise<SwarmModelOption[]> {
+  const select = "slug,name,owner_id,is_public,is_system";
+  const [{ data: eligible }, { data: kept }] = await Promise.all([
+    supabase.from("base_models").select(select).eq("swarm_eligible", true),
+    keep.length
+      ? supabase.from("base_models").select(select).in("slug", keep)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const rows = [...(eligible ?? []), ...(kept ?? [])];
+  const visibleRows = opts?.userId
+    ? rows.filter((row: any) =>
+        row?.owner_id === opts.userId ||
+        row?.is_public === true ||
+        (row?.is_system === true && String(opts.userEmail ?? "").toLowerCase() === "axel@natax.co.uk"),
+      )
+    : rows;
+  return uniqueModelOptions(visibleRows, keep);
+}
 
 // Tuned defaults (benchmark: Opus best synth on reasoning + tone; top-4 drafters
 // span reasoning styles for genuine diversity without heavy overlap).
@@ -90,7 +137,7 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
 
 const ROLE_SET = new Set<SwarmRole>(SWARM_ROLE_DEFAULTS.map((a) => a.role));
 
-export function normalizeAgents(raw: any): SwarmAgent[] {
+export function normalizeAgents(raw: any, allowed?: Set<string>): SwarmAgent[] {
   const list: SwarmAgent[] = SWARM_ROLE_DEFAULTS.map((d) => ({ ...d }));
   if (!Array.isArray(raw)) return list;
   for (const entry of raw) {
@@ -99,7 +146,7 @@ export function normalizeAgents(raw: any): SwarmAgent[] {
     if (!ROLE_SET.has(role)) continue;
     const target = list.find((a) => a.role === role);
     if (!target) continue;
-    if (typeof entry.model === "string" && ALLOWED_SET.has(entry.model)) target.model = entry.model;
+    if (typeof entry.model === "string" && (!allowed || allowed.has(entry.model))) target.model = entry.model;
     if (typeof entry.enabled === "boolean") target.enabled = entry.enabled;
     if (typeof entry.systemPrompt === "string" && entry.systemPrompt.trim()) target.systemPrompt = entry.systemPrompt;
   }
@@ -113,8 +160,8 @@ export function normalizeAgents(raw: any): SwarmAgent[] {
 // directly (in other server-only files) or, inside a `createServerFn`
 // handler, use `await import("@/server/swarm-core.server")`.
 
-export function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
-  const list = (models ?? []).filter((m) => typeof m === "string" && ALLOWED_SET.has(m));
+export function normalizeModels(models: string[] | null | undefined, cap = 6, allowed?: Set<string>): string[] {
+  const list = (models ?? []).filter((m) => typeof m === "string" && (!allowed || allowed.has(m)));
   const seen = new Set<string>();
   const out: string[] = [];
   for (const m of list) {
@@ -136,33 +183,24 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
       .select("swarm_models,swarm_synth_model,swarm_max_parallel,swarm_agents")
       .eq("user_id", userId)
       .maybeSingle();
-    const models = normalizeModels(data?.swarm_models ?? DEFAULT_SWARM_MODELS);
-    const synth = data?.swarm_synth_model && ALLOWED_SET.has(data.swarm_synth_model)
-      ? data.swarm_synth_model
-      : DEFAULT_SYNTH_MODEL;
-    const maxParallel = Math.min(6, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
-    const agents = normalizeAgents(data?.swarm_agents);
 
-    // Filter `available` to models the user has flagged swarm_eligible.
-    // Always keep currently-selected slugs (drafters, synth, agent models) so
-    // an existing config never renders "unknown".
-    const { data: eligibleRows } = await supabase
-      .from("base_models")
-      .select("slug")
-      .eq("swarm_eligible", true);
-    const eligibleSet = new Set<string>((eligibleRows ?? []).map((r: any) => r.slug));
-    const keep = new Set<string>([
-      ...models,
-      synth,
-      ...agents.map((a) => a.model),
-    ]);
-    const available = ALLOWED_SWARM_MODELS.filter((m) => eligibleSet.has(m.slug) || keep.has(m.slug));
+    const rawModels = Array.isArray(data?.swarm_models) ? data.swarm_models : DEFAULT_SWARM_MODELS;
+    const rawSynth = typeof data?.swarm_synth_model === "string" ? data.swarm_synth_model : DEFAULT_SYNTH_MODEL;
+    const rawAgents = normalizeAgents(data?.swarm_agents);
+    const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
+
+    const available = await loadAvailableSwarmModels(supabase, keep);
+    const allowed = allowedSetFrom(available);
+    const models = normalizeModels(rawModels, DEFAULT_MAX_PARALLEL, allowed);
+    const synth = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
+    const maxParallel = Math.min(6, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
+    const agents = normalizeAgents(data?.swarm_agents, allowed);
 
     return {
-      models: models.length >= 2 ? models : DEFAULT_SWARM_MODELS,
+      models: models.length >= 2 ? models : normalizeModels(DEFAULT_SWARM_MODELS, DEFAULT_MAX_PARALLEL, allowed),
       synthModel: synth,
       maxParallel,
-      available: available.length ? available : ALLOWED_SWARM_MODELS,
+      available,
       agents,
       roleDefaults: SWARM_ROLE_DEFAULTS,
     };
@@ -183,11 +221,18 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const cleaned = normalizeModels(data.models);
+    const requested = Array.from(new Set([
+      ...data.models,
+      data.synthModel,
+      ...(data.agents ?? []).map((a) => a.model).filter(Boolean),
+    ].filter((slug): slug is string => typeof slug === "string" && slug.length > 0)));
+    const available = await loadAvailableSwarmModels(supabase, requested);
+    const allowed = allowedSetFrom(available);
+    const cleaned = normalizeModels(data.models, DEFAULT_MAX_PARALLEL, allowed);
     if (cleaned.length < 2) throw new Error("Pick at least 2 models for swarm mode.");
-    const synth = ALLOWED_SET.has(data.synthModel) ? data.synthModel : DEFAULT_SYNTH_MODEL;
+    const synth = allowed.has(data.synthModel) ? data.synthModel : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
     const cap = Math.min(6, Math.max(2, data.maxParallel || DEFAULT_MAX_PARALLEL));
-    const agents = data.agents ? normalizeAgents(data.agents) : null;
+    const agents = data.agents ? normalizeAgents(data.agents, allowed) : null;
     const patch: any = {
       user_id: userId,
       swarm_models: cleaned,
@@ -243,29 +288,33 @@ export const runSwarm = createServerFn({ method: "POST" })
       .maybeSingle();
 
     const cap = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
-    const synthModel = ALLOWED_SET.has(data.synthModel) ? data.synthModel : (cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL);
+    const rawModels = Array.isArray(data.models) && data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS);
+    const rawSynth = data.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
+    const rawAgents = normalizeAgents(data.agents ?? cfg?.swarm_agents);
+    const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
+    const available = await loadAvailableSwarmModels(supabase, keep);
+    const allowed = allowedSetFrom(available);
+    const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
 
-    // Decide fan-out: role-based agents (preferred) or legacy models list.
-    const agentsResolved = normalizeAgents(data.agents ?? cfg?.swarm_agents);
-    const activeAgents = agentsResolved.filter((a) => a.enabled && ALLOWED_SET.has(a.model)).slice(0, cap);
+    // Decide fan-out: role-based agents (preferred) or fallback models list.
+    const agentsResolved = normalizeAgents(data.agents ?? cfg?.swarm_agents, allowed);
+    const activeAgents = agentsResolved.filter((a) => a.enabled && allowed.has(a.model)).slice(0, cap);
 
-    type FanUnit = { model: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
+    type FanUnit = { model: string; label: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
     let units: FanUnit[];
     if (data.useAgents && activeAgents.length >= 2) {
       units = activeAgents.map((a) => ({
         model: a.model,
+        label: labelForModel(a.model, available),
         systemPrompt: a.systemPrompt,
         role: a.role,
         roleLabel: a.label,
       }));
     } else {
-      const models = normalizeModels(
-        data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS),
-        cap,
-      );
+      const models = normalizeModels(rawModels, cap, allowed);
       if (models.length < 2) throw new Error("Swarm requires at least 2 models. Configure in the Swarm menu.");
       const drafterSystem = "You are a top-tier assistant. Give the best answer you can to the user's message. Be specific, correct, and useful. Prefer markdown structure when helpful.";
-      units = models.map((m) => ({ model: m, systemPrompt: drafterSystem, role: null, roleLabel: null }));
+      units = models.map((m) => ({ model: m, label: labelForModel(m, available), systemPrompt: drafterSystem, role: null, roleLabel: null }));
     }
 
     // Ensure conversation
@@ -302,7 +351,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     const drafts: Draft[] = await Promise.all(
       units.map(async (u) => {
         const r = await draftOne(u.model, data.content, u.systemPrompt);
-        return { ...r, role: u.role, roleLabel: u.roleLabel };
+        return { ...r, label: u.label, role: u.role, roleLabel: u.roleLabel };
       }),
     );
     const okDrafts = drafts.filter((d) => d.status === "ok");
@@ -310,7 +359,7 @@ export const runSwarm = createServerFn({ method: "POST" })
 
 
     let finalContent = "";
-    let synthLabel = LABEL_BY_SLUG.get(synthModel) ?? synthModel;
+    let synthLabel = labelForModel(synthModel, available);
     let swarmStatus: "ok" | "degraded" | "failed" = "ok";
     let breakdownByModel = new Map<string, { confidence: number; rationale: string }>();
 

@@ -240,6 +240,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
           cost_credits: r.cost_credits,
           quality_score: r.quality_score ?? null,
           error: r.error ?? null,
+          content: r.content ?? "",
         })),
         final_answer: swarmRow.content || null,
       })

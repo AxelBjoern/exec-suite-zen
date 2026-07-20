@@ -29,6 +29,8 @@ type Props = {
   onGenerateDoc: (kind: "pdf" | "docx") => void;
   swarmSlot?: React.ReactNode;
   swarmActive?: boolean;
+  autoActive?: boolean;
+  onToggleAuto?: () => void;
 };
 
 export function ChatComposer({
@@ -47,6 +49,8 @@ export function ChatComposer({
   onGenerateDoc,
   swarmSlot,
   swarmActive,
+  autoActive,
+  onToggleAuto,
 }: Props) {
   return (
     <div className="border-t border-border/40 bg-card/40 backdrop-blur pb-[env(safe-area-inset-bottom)]">
@@ -201,6 +205,18 @@ export function ChatComposer({
             >
               <ClipboardPaste className="h-4 w-4" />
             </Button>
+            {onToggleAuto && !swarmActive && (
+              <button
+                type="button"
+                onClick={onToggleAuto}
+                disabled={pending}
+                title={autoActive ? "Auto mode ON — router picks the best model per message" : "Auto mode OFF — using the model you selected"}
+                aria-pressed={!!autoActive}
+                className={`ml-1 h-8 rounded-md border px-2 text-[11px] font-medium uppercase tracking-wide transition-colors ${autoActive ? "border-primary/60 bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:text-foreground"}`}
+              >
+                Auto
+              </button>
+            )}
             {swarmSlot && <div className="ml-1 pl-1 border-l border-border/60">{swarmSlot}</div>}
           </div>
           {pending ? (

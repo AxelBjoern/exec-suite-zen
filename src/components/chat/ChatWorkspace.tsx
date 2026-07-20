@@ -13,6 +13,7 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
+import { routeAutoModel } from "@/lib/chat-router.functions";
 import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 
@@ -142,6 +143,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
   const [swarmActive, setSwarmActive] = useState(false);
+  const [autoActive, setAutoActive] = useState(false);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
 
@@ -334,15 +336,42 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
             },
             onSynthStart: () => setLiveSynthRunning(true),
           })
-        : await send({
-            data: {
-              content: vars.content,
-              model,
-              attachmentIds: vars.attachmentIds,
-              conversationId: targetConvoId,
-            },
-            signal: controller.signal,
-          });
+        : await (async () => {
+            let effectiveModel = model;
+            if (autoActive) {
+              try {
+                const picked = await routeAutoModel({
+                  data: {
+                    prompt: vars.content,
+                    hasAttachments: vars.attachmentIds.length > 0,
+                    candidates: allowedModels.map((m) => ({
+                      id: m.id,
+                      label: m.label,
+                      description: m.description ?? null,
+                    })),
+                  },
+                });
+                if (picked?.model) {
+                  effectiveModel = picked.model;
+                  const label = allowedModels.find((m) => m.id === picked.model)?.label ?? picked.model;
+                  toast.message(`Auto → ${label}`, {
+                    description: picked.reason || undefined,
+                  });
+                }
+              } catch {
+                // Router failure is non-fatal — fall back to user's selected model.
+              }
+            }
+            return send({
+              data: {
+                content: vars.content,
+                model: effectiveModel,
+                attachmentIds: vars.attachmentIds,
+                conversationId: targetConvoId,
+              },
+              signal: controller.signal,
+            });
+          })();
       return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {
@@ -885,6 +914,8 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onFiles={handleFiles}
           onGenerateDoc={handleGenerateDoc}
           swarmActive={swarmActive}
+          autoActive={autoActive}
+          onToggleAuto={() => setAutoActive((v) => !v)}
           swarmSlot={
             <SwarmPopover
               active={swarmActive}

@@ -65,7 +65,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
         const rawSynth = body.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
         const rawAgents = normalizeAgents(body.agents ?? cfg?.swarm_agents);
         const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
-        const available = await loadAvailableSwarmModels(admin, keep);
+        const available = await loadAvailableSwarmModels(admin, keep, { userId, userEmail: user.email });
         const allowed = new Set(available.map((m) => m.slug));
         const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
         const synthLabel = labelForModel(synthModel, available);
@@ -156,7 +156,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
               await Promise.all(
                 units.map(async (u, i) => {
                   const r = await draftOne(u.model, content, u.systemPrompt);
-                  const draft: DraftResult = { ...r, role: u.role, roleLabel: u.roleLabel };
+                  const draft: DraftResult = { ...r, label: u.label, role: u.role, roleLabel: u.roleLabel };
                   drafts[i] = draft;
                   send("draft", {
                     index: i,

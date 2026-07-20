@@ -300,11 +300,12 @@ export const runSwarm = createServerFn({ method: "POST" })
     const agentsResolved = normalizeAgents(data.agents ?? cfg?.swarm_agents, allowed);
     const activeAgents = agentsResolved.filter((a) => a.enabled && allowed.has(a.model)).slice(0, cap);
 
-    type FanUnit = { model: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
+    type FanUnit = { model: string; label: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
     let units: FanUnit[];
     if (data.useAgents && activeAgents.length >= 2) {
       units = activeAgents.map((a) => ({
         model: a.model,
+        label: labelForModel(a.model, available),
         systemPrompt: a.systemPrompt,
         role: a.role,
         roleLabel: a.label,
@@ -313,7 +314,7 @@ export const runSwarm = createServerFn({ method: "POST" })
       const models = normalizeModels(rawModels, cap, allowed);
       if (models.length < 2) throw new Error("Swarm requires at least 2 models. Configure in the Swarm menu.");
       const drafterSystem = "You are a top-tier assistant. Give the best answer you can to the user's message. Be specific, correct, and useful. Prefer markdown structure when helpful.";
-      units = models.map((m) => ({ model: m, systemPrompt: drafterSystem, role: null, roleLabel: null }));
+      units = models.map((m) => ({ model: m, label: labelForModel(m, available), systemPrompt: drafterSystem, role: null, roleLabel: null }));
     }
 
     // Ensure conversation
@@ -350,7 +351,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     const drafts: Draft[] = await Promise.all(
       units.map(async (u) => {
         const r = await draftOne(u.model, data.content, u.systemPrompt);
-        return { ...r, role: u.role, roleLabel: u.roleLabel };
+        return { ...r, label: u.label, role: u.role, roleLabel: u.roleLabel };
       }),
     );
     const okDrafts = drafts.filter((d) => d.status === "ok");

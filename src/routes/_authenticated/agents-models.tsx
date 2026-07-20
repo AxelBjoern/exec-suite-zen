@@ -113,6 +113,10 @@ function AgentsModelsShell() {
     },
   });
 
+  const isOwner = isVdnxOwnerEmail(me?.email);
+  const canManageRow = (row: { owner_id?: string | null; is_system: boolean }) =>
+    row.owner_id === me?.id || (isOwner && row.is_system);
+
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (!me?.id || hydratedRef.current) return;
@@ -222,8 +226,8 @@ function AgentsModelsShell() {
 
   async function handleEditAgent(row: AgentType) {
     if (!me?.id) return;
-    // Clone VDNX/public into owned copy, then edit it
-    if (row.owner_id !== me.id) {
+    // Clone VDNX/public into owned copy unless this owner can manage the system row directly.
+    if (!canManageRow(row)) {
       const draft: AgentDraft = {
         name: `${row.name} (copy)`, industry: row.industry, description: row.description,
       };
@@ -245,7 +249,7 @@ function AgentsModelsShell() {
 
   async function handleEditModel(row: BaseModel) {
     if (!me?.id) return;
-    if (row.owner_id !== me.id) {
+    if (!canManageRow(row)) {
       const draft: ModelDraft = {
         slug: row.slug, name: `${row.name} (copy)`, provider: row.provider, description: row.description,
       };
@@ -274,7 +278,7 @@ function AgentsModelsShell() {
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Module</p>
           <h1 className="font-serif text-3xl font-bold text-foreground">Agents &amp; Models</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Edit or delete your own rows. Editing a VDNX default creates an editable copy in your library.
+            Manage your models and choose which ones can be used by Swarm agents.
           </p>
         </div>
       </div>
@@ -295,9 +299,9 @@ function AgentsModelsShell() {
             title="Agents"
             count={types.length}
             empty="No agents yet."
-            rows={types.map((t) => ({ row: t, isOwn: t.owner_id === me?.id }))}
+            rows={types.map((t) => ({ row: t, isOwn: t.owner_id === me?.id, canManage: canManageRow(t) }))}
             renderRowExtras={(r) =>
-              r.isOwn && me?.id ? <AgentKnowledge agentId={r.row.id} userId={me.id} /> : null
+              r.canManage && me?.id ? <AgentKnowledge agentId={r.row.id} userId={me.id} /> : null
             }
             describe={(t: AgentType) =>
               `${t.industry}${t.description ? " · " + t.description : ""}`
@@ -334,19 +338,19 @@ function AgentsModelsShell() {
             title="Models"
             count={models.length}
             empty="No models yet."
-            rows={models.map((m) => ({ row: m, isOwn: m.owner_id === me?.id }))}
+            rows={models.map((m) => ({ row: m, isOwn: m.owner_id === me?.id, canManage: canManageRow(m) }))}
             describe={(m: BaseModel) => `${m.provider} · ${m.slug}`}
             primary={(m: BaseModel) => m.name}
             onEdit={(m: BaseModel) => handleEditModel(m)}
             onDelete={(m: BaseModel) => remove.mutate({ table: "base_models", id: m.id })}
-            renderRowExtras={({ row, isOwn }) => (
+            renderRowExtras={({ row, canManage }) => (
               <div className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <label className={`inline-flex items-center gap-1.5 ${isOwn ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`} title={isOwn ? "Available in Swarm picker" : "Clone to change"}>
+                <label className={`inline-flex items-center gap-1.5 ${canManage ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`} title={canManage ? "Available in Swarm picker" : "Clone to change"}>
                   <input
                     type="checkbox"
                     className="h-3 w-3 accent-primary"
                     checked={!!row.swarm_eligible}
-                    disabled={!isOwn || toggleSwarm.isPending}
+                    disabled={!canManage || toggleSwarm.isPending}
                     onChange={(e) => toggleSwarm.mutate({ id: row.id, swarm_eligible: e.target.checked })}
                   />
                   Swarm
@@ -386,12 +390,12 @@ function Section<T extends { id: string; is_system: boolean; is_public?: boolean
   title: string;
   count: number;
   empty: string;
-  rows: { row: T; isOwn: boolean }[];
+  rows: { row: T; isOwn: boolean; canManage?: boolean }[];
   primary: (row: T) => string;
   describe: (row: T) => string;
   onEdit: (row: T) => void;
   onDelete: (row: T) => void;
-  renderRowExtras?: (r: { row: T; isOwn: boolean }) => React.ReactNode;
+  renderRowExtras?: (r: { row: T; isOwn: boolean; canManage: boolean }) => React.ReactNode;
   form: React.ReactNode;
 }) {
   return (
@@ -407,7 +411,7 @@ function Section<T extends { id: string; is_system: boolean; is_public?: boolean
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {props.rows.map(({ row, isOwn }) => (
+          {props.rows.map(({ row, isOwn, canManage = isOwn }) => (
             <li key={row.id} className="rounded border border-border bg-panel-2 px-3 py-2 text-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -426,12 +430,12 @@ function Section<T extends { id: string; is_system: boolean; is_public?: boolean
                   <button
                     onClick={() => props.onEdit(row)}
                     className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label={isOwn ? "Edit" : "Clone & edit"}
-                    title={isOwn ? "Edit" : "Clone & edit"}
+                    aria-label={canManage ? "Edit" : "Clone & edit"}
+                    title={canManage ? "Edit" : "Clone & edit"}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  {isOwn && (
+                  {canManage && (
                     <button
                       onClick={() => props.onDelete(row)}
                       className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -442,7 +446,7 @@ function Section<T extends { id: string; is_system: boolean; is_public?: boolean
                   )}
                 </div>
               </div>
-              {props.renderRowExtras?.({ row, isOwn })}
+              {props.renderRowExtras?.({ row, isOwn, canManage })}
             </li>
           ))}
         </ul>

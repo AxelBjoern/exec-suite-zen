@@ -317,6 +317,9 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                     latency_ms: d.latency_ms,
                     tokens_in: d.tokens_in ?? null,
                     tokens_out: d.tokens_out ?? null,
+                    attempted_models: d.attempted_models ?? [d.model],
+                    used_fallback: d.used_fallback ?? false,
+                    primary_error: d.primary_error ?? null,
                   })),
                 );
               }

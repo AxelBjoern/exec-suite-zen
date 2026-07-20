@@ -16,7 +16,14 @@ export type DraftResult = {
   latency_ms: number;
   tokens_in?: number;
   tokens_out?: number;
+  attempted_models: string[];
+  used_fallback: boolean;
+  primary_error?: string;
 };
+
+export const PRIMARY_TIMEOUT_MS = 100_000;
+export const FALLBACK_TIMEOUT_MS = 45_000;
+export const DEFAULT_FALLBACK_MODEL = "deepseek/deepseek-v4-flash";
 
 export const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
 

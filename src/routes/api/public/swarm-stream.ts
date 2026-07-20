@@ -295,7 +295,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                       { role: "system", content: SYNTH_SYSTEM },
                       {
                         role: "user",
-                        content: `USER PROMPT:\n${content}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
+                        content: `USER PROMPT:\n${augmentedContent}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
                       },
                     ],
                   });

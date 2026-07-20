@@ -83,6 +83,14 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           role: SwarmRole | null;
           roleLabel: string | null;
           label: string;
+          fallbackModel: string | null;
+          timeoutMs: number;
+        };
+        const pickFallback = (primary: string, wanted?: string | null): string | null => {
+          if (wanted && wanted !== primary && allowed.has(wanted)) return wanted;
+          if (allowed.has(DEFAULT_AGENT_FALLBACK) && DEFAULT_AGENT_FALLBACK !== primary) return DEFAULT_AGENT_FALLBACK;
+          const alt = available.find((m) => m.slug !== primary);
+          return alt?.slug ?? null;
         };
         let units: FanUnit[];
         const useAgents = body.useAgents !== false;
@@ -93,6 +101,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             role: a.role,
             roleLabel: a.label,
             label: labelForModel(a.model, available),
+            fallbackModel: pickFallback(a.model, a.fallbackModel),
+            timeoutMs: a.timeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS,
           }));
         } else {
           const models = normalizeModels(rawModels, cap, allowed);
@@ -107,6 +117,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             role: null,
             roleLabel: null,
             label: labelForModel(m, available),
+            fallbackModel: pickFallback(m, null),
+            timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
           }));
         }
 

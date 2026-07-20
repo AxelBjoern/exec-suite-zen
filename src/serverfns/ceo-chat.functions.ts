@@ -1447,6 +1447,30 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       systemPrompt = `${rule}\n\n${ceoSystem}`;
     }
 
+    // Slice B — Project workspace memory. If this conversation is assigned
+    // to a chat_projects row, prepend that project's system_prompt so every
+    // reply picks up the workspace context (best-effort; never blocks).
+    try {
+      const { data: convRow } = await supabaseAdmin
+        .from("ceo_conversations")
+        .select("project_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const projectId = convRow?.project_id ?? null;
+      if (projectId) {
+        const { data: proj } = await supabaseAdmin
+          .from("chat_projects")
+          .select("system_prompt")
+          .eq("id", projectId)
+          .eq("user_id", context.userId)
+          .maybeSingle();
+        const p = (proj?.system_prompt ?? "").trim();
+        if (p) {
+          systemPrompt = `=== PROJECT CONTEXT ===\n${p}\n=== END PROJECT CONTEXT ===\n\n${systemPrompt}`;
+        }
+      }
+    } catch { /* project prompt is optional */ }
+
     // ── VDNX repo grounding: auto-inject live overview + directive ─────────
     const { detectsVdnxRepoIntent, getVdnxRepoOverview } = await import("@/server/code-context.server");
     const GH_URL_RE = /https?:\/\/github\.com\/[^\s)]+/i;

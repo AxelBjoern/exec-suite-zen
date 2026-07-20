@@ -397,8 +397,11 @@ export const runSwarm = createServerFn({ method: "POST" })
     // Fan out in parallel — one draft per unit (per role, if agents mode)
     const drafts: Draft[] = await Promise.all(
       units.map(async (u) => {
-        const r = await draftOne(u.model, data.content, u.systemPrompt);
-        return { ...r, label: u.label, role: u.role, roleLabel: u.roleLabel };
+        const r = await draftOne(u.model, data.content, u.systemPrompt, {
+          fallbackModel: u.fallbackModel,
+          timeoutMs: u.timeoutMs,
+        });
+        return { ...r, label: labelForModel(r.model, available) || u.label, role: u.role, roleLabel: u.roleLabel };
       }),
     );
     const okDrafts = drafts.filter((d) => d.status === "ok");

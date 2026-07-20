@@ -11,6 +11,8 @@ import {
   type DraftResult,
 } from "@/server/swarm-core.server";
 import {
+  DEFAULT_AGENT_FALLBACK,
+  DEFAULT_AGENT_TIMEOUT_MS,
   DEFAULT_MAX_PARALLEL,
   DEFAULT_SWARM_MODELS,
   DEFAULT_SYNTH_MODEL,
@@ -81,6 +83,14 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           role: SwarmRole | null;
           roleLabel: string | null;
           label: string;
+          fallbackModel: string | null;
+          timeoutMs: number;
+        };
+        const pickFallback = (primary: string, wanted?: string | null): string | null => {
+          if (wanted && wanted !== primary && allowed.has(wanted)) return wanted;
+          if (allowed.has(DEFAULT_AGENT_FALLBACK) && DEFAULT_AGENT_FALLBACK !== primary) return DEFAULT_AGENT_FALLBACK;
+          const alt = available.find((m) => m.slug !== primary);
+          return alt?.slug ?? null;
         };
         let units: FanUnit[];
         const useAgents = body.useAgents !== false;
@@ -91,6 +101,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             role: a.role,
             roleLabel: a.label,
             label: labelForModel(a.model, available),
+            fallbackModel: pickFallback(a.model, a.fallbackModel),
+            timeoutMs: a.timeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS,
           }));
         } else {
           const models = normalizeModels(rawModels, cap, allowed);
@@ -105,6 +117,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             role: null,
             roleLabel: null,
             label: labelForModel(m, available),
+            fallbackModel: pickFallback(m, null),
+            timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
           }));
         }
 
@@ -155,9 +169,51 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
               // Fan out; emit each as it finishes
               await Promise.all(
                 units.map(async (u, i) => {
-                  const r = await draftOne(u.model, content, u.systemPrompt);
-                  const draft: DraftResult = { ...r, label: u.label, role: u.role, roleLabel: u.roleLabel };
+                  send("draft_start", {
+                    index: i,
+                    model: u.model,
+                    label: u.label,
+                    role: u.role,
+                    role_label: u.roleLabel,
+                    fallback_model: u.fallbackModel,
+                    timeout_ms: u.timeoutMs,
+                  });
+                  const r = await draftOne(u.model, content, u.systemPrompt, {
+                    fallbackModel: u.fallbackModel,
+                    timeoutMs: u.timeoutMs,
+                  });
+                  const finalLabel = labelForModel(r.model, available) || u.label;
+                  const draft: DraftResult = { ...r, label: finalLabel, role: u.role, roleLabel: u.roleLabel };
                   drafts[i] = draft;
+
+                  if (draft.used_fallback) {
+                    const primaryTimedOut = (draft.primary_error ?? "").toLowerCase().includes("timeout");
+                    send("fallback", {
+                      index: i,
+                      role: u.role,
+                      role_label: u.roleLabel,
+                      primary_model: u.model,
+                      primary_label: u.label,
+                      primary_error: draft.primary_error ?? null,
+                      primary_timed_out: primaryTimedOut,
+                      fallback_model: draft.model,
+                      fallback_label: finalLabel,
+                      status: draft.status,
+                    });
+                  } else if (draft.status === "error") {
+                    const timedOut = (draft.error ?? "").toLowerCase().includes("timeout");
+                    if (timedOut) {
+                      send("timeout", {
+                        index: i,
+                        role: u.role,
+                        role_label: u.roleLabel,
+                        model: u.model,
+                        label: u.label,
+                        timeout_ms: u.timeoutMs,
+                      });
+                    }
+                  }
+
                   send("draft", {
                     index: i,
                     model: draft.model,
@@ -170,6 +226,9 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                     latency_ms: draft.latency_ms,
                     tokens_in: draft.tokens_in ?? null,
                     tokens_out: draft.tokens_out ?? null,
+                    attempted_models: draft.attempted_models ?? [draft.model],
+                    used_fallback: draft.used_fallback ?? false,
+                    primary_error: draft.primary_error ?? null,
                   });
                 }),
               );
@@ -258,6 +317,9 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                     latency_ms: d.latency_ms,
                     tokens_in: d.tokens_in ?? null,
                     tokens_out: d.tokens_out ?? null,
+                    attempted_models: d.attempted_models ?? [d.model],
+                    used_fallback: d.used_fallback ?? false,
+                    primary_error: d.primary_error ?? null,
                   })),
                 );
               }

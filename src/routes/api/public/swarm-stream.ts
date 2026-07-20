@@ -38,6 +38,7 @@ type Body = {
   synthModel?: string;
   agents?: any[] | null;
   useAgents?: boolean;
+  attachmentIds?: string[];
 };
 
 export const Route = createFileRoute("/api/public/swarm-stream")({

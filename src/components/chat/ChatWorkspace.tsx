@@ -292,9 +292,9 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
             content: vars.content,
             conversationId: targetConvoId,
             signal: controller.signal,
-            onRun: (info) => {
+            onRun: (info: SwarmStreamRunEvent) => {
               setLiveDrafts(
-                info.drafters.map((d, i) => ({
+                info.drafters.map((d: SwarmStreamDrafter, i: number) => ({
                   index: i,
                   model: d.model,
                   label: d.label,

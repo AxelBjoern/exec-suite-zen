@@ -325,6 +325,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
 
       if (serverConvoId) {
         await qc.invalidateQueries({ queryKey: ["ceo-chat", serverConvoId] });
+        await qc.invalidateQueries({ queryKey: ["swarm-runs", serverConvoId] });
       }
       await qc.invalidateQueries({ queryKey: ["ceo-conversations"] });
       requestAnimationFrame(() => inputRef.current?.focus());

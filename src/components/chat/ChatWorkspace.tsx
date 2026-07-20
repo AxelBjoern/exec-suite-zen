@@ -143,6 +143,22 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const [swarmActive, setSwarmActive] = useState<boolean>(false);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
+
+  type LiveDraft = {
+    index: number;
+    model: string;
+    label: string;
+    role: string | null;
+    role_label: string | null;
+    status: "pending" | "ok" | "error";
+    content: string;
+    error: string | null;
+    latency_ms: number | null;
+  };
+  const [liveDrafts, setLiveDrafts] = useState<LiveDraft[] | null>(null);
+  const [liveSynthLabel, setLiveSynthLabel] = useState<string | null>(null);
+  const [liveSynthRunning, setLiveSynthRunning] = useState(false);
+  const [expandedLiveDraft, setExpandedLiveDraft] = useState<number | null>(null);
   const { data: swarmRuns = [] } = useQuery({
     queryKey: ["swarm-runs", activeId],
     queryFn: () => swarmRunsFn({ data: { conversationId: activeId } }),

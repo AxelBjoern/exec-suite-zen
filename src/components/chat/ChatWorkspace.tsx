@@ -948,7 +948,20 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onFiles={handleFiles}
           onGenerateDoc={handleGenerateDoc}
           swarmActive={swarmActive}
-          swarmSlot={<SwarmPopover active={swarmActive} onToggle={setSwarmActive} disabled={mutation.isPending} />}
+          swarmSlot={
+            <div className="flex items-center gap-2">
+              <ChatModeToggle
+                mode={chatMode}
+                onChange={(m) => setChatMode(m)}
+                disabled={mutation.isPending}
+              />
+              <SwarmPopover
+                active={swarmActive}
+                onToggle={(on) => setChatMode(on ? "swarm" : "single")}
+                disabled={mutation.isPending}
+              />
+            </div>
+          }
         />
       </div>
       <Toaster theme="dark" position="top-right" />

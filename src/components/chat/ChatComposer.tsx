@@ -29,6 +29,8 @@ type Props = {
   onGenerateDoc: (kind: "pdf" | "docx") => void;
   swarmSlot?: React.ReactNode;
   swarmActive?: boolean;
+  autoActive?: boolean;
+  onToggleAuto?: () => void;
 };
 
 export function ChatComposer({

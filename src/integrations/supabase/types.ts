@@ -272,6 +272,7 @@ export type Database = {
           owner_id: string | null
           provider: string
           slug: string
+          swarm_eligible: boolean
           updated_at: string
         }
         Insert: {
@@ -284,6 +285,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           slug: string
+          swarm_eligible?: boolean
           updated_at?: string
         }
         Update: {
@@ -296,6 +298,7 @@ export type Database = {
           owner_id?: string | null
           provider?: string
           slug?: string
+          swarm_eligible?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -439,6 +442,45 @@ export type Database = {
           id?: string
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      channel_bindings: {
+        Row: {
+          auto_reply: boolean
+          channel: string
+          created_at: string
+          external_chat_id: string | null
+          id: string
+          link_code: string | null
+          link_expires_at: string | null
+          owner_id: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          auto_reply?: boolean
+          channel: string
+          created_at?: string
+          external_chat_id?: string | null
+          id?: string
+          link_code?: string | null
+          link_expires_at?: string | null
+          owner_id: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          auto_reply?: boolean
+          channel?: string
+          created_at?: string
+          external_chat_id?: string | null
+          id?: string
+          link_code?: string | null
+          link_expires_at?: string | null
+          owner_id?: string
+          updated_at?: string
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -693,25 +735,34 @@ export type Database = {
       lead_replies: {
         Row: {
           body: string
+          channel: string | null
           classification: string | null
           created_at: string
+          direction: string
           draft_response: string | null
+          external_message_id: string | null
           id: string
           lead_id: string | null
         }
         Insert: {
           body: string
+          channel?: string | null
           classification?: string | null
           created_at?: string
+          direction?: string
           draft_response?: string | null
+          external_message_id?: string | null
           id?: string
           lead_id?: string | null
         }
         Update: {
           body?: string
+          channel?: string | null
           classification?: string | null
           created_at?: string
+          direction?: string
           draft_response?: string | null
+          external_message_id?: string | null
           id?: string
           lead_id?: string | null
         }
@@ -727,38 +778,47 @@ export type Database = {
       }
       leads: {
         Row: {
+          channel: string | null
           company: string | null
           created_at: string
           email: string | null
           enrichment: Json | null
+          external_chat_id: string | null
           full_name: string | null
           icp_id: string | null
           id: string
           linkedin_url: string | null
+          owner_id: string | null
           status: string
           title: string | null
         }
         Insert: {
+          channel?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
           enrichment?: Json | null
+          external_chat_id?: string | null
           full_name?: string | null
           icp_id?: string | null
           id?: string
           linkedin_url?: string | null
+          owner_id?: string | null
           status?: string
           title?: string | null
         }
         Update: {
+          channel?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
           enrichment?: Json | null
+          external_chat_id?: string | null
           full_name?: string | null
           icp_id?: string | null
           id?: string
           linkedin_url?: string | null
+          owner_id?: string | null
           status?: string
           title?: string | null
         }

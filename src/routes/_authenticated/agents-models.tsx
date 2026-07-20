@@ -35,7 +35,9 @@ type BaseModel = {
   is_system: boolean;
   is_public?: boolean;
   owner_id?: string | null;
+  swarm_eligible?: boolean;
 };
+
 
 type AgentDraft = { name: string; industry: string; description: string };
 type ModelDraft = { slug: string; name: string; provider: string; description: string };
@@ -104,7 +106,7 @@ function AgentsModelsShell() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("base_models")
-        .select("id,slug,name,provider,description,is_system,is_public,owner_id")
+        .select("id,slug,name,provider,description,is_system,is_public,owner_id,swarm_eligible")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -178,6 +180,18 @@ function AgentsModelsShell() {
       toast.success("Model updated");
       qc.invalidateQueries({ queryKey: ["am", "base_models"] });
       qc.invalidateQueries({ queryKey: ["my-model-allowlist"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
+  const toggleSwarm = useMutation({
+    mutationFn: async ({ id, swarm_eligible }: { id: string; swarm_eligible: boolean }) => {
+      const { error } = await (supabase as any).from("base_models").update({ swarm_eligible }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+      qc.invalidateQueries({ queryKey: ["swarm-config"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
@@ -325,6 +339,20 @@ function AgentsModelsShell() {
             primary={(m: BaseModel) => m.name}
             onEdit={(m: BaseModel) => handleEditModel(m)}
             onDelete={(m: BaseModel) => remove.mutate({ table: "base_models", id: m.id })}
+            renderRowExtras={({ row, isOwn }) => (
+              <div className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <label className={`inline-flex items-center gap-1.5 ${isOwn ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`} title={isOwn ? "Available in Swarm picker" : "Clone to change"}>
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3 accent-primary"
+                    checked={!!row.swarm_eligible}
+                    disabled={!isOwn || toggleSwarm.isPending}
+                    onChange={(e) => toggleSwarm.mutate({ id: row.id, swarm_eligible: e.target.checked })}
+                  />
+                  Swarm
+                </label>
+              </div>
+            )}
             form={
               <ModelForm
                 key={editingModelId ?? "new"}

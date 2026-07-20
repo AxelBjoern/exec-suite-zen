@@ -1,64 +1,60 @@
-# Swarm Mode for Chat
+## Part 1 — "Available for Swarm" toggle on Agents & Models
 
-Add a Swarm toggle in the composer that fans a single prompt out to N user-picked models in parallel, then a synthesizer model merges them into one best-in-class answer. Users pick which models participate + which synthesizes in Settings → Models.
+### DB
+Migration adds one column:
+- `base_models.swarm_eligible boolean not null default false`, backfilled `true` for the 7 text models (Kling stays false).
 
-## UX
+### UI
+`src/routes/_authenticated/agents-models.tsx`: add a small `Switch` labelled "Swarm" on each Models row. Own rows toggle directly; VDNX defaults show it disabled with tooltip "Clone to change" (matches existing edit/clone pattern). Update invalidates `["am","base_models"]` + `["swarm-config"]`.
 
-Composer (`src/components/chat/ChatComposer.tsx`):
-- New "Swarm" pill button next to the model select (Users icon, `variant=secondary` when on).
-- When active: badge shows count e.g. `Swarm · 4 models`.
-- Click opens a small popover to quickly toggle which of the user's allowed models participate for this turn + pick synthesizer. Persisted per-conversation.
-- Placeholder switches to "Swarm mode — N models will draft, 1 will synthesize".
-- Disabled with tooltip if fewer than 2 swarm models configured.
+### Swarm picker filter
+`src/serverfns/swarm.functions.ts` → `getSwarmConfig`: filter `available` to models where `swarm_eligible = true` OR currently selected as drafter/synth/agent (so existing configs don't break). `SwarmPopover.tsx` and `swarm-bench.tsx` need no changes.
 
-Message (`MessageRow.tsx`):
-- Assistant message rendered normally (the synthesized answer).
-- Below it: collapsible "Swarm drafts (N)" accordion showing each model's draft, latency, token count, and a "Use this instead" action that swaps it into the final answer.
-- Small badge next to the assistant avatar: "Swarm · synth by <model>".
+---
 
-Settings → Models:
-- New section "Swarm Configuration":
-  - Multi-select checkboxes over the user's enabled models → "Use in swarms".
-  - Radio → "Synthesizer model" (defaults to strongest allowed: Claude Opus 4.7 → GPT 5.3 → Hermes 4 405B → first available).
-  - Slider "Max parallel drafters" (2–6, default 4) to cap cost.
-- Persisted in `user_settings` (new columns: `swarm_models text[]`, `swarm_synth_model text`, `swarm_max_parallel int`).
+## Part 2 — Channel Inbox reusing existing inbound infra
 
-## Server
+Reuse what's already there (`leads`, `lead_replies`, `sales` triage agent, `lead-reply-triage` cron, `approvals`) instead of building a parallel messaging stack. Telegram/WhatsApp messages become `lead_replies` on a synthetic lead per external chat, get triaged by the existing agent, and the human-approved draft is sent back on the same channel.
 
-New `src/serverfns/swarm.functions.ts`:
-- `runSwarm({ conversationId, content, attachmentIds, models[], synthModel })`:
-  1. `Promise.allSettled` calls to each drafter via existing `src/server/llm.server.ts` (OpenRouter). Per-model timeout ~45s, hard 90s cap.
-  2. Persist each draft to new table `swarm_drafts` (run_id, model_slug, content, latency_ms, tokens_in, tokens_out, status, error).
-  3. Feed drafts (labeled A/B/C/D + model names) into synthesizer with a fixed synthesis prompt: "You are the arbiter. Merge the drafts into one final answer that is more accurate, complete, and useful than any individual draft. Cite disagreements briefly if material. Never mention model names."
-  4. Save synthesized reply as the assistant message in existing `ceo_chat_messages` with metadata `{ swarm_run_id }`.
-- `getSwarmRun(runId)` → drafts + synth for the collapsible UI.
-- Uses only the 8 allowed models from core memory. Skips any drafter whose slug isn't in that list.
+### DB (thin additions)
+- `leads`: add nullable `channel text` and `external_chat_id text`; unique `(channel, external_chat_id) where channel is not null`.
+- `lead_replies`: add nullable `channel text`, `external_message_id text`, `direction text default 'in'`. Unique `(channel, external_message_id) where external_message_id is not null` for webhook idempotency.
+- `channel_bindings` (new, tiny) — `owner_id`, `channel`, `external_chat_id`, `verified_at`, `link_code`, `link_expires_at`. RLS owner-only. Used to bind a Telegram chat to a VDNX user via a `/link <code>` handshake before any triage runs.
 
-`sendCeoMessage` in `ceo-chat.functions.ts`: accept optional `swarm: { models, synth }`; when present, dispatch to `runSwarm` instead of single-model path. Same tool/context injection is passed through to drafters and synthesizer.
+All new columns/tables get proper GRANTs + RLS scoped to `auth.uid()` (leads/lead_replies already are).
 
-## Schema
+### Telegram webhook (first channel)
+`src/routes/api/public/channels/telegram.ts` — verifies `X-Telegram-Bot-Api-Secret-Token` (base64url sha256 of `telegram-webhook:${TELEGRAM_API_KEY}`, per telegram knowledge). On each update:
+1. If text is `/link <code>` — match against `channel_bindings.link_code`, set `verified_at`, reply "Linked to <email>".
+2. Otherwise, resolve the bound owner. If no binding, static reply "Send `/link <code>` from VDNX Settings → Channels to connect." and stop.
+3. Upsert a synthetic `leads` row (`channel='telegram'`, `external_chat_id=chat.id`, `owner_id=<bound owner>`, `name=@username`).
+4. Insert into `lead_replies` with `direction='in'`, `channel='telegram'`, `external_message_id=update_id`, `body=text`, `classification=null` — which is exactly what the existing `lead-reply-triage` cron already picks up.
 
-New migration:
-- `alter table user_settings add column swarm_models text[], swarm_synth_model text, swarm_max_parallel int default 4;`
-- `create table swarm_runs (id uuid pk, user_id uuid, conversation_id uuid, message_id uuid, synth_model text, created_at timestamptz)` + RLS + GRANTs.
-- `create table swarm_drafts (id uuid pk, run_id uuid fk, model_slug text, content text, latency_ms int, tokens_in int, tokens_out int, status text, error text, created_at timestamptz)` + RLS + GRANTs.
+### Reply-out plumbing
+`src/server/agent-tools.server.ts` → extend `db.draft_lead_reply` (or add a sibling `db.send_channel_reply` tool that the sales agent can also call). When the reply's parent lead has a `channel`, the eventual approved-send path routes to a new sender:
+- `src/server/channel-sender.server.ts`: given `(channel, external_chat_id, text)`, calls Telegram `sendMessage` via connector gateway (`https://connector-gateway.lovable.dev/telegram/sendMessage`, `Authorization: Bearer ${LOVABLE_API_KEY}` + `X-Connection-Api-Key: ${TELEGRAM_API_KEY}`). On success writes an outbound `lead_replies` row (`direction='out'`, `external_message_id=result.message_id`).
+- Wire into wherever approved lead-reply drafts currently get sent (approvals sweep / send action) — branch on `lead.channel`: email path stays untouched, `telegram` path calls the channel sender.
 
-## Benchmark harness (best-in-class polish)
+### Optional "auto-reply without approval"
+Per-conversation toggle stored on `channel_bindings.auto_reply boolean default false`. When true, triage cron calls the sender directly with the drafted reply and marks the approval auto-approved (reuses existing `auto_approve_rules`). Off by default so replies still land in the existing Approvals inbox.
 
-New route `src/routes/_authenticated/swarm-bench.tsx` (owner-only, gated by `isVdnxOwnerEmail`):
-- Textarea prompt + "Run benchmark".
-- Runs the prompt through each allowed model individually AND through swarm mode.
-- Table of results: latency, tokens, cost estimate (from OpenRouter pricing), and a quality vote where the synthesizer scores each output 1–5 with a rubric (accuracy, completeness, reasoning, style).
-- Persisted to `swarm_bench_runs` so we can iterate on the synthesis prompt.
-- Used one-time to tune: drafter count (default 4), which models are best drafters vs. synthesizers, synthesis prompt wording. Findings baked into the default `swarm_synth_model` + starter `swarm_models` for new users.
+### Settings UI
+`src/routes/_authenticated/settings/connections.tsx` — new "Channel Inbox" card:
+- "Link Telegram" → generates a 6-char code into `channel_bindings`, shows "DM your bot: `/link ABC123`".
+- Lists bound chats with per-chat auto-reply toggle + unlink.
 
-## Cost / safety
+### WhatsApp
+Same shape via Twilio (`/api/public/channels/whatsapp`, X-Twilio-Signature verification, `channel='whatsapp'`). Only built when you paste Twilio creds — otherwise deferred.
 
-- Hard concurrency cap = `swarm_max_parallel` (user), global 6.
-- Per-run budget check; if any drafter errors, synthesizer still runs on the successful subset. If <2 succeed, fall back to single-model reply and toast "Swarm degraded — used <model>".
-- Streaming: drafters run non-streaming (small parallelism, buffered); synthesizer streams to UI so the user still sees tokens.
+### Setup step after deploy
+I'll register the webhook once via `standard_connectors--call_gateway_connection` → `/setWebhook` with the derived secret against `https://project--<project-id>-dev.lovable.app/api/public/channels/telegram`.
 
-## Files touched
+---
 
-- add: `src/serverfns/swarm.functions.ts`, `src/routes/_authenticated/swarm-bench.tsx`, `src/components/chat/SwarmPopover.tsx`, migration for `user_settings` + `swarm_runs` + `swarm_drafts`.
-- edit: `ChatComposer.tsx` (button + popover + prop), `ChatWorkspace.tsx` (swarm state, pass to send), `MessageRow.tsx` (drafts accordion), `ceo-chat.functions.ts` (swarm branch), settings/models page (swarm config section).
+## Build order
+1. Migration + swarm-eligible toggle + swarm filter.
+2. Migration for lead/lead_replies channel columns + `channel_bindings` + Settings link UI.
+3. Telegram webhook + link handshake + channel sender + branch approved-send path.
+4. WhatsApp/Twilio only on request.
+
+Confirm and I'll build 1–3.

@@ -51,6 +51,7 @@ import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cr
 import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
 import { Route as ApiPublicCronDailyReminderRouteImport } from './routes/api/public/cron/daily-reminder'
 import { Route as ApiPublicCronApprovalSweeperRouteImport } from './routes/api/public/cron/approval-sweeper'
+import { Route as ApiPublicChannelsTelegramRouteImport } from './routes/api/public/channels/telegram'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -287,6 +288,12 @@ const ApiPublicCronApprovalSweeperRoute =
     path: '/api/public/cron/approval-sweeper',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicChannelsTelegramRoute =
+  ApiPublicChannelsTelegramRouteImport.update({
+    id: '/api/public/channels/telegram',
+    path: '/api/public/channels/telegram',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -321,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget/': typeof AuthenticatedBudgetIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/channels/telegram': typeof ApiPublicChannelsTelegramRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -363,6 +371,7 @@ export interface FileRoutesByTo {
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget': typeof AuthenticatedBudgetIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/channels/telegram': typeof ApiPublicChannelsTelegramRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -408,6 +417,7 @@ export interface FileRoutesById {
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/_authenticated/budget/': typeof AuthenticatedBudgetIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/channels/telegram': typeof ApiPublicChannelsTelegramRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
   '/api/public/cron/daily-reminder': typeof ApiPublicCronDailyReminderRoute
   '/api/public/cron/daily-reports': typeof ApiPublicCronDailyReportsRoute
@@ -453,6 +463,7 @@ export interface FileRouteTypes {
     | '/api/public/swarm-stream'
     | '/budget/'
     | '/settings/'
+    | '/api/public/channels/telegram'
     | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/api/public/swarm-stream'
     | '/budget'
     | '/settings'
+    | '/api/public/channels/telegram'
     | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -539,6 +551,7 @@ export interface FileRouteTypes {
     | '/api/public/swarm-stream'
     | '/_authenticated/budget/'
     | '/_authenticated/settings/'
+    | '/api/public/channels/telegram'
     | '/api/public/cron/approval-sweeper'
     | '/api/public/cron/daily-reminder'
     | '/api/public/cron/daily-reports'
@@ -557,6 +570,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPublicGenerateLinkedinImageRoute: typeof ApiPublicGenerateLinkedinImageRoute
   ApiPublicSwarmStreamRoute: typeof ApiPublicSwarmStreamRoute
+  ApiPublicChannelsTelegramRoute: typeof ApiPublicChannelsTelegramRoute
   ApiPublicCronApprovalSweeperRoute: typeof ApiPublicCronApprovalSweeperRoute
   ApiPublicCronDailyReminderRoute: typeof ApiPublicCronDailyReminderRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
@@ -864,6 +878,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronApprovalSweeperRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/channels/telegram': {
+      id: '/api/public/channels/telegram'
+      path: '/api/public/channels/telegram'
+      fullPath: '/api/public/channels/telegram'
+      preLoaderRoute: typeof ApiPublicChannelsTelegramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -966,6 +987,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPublicGenerateLinkedinImageRoute: ApiPublicGenerateLinkedinImageRoute,
   ApiPublicSwarmStreamRoute: ApiPublicSwarmStreamRoute,
+  ApiPublicChannelsTelegramRoute: ApiPublicChannelsTelegramRoute,
   ApiPublicCronApprovalSweeperRoute: ApiPublicCronApprovalSweeperRoute,
   ApiPublicCronDailyReminderRoute: ApiPublicCronDailyReminderRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,
@@ -979,13 +1001,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -3,9 +3,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink } from "lucide-react";
+import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink, MessageSquare, Trash2 } from "lucide-react";
 import { getConnectorStatus } from "@/lib/connections.functions";
 import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken, testMyRepoAccess } from "@/lib/user-github.functions";
+import {
+  listChannelBindings,
+  createTelegramLinkCode,
+  setChannelAutoReply,
+  deleteChannelBinding,
+} from "@/serverfns/channel-inbox.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -35,6 +41,7 @@ function ConnectionsPage() {
         <Card icon={Mail} label="Gmail" connected={data?.gmail ?? false} loading={isLoading} description="Used to send outbound and reminder emails." />
         <Card icon={Linkedin} label="LinkedIn" connected={data?.linkedin ?? false} loading={isLoading} description="Used to publish LinkedIn posts (with optional image)." />
         <GithubCard />
+        <ChannelInboxCard />
       </div>
 
       <section className="mt-8 rounded-lg border border-border bg-panel p-5 text-sm text-muted-foreground">
@@ -265,6 +272,102 @@ function GithubCard() {
         </a>
         . Fine-grained recommended: select the private repos you want VDNX to read, grant <strong>Contents: Read-only</strong>. Classic PATs need the <code>repo</code> scope.
       </p>
+    </section>
+  );
+}
+
+function ChannelInboxCard() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listChannelBindings);
+  const createFn = useServerFn(createTelegramLinkCode);
+  const autoFn = useServerFn(setChannelAutoReply);
+  const delFn = useServerFn(deleteChannelBinding);
+
+  const { data: bindings, isLoading } = useQuery({
+    queryKey: ["channel-bindings"],
+    queryFn: () => listFn(),
+  });
+
+  const create = useMutation({
+    mutationFn: () => createFn(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channel-bindings"] }),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to mint code"),
+  });
+  const toggle = useMutation({
+    mutationFn: (v: { id: string; auto_reply: boolean }) => autoFn({ data: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channel-bindings"] }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => delFn({ data: { id } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channel-bindings"] }),
+  });
+
+  const pending = (bindings ?? []).filter((b: any) => !b.verified_at && b.link_code);
+  const active = (bindings ?? []).filter((b: any) => b.verified_at);
+
+  return (
+    <section className="rounded-lg border border-border bg-panel p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-primary" />
+          <h2 className="font-serif text-lg font-semibold">Channel Inbox — Telegram</h2>
+        </div>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => create.mutate()} disabled={create.isPending}>
+          {create.isPending ? "Minting…" : "New link code"}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Incoming Telegram messages become inbound leads. The triage agent drafts a reply; approved drafts send back through the same chat.
+      </p>
+
+      {isLoading ? (
+        <p className="mt-3 text-xs text-muted-foreground">Loading…</p>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+              <div className="font-semibold text-amber-700 dark:text-amber-400">Waiting for handshake</div>
+              {pending.map((b: any) => (
+                <div key={b.id} className="mt-1 font-mono">
+                  Send <code className="rounded bg-background px-1">/link {b.link_code}</code> to your VDNX Telegram bot
+                  {b.link_expires_at && <> — expires {new Date(b.link_expires_at).toLocaleTimeString()}</>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {active.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">No linked chats yet.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-border rounded-md border border-border">
+              {active.map((b: any) => (
+                <li key={b.id} className="flex items-center justify-between gap-2 p-3 text-xs">
+                  <div className="min-w-0">
+                    <div className="font-mono">chat {b.external_chat_id}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      linked {new Date(b.verified_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        className="h-3 w-3 accent-primary"
+                        checked={!!b.auto_reply}
+                        onChange={(e) => toggle.mutate({ id: b.id, auto_reply: e.target.checked })}
+                      />
+                      auto-reply
+                    </label>
+                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => remove.mutate(b.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </section>
   );
 }

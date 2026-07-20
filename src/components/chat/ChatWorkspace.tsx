@@ -310,7 +310,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               setLiveSynthRunning(false);
               setExpandedLiveDraft(null);
             },
-            onDraft: (d) => {
+            onDraft: (d: SwarmStreamDraftEvent) => {
               setLiveDrafts((prev) =>
                 prev
                   ? prev.map((row) =>

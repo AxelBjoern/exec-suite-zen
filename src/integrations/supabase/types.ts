@@ -396,8 +396,11 @@ export type Database = {
           conversation_id: string | null
           created_at: string
           id: string
+          latency_ms: number | null
           model_used: string | null
           role: string
+          tokens_in: number | null
+          tokens_out: number | null
           user_id: string | null
         }
         Insert: {
@@ -406,8 +409,11 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           id?: string
+          latency_ms?: number | null
           model_used?: string | null
           role: string
+          tokens_in?: number | null
+          tokens_out?: number | null
           user_id?: string | null
         }
         Update: {
@@ -416,8 +422,11 @@ export type Database = {
           conversation_id?: string | null
           created_at?: string
           id?: string
+          latency_ms?: number | null
           model_used?: string | null
           role?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
           user_id?: string | null
         }
         Relationships: [
@@ -1438,8 +1447,15 @@ export type Database = {
         Row: {
           auto_send_email: boolean
           auto_send_linkedin: boolean
+          chat_experimental: boolean
+          chat_mode: string
           chat_model_allowlist: string[] | null
           design_rules: string | null
+          enable_artifacts_panel: boolean
+          enable_compaction: boolean
+          enable_projects: boolean
+          enable_tool_steps: boolean
+          enable_vision: boolean
           swarm_agents: Json | null
           swarm_max_parallel: number | null
           swarm_models: string[] | null
@@ -1450,8 +1466,15 @@ export type Database = {
         Insert: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          chat_experimental?: boolean
+          chat_mode?: string
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          enable_artifacts_panel?: boolean
+          enable_compaction?: boolean
+          enable_projects?: boolean
+          enable_tool_steps?: boolean
+          enable_vision?: boolean
           swarm_agents?: Json | null
           swarm_max_parallel?: number | null
           swarm_models?: string[] | null
@@ -1462,8 +1485,15 @@ export type Database = {
         Update: {
           auto_send_email?: boolean
           auto_send_linkedin?: boolean
+          chat_experimental?: boolean
+          chat_mode?: string
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          enable_artifacts_panel?: boolean
+          enable_compaction?: boolean
+          enable_projects?: boolean
+          enable_tool_steps?: boolean
+          enable_vision?: boolean
           swarm_agents?: Json | null
           swarm_max_parallel?: number | null
           swarm_models?: string[] | null

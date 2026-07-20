@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { VdnxLoader } from "@/components/VdnxLoader";
-import { Trash2, Play, Trophy, Timer, Coins, Star } from "lucide-react";
+import { Trash2, Play, Trophy, Timer, Coins, Star, FileJson, FileText } from "lucide-react";
+import jsPDF from "jspdf";
 import {
   runSwarmBench,
   listSwarmBenchRuns,
   deleteSwarmBenchRun,
+  getSwarmBenchRun,
 } from "@/serverfns/swarm-bench.functions";
 import { getSwarmConfig } from "@/serverfns/swarm.functions";
 

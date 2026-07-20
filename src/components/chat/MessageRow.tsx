@@ -278,19 +278,52 @@ function SwarmDrafts({ runId }: { runId: string }) {
             const conf = typeof d.confidence === "number" ? Math.round(d.confidence) : null;
             const tone = conf !== null ? confidenceTone(conf) : null;
             const header = d.role_label ? `${d.role_label} · ${d.model_label ?? d.model_slug}` : (d.model_label ?? d.model_slug);
+            const usedFallback = !!d.used_fallback;
+            const chain = d.attempted_models ?? [d.model_slug];
+            const primaryModel = chain[0] ?? d.model_slug;
+            const primaryTimedOut = (d.primary_error ?? "").toLowerCase().includes("timeout");
+            const isOk = d.status === "ok";
             return (
               <div key={d.id} className="rounded border border-border/50 bg-background/40 p-2">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[11px] font-semibold truncate">{header}</span>
                     <span className="text-[10px] font-mono text-muted-foreground truncate">
-                      {d.model_slug.split("/").pop()}
+                      {shortModel(d.model_slug)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {d.status === "ok" ? `${d.latency_ms ?? "—"}ms` : d.status}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isOk && !usedFallback && (
+                      <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-500">
+                        Primary
+                      </span>
+                    )}
+                    {usedFallback && (
+                      <span
+                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-500"
+                        title={`Primary ${shortModel(primaryModel)} ${primaryTimedOut ? "timed out" : "failed"} — served by fallback ${shortModel(d.model_slug)}`}
+                      >
+                        {primaryTimedOut ? "Fallback · timeout" : "Fallback"}
+                      </span>
+                    )}
+                    {!isOk && (
+                      <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-500">
+                        Error
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {isOk ? `${d.latency_ms ?? "—"}ms` : d.status}
+                    </span>
+                  </div>
                 </div>
+                {(usedFallback || d.primary_error) && (
+                  <div className="mb-2 text-[10px] text-muted-foreground font-mono truncate" title={chain.join(" → ")}>
+                    {chain.map(shortModel).join(" → ")}
+                    {d.primary_error && (
+                      <span className="ml-1 text-rose-500/80">· {summarizeError(d.primary_error)}</span>
+                    )}
+                  </div>
+                )}
                 {conf !== null && tone && (
                   <div className="mb-2">
                     <div className="flex items-center justify-between text-[10px] mb-0.5">
@@ -309,7 +342,7 @@ function SwarmDrafts({ runId }: { runId: string }) {
                 )}
                 <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-6">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {d.status === "ok" ? (d.content ?? "") : `⚠️ ${d.error ?? d.status}`}
+                    {isOk ? (d.content ?? "") : `⚠️ ${d.error ?? d.status}`}
                   </ReactMarkdown>
                 </div>
               </div>

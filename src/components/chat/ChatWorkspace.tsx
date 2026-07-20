@@ -653,7 +653,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     mutation.mutate({
       content: text,
       attachmentIds: attachments.map((a) => a.id),
-      swarm: swarmActive,
+      mode: chatMode,
     });
   }
 

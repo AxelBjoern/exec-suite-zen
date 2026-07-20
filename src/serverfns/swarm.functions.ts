@@ -452,7 +452,7 @@ export const getSwarmDrafts = createServerFn({ method: "GET" })
         .maybeSingle(),
       supabase
         .from("swarm_drafts")
-        .select("id,model_slug,model_label,content,status,error,latency_ms,tokens_in,tokens_out")
+        .select("id,model_slug,model_label,role,role_label,content,status,error,latency_ms,tokens_in,tokens_out")
         .eq("run_id", data.runId)
         .order("created_at", { ascending: true }),
     ]);

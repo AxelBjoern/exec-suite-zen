@@ -3,7 +3,11 @@
 // reply. All calls go through OpenRouter via src/server/llm.server.ts.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+// NOTE: Do not import `@/server/llm.server` at module scope. This file is
+// reachable from the client bundle via route imports, and the import-
+// protection plugin blocks any client-graph module from pulling server-only
+// files. Server-only swarm helpers live in `@/server/swarm-core.server` and
+// are loaded dynamically inside handler bodies.
 
 // Allowed text models (from core memory). Kling is video — excluded.
 export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [

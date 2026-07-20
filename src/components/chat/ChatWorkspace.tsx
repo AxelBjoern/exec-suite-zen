@@ -264,21 +264,29 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
 
 
   const mutation = useMutation({
-    mutationFn: async (vars: { content: string; attachmentIds: string[] }) => {
+    mutationFn: async (vars: { content: string; attachmentIds: string[]; swarm?: boolean }) => {
       const controller = new AbortController();
       abortRef.current = controller;
       const targetConvoId = activeId; // snapshot at submit time
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
-      const saved = await send({
-        data: {
-          content: vars.content,
-          model,
-          attachmentIds: vars.attachmentIds,
-          conversationId: targetConvoId,
-        },
-        signal: controller.signal,
-      });
+      const saved = vars.swarm
+        ? await swarmFn({
+            data: {
+              content: vars.content,
+              conversationId: targetConvoId,
+            },
+            signal: controller.signal,
+          })
+        : await send({
+            data: {
+              content: vars.content,
+              model,
+              attachmentIds: vars.attachmentIds,
+              conversationId: targetConvoId,
+            },
+            signal: controller.signal,
+          });
       return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {

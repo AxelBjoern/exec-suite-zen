@@ -218,7 +218,19 @@ type SwarmDraftRow = {
   tokens_out: number | null;
   confidence: number | null;
   rationale: string | null;
+  attempted_models?: string[] | null;
+  used_fallback?: boolean | null;
+  primary_error?: string | null;
 };
+
+function shortModel(slug: string) {
+  return slug.split("/").pop() ?? slug;
+}
+function summarizeError(msg: string | null | undefined): string {
+  if (!msg) return "";
+  const s = msg.trim().replace(/\s+/g, " ");
+  return s.length > 90 ? s.slice(0, 87) + "…" : s;
+}
 
 function confidenceTone(pct: number): { bar: string; text: string; label: string } {
   if (pct >= 75) return { bar: "bg-emerald-500", text: "text-emerald-500", label: "High" };

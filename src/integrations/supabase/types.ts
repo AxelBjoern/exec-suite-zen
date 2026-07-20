@@ -936,6 +936,60 @@ export type Database = {
         }
         Relationships: []
       }
+      swarm_bench_runs: {
+        Row: {
+          cost_credits: number
+          created_at: string
+          drafter_models: string[]
+          final_answer: string | null
+          id: string
+          label: string | null
+          latency_ms: number
+          notes: string | null
+          per_model: Json
+          prompt: string
+          quality_score: number | null
+          synth_model: string
+          tokens_in: number
+          tokens_out: number
+          user_id: string
+        }
+        Insert: {
+          cost_credits?: number
+          created_at?: string
+          drafter_models?: string[]
+          final_answer?: string | null
+          id?: string
+          label?: string | null
+          latency_ms?: number
+          notes?: string | null
+          per_model?: Json
+          prompt: string
+          quality_score?: number | null
+          synth_model: string
+          tokens_in?: number
+          tokens_out?: number
+          user_id: string
+        }
+        Update: {
+          cost_credits?: number
+          created_at?: string
+          drafter_models?: string[]
+          final_answer?: string | null
+          id?: string
+          label?: string | null
+          latency_ms?: number
+          notes?: string | null
+          per_model?: Json
+          prompt?: string
+          quality_score?: number | null
+          synth_model?: string
+          tokens_in?: number
+          tokens_out?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       swarm_drafts: {
         Row: {
           content: string | null

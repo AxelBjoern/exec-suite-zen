@@ -355,6 +355,10 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
                 if (picked?.model) {
                   effectiveModel = picked.model;
                   setAutoPickHint({ model: picked.model, reason: picked.reason ?? "" });
+                  const label = allowedModels.find((m) => m.id === picked.model)?.label ?? picked.model;
+                  toast.message(`Auto → ${label}`, {
+                    description: picked.reason || undefined,
+                  });
                 }
               } catch {
                 // Router failure is non-fatal — fall back to user's selected model.

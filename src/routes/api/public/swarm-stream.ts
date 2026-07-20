@@ -136,6 +136,31 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           convId = conv.id as string;
         }
 
+        // Slice B — load project system prompt (if this conversation belongs
+        // to a Project) and prepend it to each drafter's system prompt.
+        let projectPrompt = "";
+        try {
+          const { data: convRow } = await admin
+            .from("ceo_conversations")
+            .select("project_id")
+            .eq("id", convId)
+            .maybeSingle();
+          const projectId = convRow?.project_id ?? null;
+          if (projectId) {
+            const { data: proj } = await admin
+              .from("chat_projects")
+              .select("system_prompt")
+              .eq("id", projectId)
+              .eq("user_id", userId)
+              .maybeSingle();
+            const p = (proj?.system_prompt ?? "").trim();
+            if (p) projectPrompt = `=== PROJECT CONTEXT ===\n${p}\n=== END PROJECT CONTEXT ===`;
+          }
+        } catch { /* project lookup is best-effort */ }
+        if (projectPrompt) {
+          units = units.map((u) => ({ ...u, systemPrompt: `${projectPrompt}\n\n${u.systemPrompt}` }));
+        }
+
         // Load attachments (extracted_text for docx/pptx/pdf/images with OCR)
         let attachmentBlock = "";
         const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];

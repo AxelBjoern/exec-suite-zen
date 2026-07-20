@@ -445,6 +445,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       setLiveSynthRunning(false);
       setExpandedLiveDraft(null);
       setLiveStream(null);
+      setAutoDecision(null);
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server

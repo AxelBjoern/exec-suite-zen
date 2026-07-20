@@ -860,14 +860,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               </div>
             )}
 
-            {liveStream && (
-              <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap text-foreground">
-                {liveStream.text}
-                <span className="inline-block ml-0.5 w-1.5 h-4 align-middle bg-primary/70 animate-pulse" />
-              </div>
-            )}
-
-            {showThinking && !liveDrafts && !liveStream && (
+            {showThinking && !liveDrafts && (
               <div className="pl-1"><VdnxLoader size="sm" label="CEO THINKING" /></div>
             )}
 

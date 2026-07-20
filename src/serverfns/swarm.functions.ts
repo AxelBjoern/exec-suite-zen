@@ -316,16 +316,28 @@ export const runSwarm = createServerFn({ method: "POST" })
     const rawModels = Array.isArray(data.models) && data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS);
     const rawSynth = data.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
     const rawAgents = normalizeAgents(data.agents ?? cfg?.swarm_agents);
-    const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
+    const keep = Array.from(new Set([
+      ...rawModels,
+      rawSynth,
+      ...rawAgents.flatMap((a) => [a.model, a.fallbackModel].filter(Boolean) as string[]),
+      DEFAULT_AGENT_FALLBACK,
+    ]));
     const available = await loadAvailableSwarmModels(supabase, keep);
     const allowed = allowedSetFrom(available);
     const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
+
+    const pickFallback = (primary: string, wanted?: string | null): string | null => {
+      if (wanted && wanted !== primary && allowed.has(wanted)) return wanted;
+      if (allowed.has(DEFAULT_AGENT_FALLBACK) && DEFAULT_AGENT_FALLBACK !== primary) return DEFAULT_AGENT_FALLBACK;
+      const alt = available.find((m) => m.slug !== primary);
+      return alt?.slug ?? null;
+    };
 
     // Decide fan-out: role-based agents (preferred) or fallback models list.
     const agentsResolved = normalizeAgents(data.agents ?? cfg?.swarm_agents, allowed);
     const activeAgents = agentsResolved.filter((a) => a.enabled && allowed.has(a.model)).slice(0, cap);
 
-    type FanUnit = { model: string; label: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
+    type FanUnit = { model: string; label: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null; fallbackModel: string | null; timeoutMs: number };
     let units: FanUnit[];
     if (data.useAgents && activeAgents.length >= 2) {
       units = activeAgents.map((a) => ({
@@ -334,12 +346,22 @@ export const runSwarm = createServerFn({ method: "POST" })
         systemPrompt: a.systemPrompt,
         role: a.role,
         roleLabel: a.label,
+        fallbackModel: pickFallback(a.model, a.fallbackModel),
+        timeoutMs: a.timeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS,
       }));
     } else {
       const models = normalizeModels(rawModels, cap, allowed);
       if (models.length < 2) throw new Error("Swarm requires at least 2 models. Configure in the Swarm menu.");
       const drafterSystem = "You are a top-tier assistant. Give the best answer you can to the user's message. Be specific, correct, and useful. Prefer markdown structure when helpful.";
-      units = models.map((m) => ({ model: m, label: labelForModel(m, available), systemPrompt: drafterSystem, role: null, roleLabel: null }));
+      units = models.map((m) => ({
+        model: m,
+        label: labelForModel(m, available),
+        systemPrompt: drafterSystem,
+        role: null,
+        roleLabel: null,
+        fallbackModel: pickFallback(m, null),
+        timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
+      }));
     }
 
     // Ensure conversation

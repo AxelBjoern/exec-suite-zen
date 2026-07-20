@@ -14,10 +14,8 @@ async function llm() {
 async function chatCompletion(...args: Parameters<Awaited<ReturnType<typeof llm>>["chatCompletion"]>) {
   return (await llm()).chatCompletion(...args);
 }
-function resolveTextChatModel(m: string): string {
-  // Bench doesn't need remapping — pass through. Full resolver runs later
-  // via chatCompletion when it hits the gateway.
-  return m;
+async function resolveTextChatModel(id?: string | null): Promise<string> {
+  return (await llm()).resolveTextChatModel(id);
 }
 import {
   ALLOWED_SWARM_MODELS,

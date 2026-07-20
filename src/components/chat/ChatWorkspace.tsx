@@ -337,15 +337,39 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
             },
             onSynthStart: () => setLiveSynthRunning(true),
           })
-        : await send({
-            data: {
-              content: vars.content,
-              model,
-              attachmentIds: vars.attachmentIds,
-              conversationId: targetConvoId,
-            },
-            signal: controller.signal,
-          });
+        : await (async () => {
+            let effectiveModel = model;
+            if (autoActive) {
+              try {
+                const picked = await routeAutoModel({
+                  data: {
+                    prompt: vars.content,
+                    hasAttachments: vars.attachmentIds.length > 0,
+                    candidates: allowedModels.map((m) => ({
+                      id: m.id,
+                      label: m.label,
+                      description: m.description ?? null,
+                    })),
+                  },
+                });
+                if (picked?.model) {
+                  effectiveModel = picked.model;
+                  setAutoPickHint({ model: picked.model, reason: picked.reason ?? "" });
+                }
+              } catch {
+                // Router failure is non-fatal — fall back to user's selected model.
+              }
+            }
+            return send({
+              data: {
+                content: vars.content,
+                model: effectiveModel,
+                attachmentIds: vars.attachmentIds,
+                conversationId: targetConvoId,
+              },
+              signal: controller.signal,
+            });
+          })();
       return { saved, targetConvoId, targetKey };
     },
     onMutate: (vars) => {

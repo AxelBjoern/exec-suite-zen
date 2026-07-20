@@ -246,10 +246,6 @@ function SwarmDrafts({ runId }: { runId: string }) {
     </div>
   );
 }
-      </div>
-    </div>
-  );
-}
 
 function ModelPill({ model }: { model: string }) {
   const short = model.split("/").pop() ?? model;

@@ -237,7 +237,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
     models?: string[];
     synthModel?: string;
     maxParallel?: number;
-    agents?: Array<{ role: string; model?: string; enabled?: boolean; systemPrompt?: string }>;
+    agents?: Array<{ role: string; model?: string; enabled?: boolean; systemPrompt?: string; fallbackModel?: string | null; timeoutMs?: number | null }>;
   }) => ({
     models: Array.isArray(d?.models) ? d.models : [],
     synthModel: d?.synthModel ?? DEFAULT_SYNTH_MODEL,
@@ -249,7 +249,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
     const requested = Array.from(new Set([
       ...data.models,
       data.synthModel,
-      ...(data.agents ?? []).map((a) => a.model).filter(Boolean),
+      ...(data.agents ?? []).flatMap((a) => [a.model, a.fallbackModel]).filter(Boolean),
     ].filter((slug): slug is string => typeof slug === "string" && slug.length > 0)));
     const available = await loadAvailableSwarmModels(supabase, requested);
     const allowed = allowedSetFrom(available);

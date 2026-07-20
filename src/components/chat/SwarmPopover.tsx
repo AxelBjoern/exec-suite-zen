@@ -31,6 +31,8 @@ type AgentCfg = {
   model: string;
   enabled: boolean;
   systemPrompt: string;
+  fallbackModel?: string | null;
+  timeoutMs?: number | null;
 };
 
 export function SwarmPopover({ active, onToggle, disabled }: Props) {

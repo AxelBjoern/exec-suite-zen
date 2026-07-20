@@ -64,10 +64,29 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const genDoc = useServerFn(generateCeoDocument);
   const qc = useQueryClient();
 
-  const [activeId, setActiveId] = useState<string | null>(() => {
+  const [activeId, setActiveIdState] = useState<string | null>(() => {
+    if (initialSessionId) return initialSessionId;
     if (typeof window === "undefined") return null;
     return localStorage.getItem(ACTIVE_CONVO_KEY);
   });
+
+  // Reflect URL param → state when it changes (e.g. tab restore, back/forward)
+  useEffect(() => {
+    if (initialSessionId && initialSessionId !== activeId) {
+      setActiveIdState(initialSessionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessionId]);
+
+  // Wrapper: setting activeId also navigates to per-session URL so tabs are shareable.
+  const setActiveId = (id: string | null) => {
+    setActiveIdState(id);
+    if (id && id !== initialSessionId) {
+      navigate({ to: "/chat/$sessionId", params: { sessionId: id } });
+    } else if (!id) {
+      navigate({ to: "/chat" });
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -89,7 +108,9 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     if (activeId && conversations.length > 0 && !conversations.find((c) => c.id === activeId)) {
       setActiveId(conversations[0].id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, activeId]);
+
 
   const { data: messages = [] } = useQuery<Msg[]>({
     queryKey: ["ceo-chat", activeId],

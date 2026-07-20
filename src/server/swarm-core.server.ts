@@ -35,16 +35,13 @@ Rules:
 - Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
 - If drafts are all weak, answer from your own capability rather than parroting them.`;
 
-export async function draftOne(
+async function attemptDraft(
   model: string,
   userContent: string,
   systemPrompt: string,
-): Promise<DraftResult> {
-  const label = LABEL_BY_SLUG.get(model) ?? model;
-  const started = Date.now();
+  timeoutMs: number,
+): Promise<{ ok: true; content: string; tokens_in?: number; tokens_out?: number } | { ok: false; error: string }> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
     const json = await Promise.race([
       chatCompletion({
         model: resolveTextChatModel(model),
@@ -54,32 +51,91 @@ export async function draftOne(
           { role: "user", content: userContent },
         ],
       }),
-      new Promise<never>((_, rej) =>
-        controller.signal.addEventListener("abort", () => rej(new Error("timeout"))),
-      ),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs)),
     ]);
-    clearTimeout(timer);
     const content = json?.choices?.[0]?.message?.content?.trim() || "";
-    if (!content) throw new Error("empty response");
+    if (!content) return { ok: false, error: "empty response" };
     return {
-      model,
-      label,
-      status: "ok",
+      ok: true,
       content,
-      latency_ms: Date.now() - started,
       tokens_in: json?.usage?.prompt_tokens,
       tokens_out: json?.usage?.completion_tokens,
     };
   } catch (e: any) {
+    return { ok: false, error: e?.message ?? String(e) };
+  }
+}
+
+export async function draftOne(
+  model: string,
+  userContent: string,
+  systemPrompt: string,
+  opts?: { fallbackModel?: string | null; timeoutMs?: number; fallbackTimeoutMs?: number },
+): Promise<DraftResult> {
+  const label = LABEL_BY_SLUG.get(model) ?? model;
+  const started = Date.now();
+  const timeoutMs = Math.min(180_000, Math.max(15_000, opts?.timeoutMs ?? PRIMARY_TIMEOUT_MS));
+  const fallbackTimeoutMs = Math.min(120_000, Math.max(15_000, opts?.fallbackTimeoutMs ?? FALLBACK_TIMEOUT_MS));
+  const fallback = opts?.fallbackModel && opts.fallbackModel !== model ? opts.fallbackModel : null;
+  const attempted: string[] = [model];
+
+  const primary = await attemptDraft(model, userContent, systemPrompt, timeoutMs);
+  if (primary.ok) {
+    return {
+      model,
+      label,
+      status: "ok",
+      content: primary.content,
+      latency_ms: Date.now() - started,
+      tokens_in: primary.tokens_in,
+      tokens_out: primary.tokens_out,
+      attempted_models: attempted,
+      used_fallback: false,
+    };
+  }
+
+  if (fallback) {
+    attempted.push(fallback);
+    const fbLabel = LABEL_BY_SLUG.get(fallback) ?? fallback;
+    const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs);
+    if (fb.ok) {
+      return {
+        model: fallback,
+        label: fbLabel,
+        status: "ok",
+        content: fb.content,
+        latency_ms: Date.now() - started,
+        tokens_in: fb.tokens_in,
+        tokens_out: fb.tokens_out,
+        attempted_models: attempted,
+        used_fallback: true,
+        primary_error: primary.error,
+      };
+    }
     return {
       model,
       label,
       status: "error",
       content: "",
-      error: e?.message ?? String(e),
+      error: `${primary.error} → fallback ${fbLabel}: ${fb.error}`,
       latency_ms: Date.now() - started,
+      attempted_models: attempted,
+      used_fallback: true,
+      primary_error: primary.error,
     };
   }
+
+  return {
+    model,
+    label,
+    status: "error",
+    content: "",
+    error: primary.error,
+    latency_ms: Date.now() - started,
+    attempted_models: attempted,
+    used_fallback: false,
+    primary_error: primary.error,
+  };
 }
 
 export async function synthesize(

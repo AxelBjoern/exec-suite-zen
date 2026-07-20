@@ -49,15 +49,24 @@ export function allowedSetFrom(available: SwarmModelOption[]): Set<string> {
 export async function loadAvailableSwarmModels(
   supabase: any,
   keep: string[] = [],
+  opts?: { userId?: string; userEmail?: string | null },
 ): Promise<SwarmModelOption[]> {
-  const select = "slug,name";
+  const select = "slug,name,owner_id,is_public,is_system";
   const [{ data: eligible }, { data: kept }] = await Promise.all([
     supabase.from("base_models").select(select).eq("swarm_eligible", true),
     keep.length
       ? supabase.from("base_models").select(select).in("slug", keep)
       : Promise.resolve({ data: [] }),
   ]);
-  return uniqueModelOptions([...(eligible ?? []), ...(kept ?? [])], keep);
+  const rows = [...(eligible ?? []), ...(kept ?? [])];
+  const visibleRows = opts?.userId
+    ? rows.filter((row: any) =>
+        row?.owner_id === opts.userId ||
+        row?.is_public === true ||
+        (row?.is_system === true && String(opts.userEmail ?? "").toLowerCase() === "axel@natax.co.uk"),
+      )
+    : rows;
+  return uniqueModelOptions(visibleRows, keep);
 }
 
 // Tuned defaults (benchmark: Opus best synth on reasoning + tone; top-4 drafters
@@ -180,12 +189,7 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
     const rawAgents = normalizeAgents(data?.swarm_agents);
     const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
 
-    const { data: rows } = await supabase
-      .from("base_models")
-      .select("slug,name")
-      .or(`swarm_eligible.eq.true,slug.in.(${keep.map((slug) => `"${String(slug).replaceAll('"', '\"')}"`).join(",")})`);
-
-    const available = uniqueModelOptions(rows, keep);
+    const available = await loadAvailableSwarmModels(supabase, keep);
     const allowed = allowedSetFrom(available);
     const models = normalizeModels(rawModels, DEFAULT_MAX_PARALLEL, allowed);
     const synth = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
@@ -222,11 +226,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
       data.synthModel,
       ...(data.agents ?? []).map((a) => a.model).filter(Boolean),
     ]));
-    const { data: rows } = await supabase
-      .from("base_models")
-      .select("slug,name")
-      .or(`swarm_eligible.eq.true,slug.in.(${requested.map((slug) => `"${String(slug).replaceAll('"', '\"')}"`).join(",")})`);
-    const available = uniqueModelOptions(rows, requested);
+    const available = await loadAvailableSwarmModels(supabase, requested);
     const allowed = allowedSetFrom(available);
     const cleaned = normalizeModels(data.models, DEFAULT_MAX_PARALLEL, allowed);
     if (cleaned.length < 2) throw new Error("Pick at least 2 models for swarm mode.");
@@ -292,11 +292,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     const rawSynth = data.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
     const rawAgents = normalizeAgents(data.agents ?? cfg?.swarm_agents);
     const keep = Array.from(new Set([...rawModels, rawSynth, ...rawAgents.map((a) => a.model)]));
-    const { data: rows } = await supabase
-      .from("base_models")
-      .select("slug,name")
-      .or(`swarm_eligible.eq.true,slug.in.(${keep.map((slug) => `"${String(slug).replaceAll('"', '\"')}"`).join(",")})`);
-    const available = uniqueModelOptions(rows, keep);
+    const available = await loadAvailableSwarmModels(supabase, keep);
     const allowed = allowedSetFrom(available);
     const synthModel = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
 

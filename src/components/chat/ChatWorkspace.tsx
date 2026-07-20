@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,22 +51,8 @@ import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { MessageRow } from "@/components/chat/MessageRow";
 
-export const Route = createFileRoute("/_authenticated/chat")({
-  head: () => ({
-    meta: [
-      { title: "Chat — VDNX CEO Agent" },
-      {
-        name: "description",
-        content: "Direct conversational chat with the VDNX CEO agent.",
-      },
-    ],
-  }),
-  component: ChatPage,
-});
-
-
-
-function ChatPage() {
+export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
+  const navigate = useNavigate();
   const load = useServerFn(getCeoChat);
   const send = useServerFn(sendCeoMessage);
   const clear = useServerFn(clearCeoChat);

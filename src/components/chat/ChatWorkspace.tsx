@@ -54,6 +54,8 @@ import { SwarmPopover } from "@/components/chat/SwarmPopover";
 import { runSwarm, getSwarmRunsForConversation } from "@/serverfns/swarm.functions";
 import { streamSwarm, type SwarmStreamRunEvent, type SwarmStreamDraftEvent, type SwarmStreamDrafter } from "@/lib/swarm-stream";
 import { streamChat, isStreamEligible, ChatStreamFallback } from "@/lib/chat-stream";
+import { ChatModeToggle, type ChatMode } from "@/components/chat/ChatModeToggle";
+import { classifyChatMode } from "@/serverfns/chat-router.functions";
 
 export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const navigate = useNavigate();
@@ -142,7 +144,23 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
-  const [swarmActive, setSwarmActive] = useState<boolean>(false);
+  // Slice 2: tri-state chat mode. `single` is the byte-identical default;
+  // `swarm` maps 1:1 to the legacy swarmActive branch; `auto` runs the
+  // classifier and dispatches to whichever the router picks.
+  const CHAT_MODE_KEY = "vdnx.chat.mode";
+  const [chatMode, setChatMode] = useState<ChatMode>(() => {
+    if (typeof window === "undefined") return "single";
+    const v = localStorage.getItem(CHAT_MODE_KEY);
+    return v === "auto" || v === "swarm" ? v : "single";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem(CHAT_MODE_KEY, chatMode);
+  }, [chatMode]);
+  const swarmActive = chatMode === "swarm";
+  const classifyFn = useServerFn(classifyChatMode);
+  // Transient chip shown next to the currently streaming/pending reply
+  // whenever Auto routes a message. Cleared once the reply is persisted.
+  const [autoDecision, setAutoDecision] = useState<{ mode: "single" | "swarm"; reason: string } | null>(null);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
 
@@ -286,13 +304,34 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
 
 
   const mutation = useMutation({
-    mutationFn: async (vars: { content: string; attachmentIds: string[]; swarm?: boolean }) => {
+    mutationFn: async (vars: {
+      content: string;
+      attachmentIds: string[];
+      mode: ChatMode;
+    }) => {
       const controller = new AbortController();
       abortRef.current = controller;
       const targetConvoId = activeId; // snapshot at submit time
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
-      const saved = vars.swarm
+
+      // Slice 2 — Auto router: classify then dispatch. Classifier failures
+      // return { mode:"single" } so behavior degrades to the current default.
+      let effectiveSwarm = vars.mode === "swarm";
+      if (vars.mode === "auto") {
+        try {
+          const decision = await classifyFn({ data: { content: vars.content } });
+          setAutoDecision(decision);
+          effectiveSwarm = decision.mode === "swarm";
+        } catch {
+          setAutoDecision({ mode: "single", reason: "Router error — defaulted to single" });
+          effectiveSwarm = false;
+        }
+      } else {
+        setAutoDecision(null);
+      }
+
+      const saved = effectiveSwarm
         ? await streamSwarm({
             content: vars.content,
             conversationId: targetConvoId,
@@ -406,6 +445,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       setLiveSynthRunning(false);
       setExpandedLiveDraft(null);
       setLiveStream(null);
+      setAutoDecision(null);
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server
@@ -635,7 +675,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
     mutation.mutate({
       content: text,
       attachmentIds: attachments.map((a) => a.id),
-      swarm: swarmActive,
+      mode: chatMode,
     });
   }
 
@@ -848,6 +888,15 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               />
             )}
 
+            {autoDecision && (mutation.isPending || liveStream || liveDrafts) && (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                <span className="font-semibold uppercase tracking-wider">Auto</span>
+                <span>→ {autoDecision.mode}</span>
+                <span className="text-muted-foreground/70">· {autoDecision.reason}</span>
+              </div>
+            )}
+
+
             {liveDrafts && liveDrafts.length > 0 && (
               <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">
@@ -930,7 +979,20 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onFiles={handleFiles}
           onGenerateDoc={handleGenerateDoc}
           swarmActive={swarmActive}
-          swarmSlot={<SwarmPopover active={swarmActive} onToggle={setSwarmActive} disabled={mutation.isPending} />}
+          swarmSlot={
+            <div className="flex items-center gap-2">
+              <ChatModeToggle
+                mode={chatMode}
+                onChange={(m) => setChatMode(m)}
+                disabled={mutation.isPending}
+              />
+              <SwarmPopover
+                active={swarmActive}
+                onToggle={(on) => setChatMode(on ? "swarm" : "single")}
+                disabled={mutation.isPending}
+              />
+            </div>
+          }
         />
       </div>
       <Toaster theme="dark" position="top-right" />

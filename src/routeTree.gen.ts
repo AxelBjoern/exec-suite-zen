@@ -29,6 +29,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenticated/budget.index'
 import { Route as ApiPublicSwarmStreamRouteImport } from './routes/api/public/swarm-stream'
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
+import { Route as ApiPublicChatStreamRouteImport } from './routes/api/public/chat-stream'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
 import { Route as AuthenticatedOutboundArchiveRouteImport } from './routes/_authenticated/outbound.archive'
@@ -157,6 +158,11 @@ const ApiPublicGenerateLinkedinImageRoute =
     path: '/api/public/generate-linkedin-image',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicChatStreamRoute = ApiPublicChatStreamRouteImport.update({
+  id: '/api/public/chat-stream',
+  path: '/api/public/chat-stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSettingsModelsRoute =
   AuthenticatedSettingsModelsRouteImport.update({
     id: '/settings/models',
@@ -331,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
+  '/api/public/chat-stream': typeof ApiPublicChatStreamRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget/': typeof AuthenticatedBudgetIndexRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
+  '/api/public/chat-stream': typeof ApiPublicChatStreamRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget': typeof AuthenticatedBudgetIndexRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/_authenticated/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
+  '/api/public/chat-stream': typeof ApiPublicChatStreamRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
   '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/_authenticated/budget/': typeof AuthenticatedBudgetIndexRoute
@@ -469,6 +478,7 @@ export interface FileRouteTypes {
     | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
+    | '/api/public/chat-stream'
     | '/api/public/generate-linkedin-image'
     | '/api/public/swarm-stream'
     | '/budget/'
@@ -513,6 +523,7 @@ export interface FileRouteTypes {
     | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
+    | '/api/public/chat-stream'
     | '/api/public/generate-linkedin-image'
     | '/api/public/swarm-stream'
     | '/budget'
@@ -559,6 +570,7 @@ export interface FileRouteTypes {
     | '/_authenticated/outbound/archive'
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
+    | '/api/public/chat-stream'
     | '/api/public/generate-linkedin-image'
     | '/api/public/swarm-stream'
     | '/_authenticated/budget/'
@@ -580,6 +592,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiPublicChatStreamRoute: typeof ApiPublicChatStreamRoute
   ApiPublicGenerateLinkedinImageRoute: typeof ApiPublicGenerateLinkedinImageRoute
   ApiPublicSwarmStreamRoute: typeof ApiPublicSwarmStreamRoute
   ApiPublicChannelsTelegramRoute: typeof ApiPublicChannelsTelegramRoute
@@ -734,6 +747,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/generate-linkedin-image'
       fullPath: '/api/public/generate-linkedin-image'
       preLoaderRoute: typeof ApiPublicGenerateLinkedinImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/chat-stream': {
+      id: '/api/public/chat-stream'
+      path: '/api/public/chat-stream'
+      fullPath: '/api/public/chat-stream'
+      preLoaderRoute: typeof ApiPublicChatStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/settings/models': {
@@ -1006,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiPublicChatStreamRoute: ApiPublicChatStreamRoute,
   ApiPublicGenerateLinkedinImageRoute: ApiPublicGenerateLinkedinImageRoute,
   ApiPublicSwarmStreamRoute: ApiPublicSwarmStreamRoute,
   ApiPublicChannelsTelegramRoute: ApiPublicChannelsTelegramRoute,

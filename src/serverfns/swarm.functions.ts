@@ -191,6 +191,8 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
 type DraftResult = {
   model: string;
   label: string;
+  role?: SwarmRole | null;
+  roleLabel?: string | null;
   status: "ok" | "error";
   content: string;
   error?: string;

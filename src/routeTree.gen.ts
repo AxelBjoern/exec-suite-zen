@@ -26,6 +26,7 @@ import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAgentsModelsRouteImport } from './routes/_authenticated/agents-models'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenticated/budget.index'
+import { Route as ApiPublicSwarmStreamRouteImport } from './routes/api/public/swarm-stream'
 import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
@@ -138,6 +139,11 @@ const AuthenticatedBudgetIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedBudgetRoute,
   } as any)
+const ApiPublicSwarmStreamRoute = ApiPublicSwarmStreamRouteImport.update({
+  id: '/api/public/swarm-stream',
+  path: '/api/public/swarm-stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicGenerateLinkedinImageRoute =
   ApiPublicGenerateLinkedinImageRouteImport.update({
     id: '/api/public/generate-linkedin-image',
@@ -312,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget/': typeof AuthenticatedBudgetIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
@@ -353,6 +360,7 @@ export interface FileRoutesByTo {
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/budget': typeof AuthenticatedBudgetIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
   '/api/public/generate-linkedin-image': typeof ApiPublicGenerateLinkedinImageRoute
+  '/api/public/swarm-stream': typeof ApiPublicSwarmStreamRoute
   '/_authenticated/budget/': typeof AuthenticatedBudgetIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/api/public/cron/approval-sweeper': typeof ApiPublicCronApprovalSweeperRoute
@@ -441,6 +450,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/api/public/swarm-stream'
     | '/budget/'
     | '/settings/'
     | '/api/public/cron/approval-sweeper'
@@ -482,6 +492,7 @@ export interface FileRouteTypes {
     | '/settings/connections'
     | '/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/api/public/swarm-stream'
     | '/budget'
     | '/settings'
     | '/api/public/cron/approval-sweeper'
@@ -525,6 +536,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
     | '/api/public/generate-linkedin-image'
+    | '/api/public/swarm-stream'
     | '/_authenticated/budget/'
     | '/_authenticated/settings/'
     | '/api/public/cron/approval-sweeper'
@@ -544,6 +556,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPublicGenerateLinkedinImageRoute: typeof ApiPublicGenerateLinkedinImageRoute
+  ApiPublicSwarmStreamRoute: typeof ApiPublicSwarmStreamRoute
   ApiPublicCronApprovalSweeperRoute: typeof ApiPublicCronApprovalSweeperRoute
   ApiPublicCronDailyReminderRoute: typeof ApiPublicCronDailyReminderRoute
   ApiPublicCronDailyReportsRoute: typeof ApiPublicCronDailyReportsRoute
@@ -675,6 +688,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/budget/'
       preLoaderRoute: typeof AuthenticatedBudgetIndexRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/api/public/swarm-stream': {
+      id: '/api/public/swarm-stream'
+      path: '/api/public/swarm-stream'
+      fullPath: '/api/public/swarm-stream'
+      preLoaderRoute: typeof ApiPublicSwarmStreamRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/generate-linkedin-image': {
       id: '/api/public/generate-linkedin-image'
@@ -945,6 +965,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPublicGenerateLinkedinImageRoute: ApiPublicGenerateLinkedinImageRoute,
+  ApiPublicSwarmStreamRoute: ApiPublicSwarmStreamRoute,
   ApiPublicCronApprovalSweeperRoute: ApiPublicCronApprovalSweeperRoute,
   ApiPublicCronDailyReminderRoute: ApiPublicCronDailyReminderRoute,
   ApiPublicCronDailyReportsRoute: ApiPublicCronDailyReportsRoute,

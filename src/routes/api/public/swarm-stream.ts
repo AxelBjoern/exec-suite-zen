@@ -212,7 +212,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                     fallback_model: u.fallbackModel,
                     timeout_ms: u.timeoutMs,
                   });
-                  const r = await draftOne(u.model, content, u.systemPrompt, {
+                  const r = await draftOne(u.model, augmentedContent, u.systemPrompt, {
                     fallbackModel: u.fallbackModel,
                     timeoutMs: u.timeoutMs,
                   });

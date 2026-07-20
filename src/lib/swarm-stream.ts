@@ -122,6 +122,9 @@ export async function streamSwarm(opts: StreamSwarmOpts): Promise<any> {
         case "error":
           errorMessage = payload?.message ?? "Swarm error";
           break;
+        case "breakdown":
+          opts.onBreakdown?.(payload?.items ?? []);
+          break;
         case "done":
           break;
       }

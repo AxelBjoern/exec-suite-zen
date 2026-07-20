@@ -132,7 +132,7 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const { data } = await supabase
       .from("user_settings")
-      .select("swarm_models,swarm_synth_model,swarm_max_parallel")
+      .select("swarm_models,swarm_synth_model,swarm_max_parallel,swarm_agents")
       .eq("user_id", userId)
       .maybeSingle();
     const models = normalizeModels(data?.swarm_models ?? DEFAULT_SWARM_MODELS);
@@ -140,20 +140,29 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
       ? data.swarm_synth_model
       : DEFAULT_SYNTH_MODEL;
     const maxParallel = Math.min(6, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
+    const agents = normalizeAgents(data?.swarm_agents);
     return {
       models: models.length >= 2 ? models : DEFAULT_SWARM_MODELS,
       synthModel: synth,
       maxParallel,
       available: ALLOWED_SWARM_MODELS,
+      agents,
+      roleDefaults: SWARM_ROLE_DEFAULTS,
     };
   });
 
 export const saveSwarmConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { models?: string[]; synthModel?: string; maxParallel?: number }) => ({
+  .inputValidator((d: {
+    models?: string[];
+    synthModel?: string;
+    maxParallel?: number;
+    agents?: Array<{ role: string; model?: string; enabled?: boolean; systemPrompt?: string }>;
+  }) => ({
     models: Array.isArray(d?.models) ? d.models : [],
     synthModel: d?.synthModel ?? DEFAULT_SYNTH_MODEL,
     maxParallel: Number(d?.maxParallel ?? DEFAULT_MAX_PARALLEL),
+    agents: Array.isArray(d?.agents) ? d.agents : null,
   }))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
@@ -161,18 +170,22 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
     if (cleaned.length < 2) throw new Error("Pick at least 2 models for swarm mode.");
     const synth = ALLOWED_SET.has(data.synthModel) ? data.synthModel : DEFAULT_SYNTH_MODEL;
     const cap = Math.min(6, Math.max(2, data.maxParallel || DEFAULT_MAX_PARALLEL));
+    const agents = data.agents ? normalizeAgents(data.agents) : null;
+    const patch: any = {
+      user_id: userId,
+      swarm_models: cleaned,
+      swarm_synth_model: synth,
+      swarm_max_parallel: cap,
+      updated_at: new Date().toISOString(),
+    };
+    if (agents) patch.swarm_agents = agents;
     const { error } = await supabase
       .from("user_settings")
-      .upsert({
-        user_id: userId,
-        swarm_models: cleaned,
-        swarm_synth_model: synth,
-        swarm_max_parallel: cap,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
+      .upsert(patch, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
-    return { ok: true, models: cleaned, synthModel: synth, maxParallel: cap };
+    return { ok: true, models: cleaned, synthModel: synth, maxParallel: cap, agents };
   });
+
 
 // ── Run swarm ──────────────────────────────────────────────────────────────
 type DraftResult = {

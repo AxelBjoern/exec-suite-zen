@@ -771,6 +771,8 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onStop={handleStop}
           onFiles={handleFiles}
           onGenerateDoc={handleGenerateDoc}
+          swarmActive={swarmActive}
+          swarmSlot={<SwarmPopover active={swarmActive} onToggle={setSwarmActive} disabled={mutation.isPending} />}
         />
       </div>
       <Toaster theme="dark" position="top-right" />

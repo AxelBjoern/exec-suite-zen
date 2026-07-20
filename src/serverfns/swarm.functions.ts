@@ -88,7 +88,12 @@ export type SwarmAgent = {
   model: string;
   enabled: boolean;
   systemPrompt: string;
+  fallbackModel?: string | null;
+  timeoutMs?: number | null;
 };
+
+export const DEFAULT_AGENT_FALLBACK = "deepseek/deepseek-v4-flash";
+export const DEFAULT_AGENT_TIMEOUT_MS = 100_000;
 
 export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
   {
@@ -97,6 +102,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "anthropic/claude-opus-4.7",
     enabled: true,
     systemPrompt: "You are the CEO. Answer with strategic clarity: prioritize outcomes, tradeoffs, risk, and decisions. Be concise, opinionated, and executive. Prefer bullets and a clear recommendation.",
+    fallbackModel: DEFAULT_AGENT_FALLBACK,
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
   {
     role: "cto",
@@ -104,6 +111,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "openai/gpt-5.3-chat",
     enabled: true,
     systemPrompt: "You are the CTO. Answer with technical rigor: architecture, tradeoffs, feasibility, security, scalability, and implementation plan. Include concrete stack/tooling choices and pitfalls.",
+    fallbackModel: DEFAULT_AGENT_FALLBACK,
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
   {
     role: "cmo",
@@ -111,6 +120,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "x-ai/grok-4.3",
     enabled: true,
     systemPrompt: "You are the CMO. Answer through positioning, ICP, messaging, funnel, and growth loops. Give a crisp value prop, differentiators, and 2–3 concrete campaign ideas with channels.",
+    fallbackModel: DEFAULT_AGENT_FALLBACK,
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
   {
     role: "sales",
@@ -118,6 +129,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "nousresearch/hermes-4-405b",
     enabled: true,
     systemPrompt: "You are the Sales lead. Answer through pipeline, objections, outreach, and closing. Produce specific talk tracks, discovery questions, or email copy. Prioritize what wins deals this quarter.",
+    fallbackModel: DEFAULT_AGENT_FALLBACK,
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
   {
     role: "seo",
@@ -125,6 +138,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "deepseek/deepseek-v4-pro",
     enabled: false,
     systemPrompt: "You are the SEO lead. Answer through keyword intent, SERP structure, on-page, technical SEO, internal links, and content briefs. Give concrete keywords, titles, and structural recommendations.",
+    fallbackModel: DEFAULT_AGENT_FALLBACK,
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
   {
     role: "social",
@@ -132,6 +147,8 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
     model: "deepseek/deepseek-v4-flash",
     enabled: false,
     systemPrompt: "You are the Social lead. Answer through platform-native hooks (LinkedIn, X, IG). Produce ready-to-post copy with strong opens, formatting for skim, and clear CTAs. Match tone to the platform.",
+    fallbackModel: "x-ai/grok-4.3",
+    timeoutMs: DEFAULT_AGENT_TIMEOUT_MS,
   },
 ];
 
@@ -149,6 +166,14 @@ export function normalizeAgents(raw: any, allowed?: Set<string>): SwarmAgent[] {
     if (typeof entry.model === "string" && (!allowed || allowed.has(entry.model))) target.model = entry.model;
     if (typeof entry.enabled === "boolean") target.enabled = entry.enabled;
     if (typeof entry.systemPrompt === "string" && entry.systemPrompt.trim()) target.systemPrompt = entry.systemPrompt;
+    if (typeof entry.fallbackModel === "string" && (!allowed || allowed.has(entry.fallbackModel))) {
+      target.fallbackModel = entry.fallbackModel;
+    } else if (entry.fallbackModel === null) {
+      target.fallbackModel = null;
+    }
+    if (typeof entry.timeoutMs === "number" && Number.isFinite(entry.timeoutMs)) {
+      target.timeoutMs = Math.min(180_000, Math.max(15_000, Math.round(entry.timeoutMs)));
+    }
   }
   return list;
 }

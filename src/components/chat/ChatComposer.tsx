@@ -127,10 +127,10 @@ export function ChatComposer({
                 onFiles(dt.files);
               }
             }}
-            placeholder="Message the CEO… (Enter to send, Shift+Enter for newline)"
+            placeholder={swarmActive ? "Swarm mode — multiple models will draft, one will synthesize…" : "Message the CEO… (Enter to send, Shift+Enter for newline)"}
             rows={2}
             disabled={pending}
-            className="w-full resize-none bg-transparent pt-3 pb-12 px-3 pr-14 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+            className={`w-full resize-none bg-transparent pt-3 pb-12 px-3 pr-14 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60 ${swarmActive ? "ring-1 ring-primary/40 rounded-xl" : ""}`}
           />
           <input
             ref={fileInputRef}

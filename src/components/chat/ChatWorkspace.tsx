@@ -50,6 +50,8 @@ import {
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { MessageRow } from "@/components/chat/MessageRow";
+import { SwarmPopover } from "@/components/chat/SwarmPopover";
+import { runSwarm, getSwarmRunsForConversation } from "@/serverfns/swarm.functions";
 
 export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const navigate = useNavigate();

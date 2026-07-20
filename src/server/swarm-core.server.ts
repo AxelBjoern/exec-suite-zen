@@ -93,3 +93,77 @@ export async function synthesize(
   });
   return json?.choices?.[0]?.message?.content?.trim() ?? "";
 }
+
+// ── Quality-breakdown synth ────────────────────────────────────────────────
+// Produces the final answer PLUS a per-draft judgment: confidence 0-100 and
+// a one-sentence rationale describing how each draft contributed (or why it
+// was discounted). Used to render the quality breakdown UI on swarm replies.
+export type DraftBreakdown = {
+  id: string;              // "A", "B", ...
+  model: string;
+  label: string;
+  confidence: number;      // 0-100
+  rationale: string;
+};
+
+const SYNTH_BREAKDOWN_SYSTEM = `${SYNTH_SYSTEM}
+
+ADDITIONAL OUTPUT REQUIREMENT:
+Return ONE JSON object, no prose outside JSON, matching:
+{
+  "answer": "the final unified answer as a single string (markdown allowed)",
+  "breakdown": [
+    { "id": "A", "confidence": 0-100, "rationale": "one short sentence explaining how much of A you kept / why" }
+  ]
+}
+- Include one breakdown entry for every draft you were given, in the same A/B/C order.
+- confidence = how much this draft contributed to the final answer AND how trustworthy its claims were (100 = fully relied on, 0 = discarded).
+- rationale is one sentence, direct, no fluff.
+- The "answer" field must still be the full final answer you would have written normally — do not shorten it just because it's inside JSON.`;
+
+export async function synthesizeWithBreakdown(
+  synthModel: string,
+  userPrompt: string,
+  drafts: Array<Pick<DraftResult, "model" | "label" | "content">>,
+): Promise<{ answer: string; breakdown: DraftBreakdown[] }> {
+  const labeled = drafts.map((d, i) => ({
+    id: String.fromCharCode(65 + i),
+    ...d,
+  }));
+  const draftBlock = labeled
+    .map((l) => `## Draft ${l.id} (${l.label})\n\n${l.content}`)
+    .join("\n\n---\n\n");
+  const json = await chatCompletion({
+    model: resolveTextChatModel(synthModel),
+    temperature: 0.2,
+    messages: [
+      { role: "system", content: SYNTH_BREAKDOWN_SYSTEM },
+      {
+        role: "user",
+        content: `USER PROMPT:\n${userPrompt}\n\n---\n\n${labeled.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nReturn the JSON now.`,
+      },
+    ],
+  });
+  const raw = json?.choices?.[0]?.message?.content?.trim() ?? "";
+  const match = raw.match(/\{[\s\S]*\}/);
+  let parsed: any = null;
+  if (match) {
+    try { parsed = JSON.parse(match[0]); } catch { /* fall through */ }
+  }
+  const answer = typeof parsed?.answer === "string" && parsed.answer.trim()
+    ? parsed.answer.trim()
+    : raw; // fallback: use raw text as the answer
+  const breakdownIn: any[] = Array.isArray(parsed?.breakdown) ? parsed.breakdown : [];
+  const breakdown: DraftBreakdown[] = labeled.map((l) => {
+    const hit = breakdownIn.find((b) => String(b?.id).toUpperCase() === l.id);
+    const conf = Number(hit?.confidence);
+    return {
+      id: l.id,
+      model: l.model,
+      label: l.label,
+      confidence: Number.isFinite(conf) ? Math.max(0, Math.min(100, conf)) : 0,
+      rationale: typeof hit?.rationale === "string" ? hit.rationale.trim() : "",
+    };
+  });
+  return { answer, breakdown };
+}

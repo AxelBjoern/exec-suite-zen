@@ -546,3 +546,38 @@ export const getSwarmRunsForConversation = createServerFn({ method: "GET" })
       .eq("conversation_id", data.conversationId);
     return (rows ?? []) as Array<{ message_id: string; id: string; synth_model: string; drafter_models: string[]; status: string }>;
   });
+
+// ── Audit trail: recent swarm runs with fallback/timeout info ──────────────
+export const listSwarmAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { limit?: number }) => ({
+    limit: Math.min(100, Math.max(1, Number(d?.limit ?? 30))),
+  }))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: runs, error } = await supabase
+      .from("swarm_runs")
+      .select("id,conversation_id,synth_model,drafter_models,status,latency_ms,created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(data.limit);
+    if (error) throw new Error(error.message);
+    const runIds = (runs ?? []).map((r: any) => r.id);
+    if (runIds.length === 0) return { runs: [] };
+    const { data: drafts } = await supabase
+      .from("swarm_drafts")
+      .select("run_id,model_slug,model_label,role,role_label,status,error,latency_ms,attempted_models,used_fallback,primary_error")
+      .in("run_id", runIds);
+    const byRun = new Map<string, any[]>();
+    for (const d of drafts ?? []) {
+      const arr = byRun.get(d.run_id) ?? [];
+      arr.push(d);
+      byRun.set(d.run_id, arr);
+    }
+    return {
+      runs: (runs ?? []).map((r: any) => ({
+        ...r,
+        drafts: byRun.get(r.id) ?? [],
+      })),
+    };
+  });

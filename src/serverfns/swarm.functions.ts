@@ -201,7 +201,7 @@ type DraftResult = {
   tokens_out?: number;
 };
 
-async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
+export async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
   const label = LABEL_BY_SLUG.get(model) ?? model;
   const started = Date.now();
   try {

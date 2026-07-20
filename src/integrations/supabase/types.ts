@@ -936,6 +936,95 @@ export type Database = {
         }
         Relationships: []
       }
+      swarm_drafts: {
+        Row: {
+          content: string | null
+          created_at: string
+          error: string | null
+          id: string
+          latency_ms: number | null
+          model_label: string | null
+          model_slug: string
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          model_label?: string | null
+          model_slug: string
+          run_id: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          model_label?: string | null
+          model_slug?: string
+          run_id?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swarm_drafts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "swarm_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      swarm_runs: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          drafter_models: string[]
+          id: string
+          latency_ms: number | null
+          message_id: string | null
+          status: string
+          synth_model: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          drafter_models: string[]
+          id?: string
+          latency_ms?: number | null
+          message_id?: string | null
+          status?: string
+          synth_model: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          drafter_models?: string[]
+          id?: string
+          latency_ms?: number | null
+          message_id?: string | null
+          status?: string
+          synth_model?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           agent_id: string | null
@@ -1207,6 +1296,9 @@ export type Database = {
           auto_send_linkedin: boolean
           chat_model_allowlist: string[] | null
           design_rules: string | null
+          swarm_max_parallel: number | null
+          swarm_models: string[] | null
+          swarm_synth_model: string | null
           updated_at: string
           user_id: string
         }
@@ -1215,6 +1307,9 @@ export type Database = {
           auto_send_linkedin?: boolean
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          swarm_max_parallel?: number | null
+          swarm_models?: string[] | null
+          swarm_synth_model?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1223,6 +1318,9 @@ export type Database = {
           auto_send_linkedin?: boolean
           chat_model_allowlist?: string[] | null
           design_rules?: string | null
+          swarm_max_parallel?: number | null
+          swarm_models?: string[] | null
+          swarm_synth_model?: string | null
           updated_at?: string
           user_id?: string
         }

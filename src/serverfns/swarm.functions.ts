@@ -29,6 +29,79 @@ export const DEFAULT_SWARM_MODELS = [
 export const DEFAULT_SYNTH_MODEL = "anthropic/claude-opus-4.7";
 export const DEFAULT_MAX_PARALLEL = 4;
 
+// Role-based agents. Each role has a default model + tailored system prompt.
+export type SwarmRole = "ceo" | "cto" | "cmo" | "sales" | "seo" | "social";
+export type SwarmAgent = {
+  role: SwarmRole;
+  label: string;
+  model: string;
+  enabled: boolean;
+  systemPrompt: string;
+};
+
+export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
+  {
+    role: "ceo",
+    label: "CEO",
+    model: "anthropic/claude-opus-4.7",
+    enabled: true,
+    systemPrompt: "You are the CEO. Answer with strategic clarity: prioritize outcomes, tradeoffs, risk, and decisions. Be concise, opinionated, and executive. Prefer bullets and a clear recommendation.",
+  },
+  {
+    role: "cto",
+    label: "CTO",
+    model: "openai/gpt-5.3-chat",
+    enabled: true,
+    systemPrompt: "You are the CTO. Answer with technical rigor: architecture, tradeoffs, feasibility, security, scalability, and implementation plan. Include concrete stack/tooling choices and pitfalls.",
+  },
+  {
+    role: "cmo",
+    label: "CMO",
+    model: "x-ai/grok-4.3",
+    enabled: true,
+    systemPrompt: "You are the CMO. Answer through positioning, ICP, messaging, funnel, and growth loops. Give a crisp value prop, differentiators, and 2–3 concrete campaign ideas with channels.",
+  },
+  {
+    role: "sales",
+    label: "Sales",
+    model: "nousresearch/hermes-4-405b",
+    enabled: true,
+    systemPrompt: "You are the Sales lead. Answer through pipeline, objections, outreach, and closing. Produce specific talk tracks, discovery questions, or email copy. Prioritize what wins deals this quarter.",
+  },
+  {
+    role: "seo",
+    label: "SEO",
+    model: "deepseek/deepseek-v4-pro",
+    enabled: false,
+    systemPrompt: "You are the SEO lead. Answer through keyword intent, SERP structure, on-page, technical SEO, internal links, and content briefs. Give concrete keywords, titles, and structural recommendations.",
+  },
+  {
+    role: "social",
+    label: "Social",
+    model: "deepseek/deepseek-v4-flash",
+    enabled: false,
+    systemPrompt: "You are the Social lead. Answer through platform-native hooks (LinkedIn, X, IG). Produce ready-to-post copy with strong opens, formatting for skim, and clear CTAs. Match tone to the platform.",
+  },
+];
+
+const ROLE_SET = new Set<SwarmRole>(SWARM_ROLE_DEFAULTS.map((a) => a.role));
+
+function normalizeAgents(raw: any): SwarmAgent[] {
+  const list: SwarmAgent[] = SWARM_ROLE_DEFAULTS.map((d) => ({ ...d }));
+  if (!Array.isArray(raw)) return list;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const role = entry.role as SwarmRole;
+    if (!ROLE_SET.has(role)) continue;
+    const target = list.find((a) => a.role === role);
+    if (!target) continue;
+    if (typeof entry.model === "string" && ALLOWED_SET.has(entry.model)) target.model = entry.model;
+    if (typeof entry.enabled === "boolean") target.enabled = entry.enabled;
+    if (typeof entry.systemPrompt === "string" && entry.systemPrompt.trim()) target.systemPrompt = entry.systemPrompt;
+  }
+  return list;
+}
+
 const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
 
 Rules:

@@ -13,6 +13,7 @@ import {
   deleteCeoConversation,
   generateCeoDocument,
 } from "@/serverfns/ceo-chat.functions";
+import { routeAutoModel } from "@/lib/chat-router.functions";
 import { CHAT_MODEL_OPTIONS, type ChatModelOption } from "@/lib/chat-models";
 import { getMyModelAllowlist } from "@/lib/models.functions";
 

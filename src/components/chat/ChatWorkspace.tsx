@@ -142,6 +142,8 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
   const [swarmActive, setSwarmActive] = useState(false);
+  const [autoActive, setAutoActive] = useState(false);
+  const [autoPickHint, setAutoPickHint] = useState<{ model: string; reason: string } | null>(null);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
 

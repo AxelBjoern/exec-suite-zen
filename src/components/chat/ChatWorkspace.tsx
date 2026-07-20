@@ -160,10 +160,6 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const [liveSynthLabel, setLiveSynthLabel] = useState<string | null>(null);
   const [liveSynthRunning, setLiveSynthRunning] = useState(false);
   const [expandedLiveDraft, setExpandedLiveDraft] = useState<number | null>(null);
-  // Slice 1: token-streaming for plain conversational replies. Non-null while
-  // an assistant reply is streaming; cleared once the final saved message
-  // lands in the persisted history.
-  const [liveStream, setLiveStream] = useState<{ text: string; model: string } | null>(null);
   const { data: swarmRuns = [] } = useQuery({
     queryKey: ["swarm-runs", activeId],
     queryFn: () => swarmRunsFn({ data: { conversationId: activeId } }),

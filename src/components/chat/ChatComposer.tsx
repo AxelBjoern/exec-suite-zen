@@ -27,6 +27,8 @@ type Props = {
   onStop: () => void;
   onFiles: (files: FileList | null) => void;
   onGenerateDoc: (kind: "pdf" | "docx") => void;
+  swarmSlot?: React.ReactNode;
+  swarmActive?: boolean;
 };
 
 export function ChatComposer({

@@ -888,6 +888,15 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               />
             )}
 
+            {autoDecision && (mutation.isPending || liveStream || liveDrafts) && (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                <span className="font-semibold uppercase tracking-wider">Auto</span>
+                <span>→ {autoDecision.mode}</span>
+                <span className="text-muted-foreground/70">· {autoDecision.reason}</span>
+              </div>
+            )}
+
+
             {liveDrafts && liveDrafts.length > 0 && (
               <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">

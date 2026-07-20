@@ -276,9 +276,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     const runStarted = Date.now();
 
     // Load server-only helpers lazily (see note at top of file).
-    const { draftOne, synthesize, type DraftResult: _DraftResult } = await import(
-      "@/server/swarm-core.server"
-    ) as typeof import("@/server/swarm-core.server");
+    const { draftOne, synthesize } = await import("@/server/swarm-core.server");
     type Draft = Awaited<ReturnType<typeof draftOne>> & { role?: any; roleLabel?: string | null };
 
     // Fan out in parallel — one draft per unit (per role, if agents mode)

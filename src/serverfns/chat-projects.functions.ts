@@ -58,7 +58,7 @@ export const updateChatProject = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: { name?: string; system_prompt?: string } = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.system_prompt !== undefined) patch.system_prompt = data.system_prompt;
     if (!Object.keys(patch).length) return { ok: true };

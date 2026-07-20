@@ -135,33 +135,61 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
                 Per-role model
               </div>
               <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-                {agents.map((a) => (
-                  <div key={a.role} className="flex items-center gap-2">
-                    <Switch
-                      checked={a.enabled}
-                      onCheckedChange={(v) => updateAgent(a.role, { enabled: v })}
-                    />
-                    <div className="w-14 text-sm font-medium">{a.label}</div>
-                    <Select
-                      value={a.model}
-                      onValueChange={(v) => updateAgent(a.role, { model: v })}
-                    >
-                      <SelectTrigger className="h-8 flex-1 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(cfg?.available ?? []).map((m) => (
-                          <SelectItem key={m.slug} value={m.slug} className="text-xs">
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                {agents.map((a) => {
+                  const availableLabel = (slug?: string | null) =>
+                    slug ? (cfg?.available.find((m) => m.slug === slug)?.label ?? slug.split("/").pop() ?? slug) : null;
+                  const fbLabel = availableLabel(a.fallbackModel);
+                  const timeoutS = Math.round(((a.timeoutMs ?? 100_000) / 1000));
+                  return (
+                    <div key={a.role} className="rounded border border-border/40 bg-muted/20 px-2 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={a.enabled}
+                          onCheckedChange={(v) => updateAgent(a.role, { enabled: v })}
+                        />
+                        <div className="w-14 text-sm font-medium">{a.label}</div>
+                        <Select
+                          value={a.model}
+                          onValueChange={(v) => updateAgent(a.role, { model: v })}
+                        >
+                          <SelectTrigger className="h-8 flex-1 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(cfg?.available ?? []).map((m) => (
+                              <SelectItem key={m.slug} value={m.slug} className="text-xs">
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 pl-[52px] flex-wrap">
+                        <span
+                          className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-500"
+                          title={`Primary attempt uses ${availableLabel(a.model)} with a ${timeoutS}s timeout`}
+                        >
+                          Primary · {timeoutS}s
+                        </span>
+                        {fbLabel && fbLabel !== availableLabel(a.model) ? (
+                          <span
+                            className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-500"
+                            title={`On primary timeout/error, retries with ${fbLabel}`}
+                          >
+                            Fallback · {fbLabel}
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            No fallback
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-[11px] text-muted-foreground mt-2">
-                Enable at least 2 roles. Each runs its own model with a role-specific system prompt in parallel.
+                Enable at least 2 roles. Each runs its own model with a role-specific system prompt in parallel. If the primary times out or errors, the fallback runs automatically.
               </p>
             </div>
           )}

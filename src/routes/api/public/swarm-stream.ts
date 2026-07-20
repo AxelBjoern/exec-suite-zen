@@ -271,6 +271,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
               const models = units.map((u) => u.model);
               let finalContent = "";
               let swarmStatus: "ok" | "degraded" | "failed" = "ok";
+              let breakdown: DraftBreakdown[] = [];
 
               send("synth_start", { synth_model: synthModel, synth_label: synthLabel, ok_count: okDrafts.length });
 
@@ -281,26 +282,18 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 swarmStatus = "failed";
               } else {
                 if (okDrafts.length < drafts.length) swarmStatus = "degraded";
-                const draftBlock = okDrafts
-                  .map((d, i) => {
-                    const header = d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label;
-                    return `## Draft ${String.fromCharCode(65 + i)} (${header})\n\n${d.content}`;
-                  })
-                  .join("\n\n---\n\n");
                 try {
-                  const synthJson = await chatCompletion({
-                    model: resolveTextChatModel(synthModel),
-                    temperature: 0.3,
-                    messages: [
-                      { role: "system", content: SYNTH_SYSTEM },
-                      {
-                        role: "user",
-                        content: `USER PROMPT:\n${augmentedContent}\n\n---\n\n${okDrafts.length} INDEPENDENT DRAFTS:\n\n${draftBlock}\n\n---\n\nProduce the final, unified answer now.`,
-                      },
-                    ],
-                  });
-                  finalContent =
-                    synthJson?.choices?.[0]?.message?.content?.trim() || okDrafts[0].content;
+                  const result = await synthesizeWithBreakdown(
+                    synthModel,
+                    augmentedContent,
+                    okDrafts.map((d) => ({
+                      model: d.model,
+                      label: d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label,
+                      content: d.content,
+                    })),
+                  );
+                  finalContent = result.answer || okDrafts[0].content;
+                  breakdown = result.breakdown;
                 } catch (e: any) {
                   finalContent =
                     okDrafts[0].content +
@@ -308,6 +301,14 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                   swarmStatus = "degraded";
                 }
               }
+
+              // Map breakdown back to drafts by A/B/C order (matches okDrafts order)
+              const confByModel = new Map<string, { confidence: number; rationale: string }>();
+              breakdown.forEach((b, i) => {
+                const d = okDrafts[i];
+                if (d) confByModel.set(d.model + "|" + d.label, { confidence: b.confidence, rationale: b.rationale });
+              });
+
 
               // Persist assistant message
               const { data: savedMsg, error: mErr } = await admin

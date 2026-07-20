@@ -53,6 +53,7 @@ import { MessageRow } from "@/components/chat/MessageRow";
 import { SwarmPopover } from "@/components/chat/SwarmPopover";
 import { runSwarm, getSwarmRunsForConversation } from "@/serverfns/swarm.functions";
 import { streamSwarm, type SwarmStreamRunEvent, type SwarmStreamDraftEvent, type SwarmStreamDrafter } from "@/lib/swarm-stream";
+import { streamChat, isStreamEligible, ChatStreamFallback } from "@/lib/chat-stream";
 
 export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const navigate = useNavigate();

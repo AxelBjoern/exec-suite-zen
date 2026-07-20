@@ -349,7 +349,10 @@ export const runSwarm = createServerFn({ method: "POST" })
     } else {
       if (okDrafts.length < drafts.length) swarmStatus = "degraded";
       const draftBlock = okDrafts
-        .map((d, i) => `## Draft ${String.fromCharCode(65 + i)} (${d.label})\n\n${d.content}`)
+        .map((d, i) => {
+          const header = d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label;
+          return `## Draft ${String.fromCharCode(65 + i)} (${header})\n\n${d.content}`;
+        })
         .join("\n\n---\n\n");
       try {
         const synthJson = await chatCompletion({

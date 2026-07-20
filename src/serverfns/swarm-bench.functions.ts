@@ -240,6 +240,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
           cost_credits: r.cost_credits,
           quality_score: r.quality_score ?? null,
           error: r.error ?? null,
+          content: r.content ?? "",
         })),
         final_answer: swarmRow.content || null,
       })
@@ -261,6 +262,22 @@ export const listSwarmBenchRuns = createServerFn({ method: "GET" })
       .limit(50);
     if (error) throw new Error(error.message);
     return data ?? [];
+  });
+
+export const getSwarmBenchRun = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => ({ id: String(d?.id ?? "") }))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (!data.id) throw new Error("id required");
+    const { data: row, error } = await supabase
+      .from("swarm_bench_runs")
+      .select("*")
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
   });
 
 export const deleteSwarmBenchRun = createServerFn({ method: "POST" })

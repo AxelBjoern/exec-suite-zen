@@ -62,7 +62,7 @@ async function runOne(model: string, prompt: string): Promise<Row> {
   const started = Date.now();
   try {
     const json = await chatCompletion({
-      model: resolveTextChatModel(model),
+      model: await resolveTextChatModel(model),
       temperature: 0.6,
       messages: [
         { role: "system", content: "You are a top-tier assistant. Give the best answer you can. Be specific, correct, useful." },
@@ -107,7 +107,7 @@ async function scoreRows(synthModel: string, prompt: string, rows: Row[]): Promi
     .join("\n\n---\n\n");
   try {
     const json = await chatCompletion({
-      model: resolveTextChatModel(synthModel),
+      model: await resolveTextChatModel(synthModel),
       temperature: 0,
       messages: [
         { role: "system", content: SCORING_SYSTEM },
@@ -192,7 +192,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
           .map((d, i) => `## Draft ${String.fromCharCode(65 + i)} (${d.label})\n\n${d.content}`)
           .join("\n\n---\n\n");
         const json = await chatCompletion({
-          model: resolveTextChatModel(synthModel),
+          model: await resolveTextChatModel(synthModel),
           temperature: 0.3,
           messages: [
             { role: "system", content: "You are the arbiter. Merge the drafts into one final answer that is more accurate, complete, and useful than any individual draft. Never mention the drafts or model names." },

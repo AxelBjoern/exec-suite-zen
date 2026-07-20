@@ -45,6 +45,8 @@ export function ChatComposer({
   onStop,
   onFiles,
   onGenerateDoc,
+  swarmSlot,
+  swarmActive,
 }: Props) {
   return (
     <div className="border-t border-border/40 bg-card/40 backdrop-blur pb-[env(safe-area-inset-bottom)]">

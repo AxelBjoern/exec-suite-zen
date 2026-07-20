@@ -184,6 +184,18 @@ function AgentsModelsShell() {
     onError: (e: any) => toast.error(e?.message ?? "Failed"),
   });
 
+  const toggleSwarm = useMutation({
+    mutationFn: async ({ id, swarm_eligible }: { id: string; swarm_eligible: boolean }) => {
+      const { error } = await (supabase as any).from("base_models").update({ swarm_eligible }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["am", "base_models"] });
+      qc.invalidateQueries({ queryKey: ["swarm-config"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed"),
+  });
+
   const remove = useMutation({
     mutationFn: async ({ table, id }: { table: "agent_types" | "base_models"; id: string }) => {
       const { error } = await (supabase as any).from(table).delete().eq("id", id);

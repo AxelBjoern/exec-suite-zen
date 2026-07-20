@@ -885,6 +885,8 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
           onFiles={handleFiles}
           onGenerateDoc={handleGenerateDoc}
           swarmActive={swarmActive}
+          autoActive={autoActive}
+          onToggleAuto={() => setAutoActive((v) => !v)}
           swarmSlot={
             <SwarmPopover
               active={swarmActive}

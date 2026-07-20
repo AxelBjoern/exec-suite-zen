@@ -291,6 +291,7 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
         ? await streamSwarm({
             content: vars.content,
             conversationId: targetConvoId,
+            attachmentIds: vars.attachmentIds,
             signal: controller.signal,
             onRun: (info: SwarmStreamRunEvent) => {
               setLiveDrafts(

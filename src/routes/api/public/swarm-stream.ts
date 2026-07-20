@@ -136,13 +136,46 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           convId = conv.id as string;
         }
 
-        // Save user message
-        await admin.from("ceo_chat_messages").insert({
-          user_id: userId,
-          conversation_id: convId,
-          role: "user",
-          content,
-        });
+        // Load attachments (extracted_text for docx/pptx/pdf/images with OCR)
+        let attachmentBlock = "";
+        const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
+        if (attachmentIds.length) {
+          const { data: atts } = await admin
+            .from("ceo_chat_attachments")
+            .select("id, filename, mime_type, extracted_text")
+            .in("id", attachmentIds)
+            .is("message_id", null);
+          const rows = atts ?? [];
+          if (rows.length) {
+            attachmentBlock =
+              "\n\n## Attached documents\n" +
+              rows
+                .map(
+                  (a: any) =>
+                    `### ${a.filename}${a.mime_type ? ` (${a.mime_type})` : ""}\n\n${a.extracted_text ?? "[no extracted text available for this file]"}`,
+                )
+                .join("\n\n---\n\n");
+          }
+        }
+        const augmentedContent = content + attachmentBlock;
+
+        // Save user message (original content only; attachments linked below)
+        const { data: userRow } = await admin
+          .from("ceo_chat_messages")
+          .insert({
+            user_id: userId,
+            conversation_id: convId,
+            role: "user",
+            content,
+          })
+          .select("id")
+          .single();
+        if (attachmentIds.length && userRow?.id) {
+          await admin
+            .from("ceo_chat_attachments")
+            .update({ message_id: userRow.id })
+            .in("id", attachmentIds);
+        }
 
         const stream = new ReadableStream({
           async start(controller) {

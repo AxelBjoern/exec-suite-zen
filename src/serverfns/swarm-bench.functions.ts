@@ -3,7 +3,22 @@
 // arbiter, estimate cost, and persist to swarm_bench_runs for comparison.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+// `@/server/llm.server` cannot be imported at module scope: swarm-bench.tsx
+// pulls this file into the client graph and the import-protection plugin
+// blocks any `.server` imports from client-reachable modules. Load lazily.
+let _llmModPromise: Promise<typeof import("@/server/llm.server")> | null = null;
+async function llm() {
+  if (!_llmModPromise) _llmModPromise = import("@/server/llm.server");
+  return _llmModPromise;
+}
+async function chatCompletion(...args: Parameters<Awaited<ReturnType<typeof llm>>["chatCompletion"]>) {
+  return (await llm()).chatCompletion(...args);
+}
+function resolveTextChatModel(m: string): string {
+  // Bench doesn't need remapping — pass through. Full resolver runs later
+  // via chatCompletion when it hits the gateway.
+  return m;
+}
 import {
   ALLOWED_SWARM_MODELS,
   DEFAULT_SWARM_MODELS,

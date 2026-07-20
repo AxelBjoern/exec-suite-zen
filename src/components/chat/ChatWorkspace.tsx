@@ -802,7 +802,57 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               />
             )}
 
-            {showThinking && (
+            {liveDrafts && liveDrafts.length > 0 && (
+              <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Swarm · {liveDrafts.length} agents
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {liveDrafts.filter((d) => d.status !== "pending").length}/{liveDrafts.length} done
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {liveDrafts.map((d) => {
+                    const isOpen = expandedLiveDraft === d.index;
+                    const dot =
+                      d.status === "pending"
+                        ? "bg-amber-400 animate-pulse"
+                        : d.status === "ok"
+                          ? "bg-emerald-500"
+                          : "bg-red-500";
+                    return (
+                      <div key={d.index} className="rounded border border-border/40 bg-background/40">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedLiveDraft(isOpen ? null : d.index)}
+                          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted/30"
+                        >
+                          <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+                          <span className="font-medium">{d.role_label ?? d.label}</span>
+                          <span className="text-muted-foreground">· {d.label}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {d.latency_ms != null ? `${(d.latency_ms / 1000).toFixed(1)}s` : "…"}
+                          </span>
+                        </button>
+                        {isOpen && (d.content || d.error) && (
+                          <div className="px-2 pb-2 pt-1 text-xs whitespace-pre-wrap text-foreground/80 max-h-64 overflow-y-auto">
+                            {d.error ?? d.content}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {liveSynthRunning && liveSynthLabel && (
+                  <div className="pl-1 pt-1">
+                    <VdnxLoader size="sm" label={`SYNTHESIZING · ${liveSynthLabel.toUpperCase()}`} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showThinking && !liveDrafts && (
               <div className="pl-1"><VdnxLoader size="sm" label="CEO THINKING" /></div>
             )}
 

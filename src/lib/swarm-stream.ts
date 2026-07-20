@@ -34,6 +34,7 @@ export type SwarmStreamDraftEvent = {
 export type StreamSwarmOpts = {
   content: string;
   conversationId?: string | null;
+  attachmentIds?: string[];
   signal?: AbortSignal;
   onRun?: (info: SwarmStreamRunEvent) => void;
   onDraft?: (d: SwarmStreamDraftEvent) => void;
@@ -55,6 +56,7 @@ export async function streamSwarm(opts: StreamSwarmOpts): Promise<any> {
     body: JSON.stringify({
       content: opts.content,
       conversationId: opts.conversationId ?? null,
+      attachmentIds: opts.attachmentIds ?? [],
     }),
     signal: opts.signal,
   });

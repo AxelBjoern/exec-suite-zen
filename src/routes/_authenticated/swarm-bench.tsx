@@ -323,6 +323,14 @@ function SwarmBenchPage() {
                       {expandedId === r.id && (
                         <tr key={r.id + "-detail"} className="border-t bg-muted/20">
                           <td colSpan={7} className="px-4 py-3">
+                            <div className="flex justify-end gap-2 mb-3">
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => exportJson(r)}>
+                                <FileJson className="h-3.5 w-3.5" /> Export JSON
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => exportPdf(r)}>
+                                <FileText className="h-3.5 w-3.5" /> Export PDF
+                              </Button>
+                            </div>
                             <div className="text-xs text-muted-foreground mb-2">Prompt</div>
                             <div className="mb-3 whitespace-pre-wrap text-sm">{r.prompt}</div>
                             <div className="text-xs text-muted-foreground mb-2">Per-model breakdown</div>

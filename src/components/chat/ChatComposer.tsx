@@ -201,6 +201,7 @@ export function ChatComposer({
             >
               <ClipboardPaste className="h-4 w-4" />
             </Button>
+            {swarmSlot && <div className="ml-1 pl-1 border-l border-border/60">{swarmSlot}</div>}
           </div>
           {pending ? (
             <button

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatRelative, type Conversation } from "@/lib/chat-helpers";

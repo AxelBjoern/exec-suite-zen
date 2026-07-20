@@ -15,8 +15,8 @@ export const ALLOWED_SWARM_MODELS: { slug: string; label: string }[] = [
   { slug: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { slug: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", label: "Nemotron 3 Nano Omni 30B" },
 ];
-const ALLOWED_SET = new Set(ALLOWED_SWARM_MODELS.map((m) => m.slug));
-const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
+export const ALLOWED_SET = new Set(ALLOWED_SWARM_MODELS.map((m) => m.slug));
+export const LABEL_BY_SLUG = new Map(ALLOWED_SWARM_MODELS.map((m) => [m.slug, m.label] as const));
 
 // Tuned defaults (benchmark: Opus best synth on reasoning + tone; top-4 drafters
 // span reasoning styles for genuine diversity without heavy overlap).
@@ -86,7 +86,7 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
 
 const ROLE_SET = new Set<SwarmRole>(SWARM_ROLE_DEFAULTS.map((a) => a.role));
 
-function normalizeAgents(raw: any): SwarmAgent[] {
+export function normalizeAgents(raw: any): SwarmAgent[] {
   const list: SwarmAgent[] = SWARM_ROLE_DEFAULTS.map((d) => ({ ...d }));
   if (!Array.isArray(raw)) return list;
   for (const entry of raw) {
@@ -102,7 +102,7 @@ function normalizeAgents(raw: any): SwarmAgent[] {
   return list;
 }
 
-const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
+export const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
 
 Rules:
 - Silently reconcile disagreements. If a claim is contested and material, note the disagreement briefly ("sources differ on X"), don't pretend consensus.
@@ -112,7 +112,7 @@ Rules:
 - Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
 - If drafts are all weak, answer from your own capability rather than parroting them.`;
 
-function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
+export function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
   const list = (models ?? []).filter((m) => typeof m === "string" && ALLOWED_SET.has(m));
   const seen = new Set<string>();
   const out: string[] = [];
@@ -188,7 +188,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
 
 
 // ── Run swarm ──────────────────────────────────────────────────────────────
-type DraftResult = {
+export type DraftResult = {
   model: string;
   label: string;
   role?: SwarmRole | null;
@@ -201,7 +201,7 @@ type DraftResult = {
   tokens_out?: number;
 };
 
-async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
+export async function draftOne(model: string, userContent: string, systemPrompt: string): Promise<DraftResult> {
   const label = LABEL_BY_SLUG.get(model) ?? model;
   const started = Date.now();
   try {

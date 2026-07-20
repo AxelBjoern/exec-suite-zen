@@ -52,6 +52,7 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { MessageRow } from "@/components/chat/MessageRow";
 import { SwarmPopover } from "@/components/chat/SwarmPopover";
 import { runSwarm, getSwarmRunsForConversation } from "@/serverfns/swarm.functions";
+import { streamSwarm, type SwarmStreamRunEvent, type SwarmStreamDraftEvent, type SwarmStreamDrafter } from "@/lib/swarm-stream";
 
 export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: string | null }) {
   const navigate = useNavigate();
@@ -143,6 +144,22 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const [swarmActive, setSwarmActive] = useState<boolean>(false);
   const swarmFn = useServerFn(runSwarm);
   const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
+
+  type LiveDraft = {
+    index: number;
+    model: string;
+    label: string;
+    role: string | null;
+    role_label: string | null;
+    status: "pending" | "ok" | "error";
+    content: string;
+    error: string | null;
+    latency_ms: number | null;
+  };
+  const [liveDrafts, setLiveDrafts] = useState<LiveDraft[] | null>(null);
+  const [liveSynthLabel, setLiveSynthLabel] = useState<string | null>(null);
+  const [liveSynthRunning, setLiveSynthRunning] = useState(false);
+  const [expandedLiveDraft, setExpandedLiveDraft] = useState<number | null>(null);
   const { data: swarmRuns = [] } = useQuery({
     queryKey: ["swarm-runs", activeId],
     queryFn: () => swarmRunsFn({ data: { conversationId: activeId } }),
@@ -271,12 +288,46 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const targetKey = targetConvoId ?? PENDING_NONE_KEY;
       markInFlight(targetKey, true);
       const saved = vars.swarm
-        ? await swarmFn({
-            data: {
-              content: vars.content,
-              conversationId: targetConvoId,
-            },
+        ? await streamSwarm({
+            content: vars.content,
+            conversationId: targetConvoId,
             signal: controller.signal,
+            onRun: (info: SwarmStreamRunEvent) => {
+              setLiveDrafts(
+                info.drafters.map((d: SwarmStreamDrafter, i: number) => ({
+                  index: i,
+                  model: d.model,
+                  label: d.label,
+                  role: d.role,
+                  role_label: d.role_label,
+                  status: "pending",
+                  content: "",
+                  error: null,
+                  latency_ms: null,
+                })),
+              );
+              setLiveSynthLabel(info.synth_label);
+              setLiveSynthRunning(false);
+              setExpandedLiveDraft(null);
+            },
+            onDraft: (d: SwarmStreamDraftEvent) => {
+              setLiveDrafts((prev) =>
+                prev
+                  ? prev.map((row) =>
+                      row.index === d.index
+                        ? {
+                            ...row,
+                            status: d.status,
+                            content: d.content,
+                            error: d.error,
+                            latency_ms: d.latency_ms,
+                          }
+                        : row,
+                    )
+                  : prev,
+              );
+            },
+            onSynthStart: () => setLiveSynthRunning(true),
           })
         : await send({
             data: {
@@ -305,6 +356,10 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
       const saved: any = r.saved ?? null;
       markInFlight(targetKey, false);
       setPendingFor(targetKey, null);
+      setLiveDrafts(null);
+      setLiveSynthLabel(null);
+      setLiveSynthRunning(false);
+      setExpandedLiveDraft(null);
 
       const serverConvoId: string | null = saved?.conversation_id ?? targetConvoId;
       // If user started with no active conversation, adopt the one the server
@@ -747,7 +802,57 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
               />
             )}
 
-            {showThinking && (
+            {liveDrafts && liveDrafts.length > 0 && (
+              <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Swarm · {liveDrafts.length} agents
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {liveDrafts.filter((d) => d.status !== "pending").length}/{liveDrafts.length} done
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {liveDrafts.map((d) => {
+                    const isOpen = expandedLiveDraft === d.index;
+                    const dot =
+                      d.status === "pending"
+                        ? "bg-amber-400 animate-pulse"
+                        : d.status === "ok"
+                          ? "bg-emerald-500"
+                          : "bg-red-500";
+                    return (
+                      <div key={d.index} className="rounded border border-border/40 bg-background/40">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedLiveDraft(isOpen ? null : d.index)}
+                          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted/30"
+                        >
+                          <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+                          <span className="font-medium">{d.role_label ?? d.label}</span>
+                          <span className="text-muted-foreground">· {d.label}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">
+                            {d.latency_ms != null ? `${(d.latency_ms / 1000).toFixed(1)}s` : "…"}
+                          </span>
+                        </button>
+                        {isOpen && (d.content || d.error) && (
+                          <div className="px-2 pb-2 pt-1 text-xs whitespace-pre-wrap text-foreground/80 max-h-64 overflow-y-auto">
+                            {d.error ?? d.content}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {liveSynthRunning && liveSynthLabel && (
+                  <div className="pl-1 pt-1">
+                    <VdnxLoader size="sm" label={`SYNTHESIZING · ${liveSynthLabel.toUpperCase()}`} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showThinking && !liveDrafts && (
               <div className="pl-1"><VdnxLoader size="sm" label="CEO THINKING" /></div>
             )}
 

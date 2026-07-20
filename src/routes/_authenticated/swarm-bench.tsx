@@ -62,6 +62,7 @@ function SwarmBenchPage() {
   const runBench = useServerFn(runSwarmBench);
   const listRuns = useServerFn(listSwarmBenchRuns);
   const delRun = useServerFn(deleteSwarmBenchRun);
+  const getRun = useServerFn(getSwarmBenchRun);
   const loadCfg = useServerFn(getSwarmConfig);
 
   const { data: cfg } = useQuery({ queryKey: ["swarm-config"], queryFn: () => loadCfg() });

@@ -86,7 +86,7 @@ export const SWARM_ROLE_DEFAULTS: SwarmAgent[] = [
 
 const ROLE_SET = new Set<SwarmRole>(SWARM_ROLE_DEFAULTS.map((a) => a.role));
 
-function normalizeAgents(raw: any): SwarmAgent[] {
+export function normalizeAgents(raw: any): SwarmAgent[] {
   const list: SwarmAgent[] = SWARM_ROLE_DEFAULTS.map((d) => ({ ...d }));
   if (!Array.isArray(raw)) return list;
   for (const entry of raw) {

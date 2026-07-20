@@ -16,6 +16,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
 import { Route as AuthenticatedSwarmBenchRouteImport } from './routes/_authenticated/swarm-bench'
+import { Route as AuthenticatedSwarmAuditRouteImport } from './routes/_authenticated/swarm-audit'
 import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
 import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
 import { Route as AuthenticatedCoworkRouteImport } from './routes/_authenticated/cowork'
@@ -85,6 +86,11 @@ const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
 const AuthenticatedSwarmBenchRoute = AuthenticatedSwarmBenchRouteImport.update({
   id: '/swarm-bench',
   path: '/swarm-bench',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSwarmAuditRoute = AuthenticatedSwarmAuditRouteImport.update({
+  id: '/swarm-audit',
+  path: '/swarm-audit',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedOutboundRoute = AuthenticatedOutboundRouteImport.update({
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
+  '/swarm-audit': typeof AuthenticatedSwarmAuditRoute
   '/swarm-bench': typeof AuthenticatedSwarmBenchRoute
   '/terminal': typeof AuthenticatedTerminalRoute
   '/budget/assumptions': typeof AuthenticatedBudgetAssumptionsRoute
@@ -350,6 +357,7 @@ export interface FileRoutesByTo {
   '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
+  '/swarm-audit': typeof AuthenticatedSwarmAuditRoute
   '/swarm-bench': typeof AuthenticatedSwarmBenchRoute
   '/terminal': typeof AuthenticatedTerminalRoute
   '/': typeof AuthenticatedIndexRoute
@@ -396,6 +404,7 @@ export interface FileRoutesById {
   '/_authenticated/cowork': typeof AuthenticatedCoworkRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
   '/_authenticated/outbound': typeof AuthenticatedOutboundRouteWithChildren
+  '/_authenticated/swarm-audit': typeof AuthenticatedSwarmAuditRoute
   '/_authenticated/swarm-bench': typeof AuthenticatedSwarmBenchRoute
   '/_authenticated/terminal': typeof AuthenticatedTerminalRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
     | '/cowork'
     | '/forge'
     | '/outbound'
+    | '/swarm-audit'
     | '/swarm-bench'
     | '/terminal'
     | '/budget/assumptions'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/cowork'
     | '/forge'
     | '/outbound'
+    | '/swarm-audit'
     | '/swarm-bench'
     | '/terminal'
     | '/'
@@ -530,6 +541,7 @@ export interface FileRouteTypes {
     | '/_authenticated/cowork'
     | '/_authenticated/forge'
     | '/_authenticated/outbound'
+    | '/_authenticated/swarm-audit'
     | '/_authenticated/swarm-bench'
     | '/_authenticated/terminal'
     | '/_authenticated/'
@@ -631,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/swarm-bench'
       fullPath: '/swarm-bench'
       preLoaderRoute: typeof AuthenticatedSwarmBenchRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/swarm-audit': {
+      id: '/_authenticated/swarm-audit'
+      path: '/swarm-audit'
+      fullPath: '/swarm-audit'
+      preLoaderRoute: typeof AuthenticatedSwarmAuditRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/outbound': {
@@ -952,6 +971,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCoworkRoute: typeof AuthenticatedCoworkRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
   AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRouteWithChildren
+  AuthenticatedSwarmAuditRoute: typeof AuthenticatedSwarmAuditRoute
   AuthenticatedSwarmBenchRoute: typeof AuthenticatedSwarmBenchRoute
   AuthenticatedTerminalRoute: typeof AuthenticatedTerminalRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -969,6 +989,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCoworkRoute: AuthenticatedCoworkRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
   AuthenticatedOutboundRoute: AuthenticatedOutboundRouteWithChildren,
+  AuthenticatedSwarmAuditRoute: AuthenticatedSwarmAuditRoute,
   AuthenticatedSwarmBenchRoute: AuthenticatedSwarmBenchRoute,
   AuthenticatedTerminalRoute: AuthenticatedTerminalRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,

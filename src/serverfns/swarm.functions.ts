@@ -486,6 +486,9 @@ export const runSwarm = createServerFn({ method: "POST" })
             tokens_out: d.tokens_out ?? null,
             confidence: b?.confidence ?? null,
             rationale: b?.rationale ?? null,
+            attempted_models: d.attempted_models ?? [d.model],
+            used_fallback: d.used_fallback ?? false,
+            primary_error: d.primary_error ?? null,
           };
         }),
       );

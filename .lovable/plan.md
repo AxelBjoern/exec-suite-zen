@@ -1,56 +1,39 @@
 ## Goal
+Run a live end-to-end swarm test against the running preview and confirm the quality breakdown UI renders correctly at runtime.
 
-Undo the Claude/Kimi-style merge (Slice 1 streaming + Slice 2 auto router) by rewriting the affected files back to the pre-slice behavior. Keep every other feature — the swarm quality breakdown, per-agent drafts, confidence bars, fallback badges, `/swarm-audit`, `/swarm-bench` — completely intact.
+## Steps
 
-## What gets reverted
+1. **Auth into the preview with Playwright**
+   - Restore the injected Supabase session (`LOVABLE_BROWSER_SUPABASE_*` env) into localStorage + cookies on `http://localhost:8080`.
+   - Navigate to `/chat`, wait for the sidebar to hydrate, and screenshot the landing state.
 
-**Slice 1 — token streaming (single mode)**
-- Delete `src/routes/api/public/chat-stream.ts` (SSE endpoint)
-- Delete `src/lib/chat-stream.ts` (client SSE consumer + `isStreamEligible` + `ChatStreamFallback`)
-- Remove streaming branch, `liveStream` state, and blinking-caret bubble from `ChatWorkspace.tsx`
+2. **Open a new session and enable Swarm**
+   - Click "New chat" (or navigate to `/chat/<newId>`), then open the SwarmPopover and toggle Swarm ON.
+   - Verify at least one swarm-eligible agent role has a model + fallback configured; screenshot the popover state.
 
-**Slice 2 — auto router**
-- Delete `src/serverfns/chat-router.functions.ts` (classifier server fn)
-- Delete `src/components/chat/ChatModeToggle.tsx` (tri-mode toggle)
-- Remove `chatMode` state, `localStorage` key `vdnx.chat.mode`, `classifyFn` call, `autoDecision` chip, and the toggle mount in the composer footer from `ChatWorkspace.tsx`
-- Restore the previous binary `swarmActive` toggle exactly as it worked before Slice 1 (Swarm popover + swarm on/off), which is what the sidebar and swarm SSE path already expect
+3. **Send a swarm prompt**
+   - Prompt: `"In 3 short bullets, what makes a great B2B outbound opening line? Then rate your own answer 1-10."` (short, cheap, forces reasoning + self-eval so the breakdown has signal).
+   - Submit via the composer.
 
-## What stays untouched (must not regress)
+4. **Observe the live SSE stream**
+   - Watch for `liveDrafts` cards appearing per agent with Primary/Fallback/Error badges + latency.
+   - Screenshot mid-stream (after ~15s) to capture in-flight drafts.
+   - Wait for the final synthesized assistant message.
 
-- `src/serverfns/swarm.functions.ts`, `src/server/swarm-core.server.ts`, `src/lib/swarm-stream.ts`, `src/routes/api/public/swarm-stream.ts`
-- `SwarmPopover.tsx`, `MessageRow.tsx` badges (Primary / Fallback / Error, latency, confidence bars, rationale)
-- `/swarm-audit`, `/swarm-bench`, `swarm_drafts`, `swarm_runs`, `swarm_bench_runs`
-- Attachments, slash commands, `sendCeoMessage`, DSML tool loop, GitHub PAT flow, VDNX probe, Outbound, LinkedIn image generation
-- All existing `ceo_chat_messages` / `ceo_conversations` rows
+5. **Verify the quality breakdown UI**
+   - On the final MessageRow, expand the swarm breakdown panel.
+   - Confirm each draft card shows: agent label, model slug, Primary/Fallback/Error badge, latency, confidence bar (0–100), and rationale text.
+   - Screenshot the expanded breakdown.
 
-## `ChatWorkspace.tsx` — exact edits
+6. **Cross-check server-side**
+   - Query `swarm_runs` and `swarm_drafts` for the most recent run: confirm rows exist, `confidence` + `rationale` populated, `attempted_models` / `used_fallback` set correctly.
+   - Tail server logs for any errors during the run.
 
-1. Remove imports on lines 56–58 (`chat-stream`, `ChatModeToggle`, `classifyChatMode`).
-2. Remove `CHAT_MODE_KEY`, `chatMode` state + effect, `classifyFn`, `autoDecision`, `liveStream`.
-3. Reintroduce `const [swarmActive, setSwarmActive] = useState(false)` (or the prior persisted-key equivalent — will match whatever was there before Slice 1; verify from the pre-slice signature by inspection before writing).
-4. In the send mutation: drop the `if (chatMode === "auto") classifyFn(...)` branch and the `streamChat(...) / ChatStreamFallback` block. Restore the original two-path dispatch: `swarmActive ? swarm SSE : sendCeoMessage`.
-5. Drop the `mode: chatMode` field being persisted into any request payload.
-6. In JSX: delete the `autoDecision` chip block (~line 891), the `liveStream` bubble (~line 950), and switch `showThinking && !liveDrafts && !liveStream` back to `showThinking && !liveDrafts`.
-7. In the composer footer: replace `<ChatModeToggle .../>` with the previous swarm on/off control (the `SwarmPopover` trigger button that was there before Slice 1).
+7. **Report**
+   - Pass/fail per check with screenshot references.
+   - Flag any regression (missing badge, empty rationale, zero confidence across the board, SSE stalled, synth failed, etc.).
 
-## Database — leave as-is (recommended)
-
-The Slice 1/2 migrations only added **nullable** columns and flag columns; they are inert once the code stops writing to them:
-
-- `ceo_chat_messages`: `model_used`, `latency_ms`, `tokens_in`, `tokens_out` (all NULL for legacy rows, harmless)
-- `user_settings`: `chat_mode`, `enable_artifacts_panel`, `enable_projects`, `enable_tool_steps`, `enable_vision`, `enable_compaction`, `chat_experimental`
-
-Recommendation: keep them. They cost nothing, break nothing, and preserve reversibility if you ever want to reintroduce streaming later. If you want a clean drop instead, say so and I'll add a migration step — otherwise I'll skip it.
-
-## Verification after the revert
-
-1. Typecheck / build passes with zero references to `chat-stream`, `chat-router`, `ChatModeToggle`, `chatMode`, `liveStream`, `autoDecision`, `classifyChatMode`, `isStreamEligible`.
-2. Load `/chat/:sessionId` — single-model reply works via `sendCeoMessage` (non-streaming, same as before Slice 1).
-3. Toggle Swarm on — SSE swarm stream, per-agent drafts, confidence bars, Primary/Fallback/Error badges all render.
-4. `/swarm-audit` and `/swarm-bench` load and show historical runs.
-5. Sidebar sessions, rename, attachments, slash commands, "Add to Outbound" all still work.
-
-## Confirm before I switch to build mode
-
-- Proceed with the revert as scoped above? (Slice 1 + Slice 2 only, quality breakdown + everything else preserved.)
-- Keep the additive DB columns in place (recommended), or drop them in a follow-up migration?
+## Notes
+- Read-only verification — no code edits.
+- If `LOVABLE_BROWSER_AUTH_STATUS` is not `injected`, I'll stop and ask you to sign in via the preview so the session mints.
+- If the swarm reply falls back to plain synth (breakdown JSON parse failed), that itself is the finding to report.

@@ -339,6 +339,20 @@ function AgentsModelsShell() {
             primary={(m: BaseModel) => m.name}
             onEdit={(m: BaseModel) => handleEditModel(m)}
             onDelete={(m: BaseModel) => remove.mutate({ table: "base_models", id: m.id })}
+            renderRowExtras={({ row, isOwn }) => (
+              <div className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <label className={`inline-flex items-center gap-1.5 ${isOwn ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`} title={isOwn ? "Available in Swarm picker" : "Clone to change"}>
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3 accent-primary"
+                    checked={!!row.swarm_eligible}
+                    disabled={!isOwn || toggleSwarm.isPending}
+                    onChange={(e) => toggleSwarm.mutate({ id: row.id, swarm_eligible: e.target.checked })}
+                  />
+                  Swarm
+                </label>
+              </div>
+            )}
             form={
               <ModelForm
                 key={editingModelId ?? "new"}

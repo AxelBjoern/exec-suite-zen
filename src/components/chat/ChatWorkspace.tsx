@@ -140,6 +140,19 @@ export function ChatWorkspace({ initialSessionId = null }: { initialSessionId?: 
   const dragDepthRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastAutoOpenedArtifactRef = useRef<string | null>(null);
+  const [swarmActive, setSwarmActive] = useState<boolean>(false);
+  const swarmFn = useServerFn(runSwarm);
+  const swarmRunsFn = useServerFn(getSwarmRunsForConversation);
+  const { data: swarmRuns = [] } = useQuery({
+    queryKey: ["swarm-runs", activeId],
+    queryFn: () => swarmRunsFn({ data: { conversationId: activeId } }),
+    enabled: !!activeId,
+  });
+  const swarmRunByMessage = useMemo(() => {
+    const m = new Map<string, { id: string; synth_model: string; drafter_models: string[]; status: string }>();
+    for (const r of swarmRuns as any[]) m.set(r.message_id, r);
+    return m;
+  }, [swarmRuns]);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   useEffect(() => {

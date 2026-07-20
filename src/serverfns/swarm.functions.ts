@@ -251,6 +251,8 @@ export const runSwarm = createServerFn({ method: "POST" })
     conversationId?: string | null;
     models?: string[];
     synthModel?: string;
+    agents?: Array<{ role: string; model?: string; enabled?: boolean; systemPrompt?: string }> | null;
+    useAgents?: boolean;
   }) => {
     const c = (d?.content ?? "").trim();
     if (!c) throw new Error("Empty prompt");
@@ -260,6 +262,8 @@ export const runSwarm = createServerFn({ method: "POST" })
       conversationId: d?.conversationId ?? null,
       models: Array.isArray(d?.models) ? d.models : [],
       synthModel: d?.synthModel ?? DEFAULT_SYNTH_MODEL,
+      agents: Array.isArray(d?.agents) ? d.agents : null,
+      useAgents: d?.useAgents !== false, // default true
     };
   })
   .handler(async ({ data, context }) => {
@@ -270,16 +274,35 @@ export const runSwarm = createServerFn({ method: "POST" })
     // Load user config, merge with per-call overrides
     const { data: cfg } = await supabase
       .from("user_settings")
-      .select("swarm_models,swarm_synth_model,swarm_max_parallel")
+      .select("swarm_models,swarm_synth_model,swarm_max_parallel,swarm_agents")
       .eq("user_id", userId)
       .maybeSingle();
 
-    const models = normalizeModels(
-      data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS),
-      Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)),
-    );
-    if (models.length < 2) throw new Error("Swarm requires at least 2 models. Configure in the Swarm menu.");
+    const cap = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
     const synthModel = ALLOWED_SET.has(data.synthModel) ? data.synthModel : (cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL);
+
+    // Decide fan-out: role-based agents (preferred) or legacy models list.
+    const agentsResolved = normalizeAgents(data.agents ?? cfg?.swarm_agents);
+    const activeAgents = agentsResolved.filter((a) => a.enabled && ALLOWED_SET.has(a.model)).slice(0, cap);
+
+    type FanUnit = { model: string; systemPrompt: string; role: SwarmRole | null; roleLabel: string | null };
+    let units: FanUnit[];
+    if (data.useAgents && activeAgents.length >= 2) {
+      units = activeAgents.map((a) => ({
+        model: a.model,
+        systemPrompt: a.systemPrompt,
+        role: a.role,
+        roleLabel: a.label,
+      }));
+    } else {
+      const models = normalizeModels(
+        data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS),
+        cap,
+      );
+      if (models.length < 2) throw new Error("Swarm requires at least 2 models. Configure in the Swarm menu.");
+      const drafterSystem = "You are a top-tier assistant. Give the best answer you can to the user's message. Be specific, correct, and useful. Prefer markdown structure when helpful.";
+      units = models.map((m) => ({ model: m, systemPrompt: drafterSystem, role: null, roleLabel: null }));
+    }
 
     // Ensure conversation
     let convId = data.conversationId;
@@ -303,11 +326,17 @@ export const runSwarm = createServerFn({ method: "POST" })
     });
 
     const runStarted = Date.now();
-    const drafterSystem = "You are a top-tier assistant. Give the best answer you can to the user's message. Be specific, correct, and useful. Prefer markdown structure when helpful.";
 
-    // Fan out in parallel
-    const drafts = await Promise.all(models.map((m) => draftOne(m, data.content, drafterSystem)));
+    // Fan out in parallel — one draft per unit (per role, if agents mode)
+    const drafts: DraftResult[] = await Promise.all(
+      units.map(async (u) => {
+        const r = await draftOne(u.model, data.content, u.systemPrompt);
+        return { ...r, role: u.role, roleLabel: u.roleLabel };
+      }),
+    );
     const okDrafts = drafts.filter((d) => d.status === "ok");
+    const models = units.map((u) => u.model);
+
 
     let finalContent = "";
     let synthLabel = LABEL_BY_SLUG.get(synthModel) ?? synthModel;

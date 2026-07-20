@@ -276,7 +276,9 @@ export const runSwarm = createServerFn({ method: "POST" })
     const runStarted = Date.now();
 
     // Load server-only helpers lazily (see note at top of file).
-    const { draftOne, synthesize } = await import("@/server/swarm-core.server");
+    const { draftOne, synthesizeWithBreakdown, type DraftBreakdown } = await import(
+      "@/server/swarm-core.server"
+    );
     type Draft = Awaited<ReturnType<typeof draftOne>> & { role?: any; roleLabel?: string | null };
 
     // Fan out in parallel — one draft per unit (per role, if agents mode)
@@ -293,6 +295,7 @@ export const runSwarm = createServerFn({ method: "POST" })
     let finalContent = "";
     let synthLabel = LABEL_BY_SLUG.get(synthModel) ?? synthModel;
     let swarmStatus: "ok" | "degraded" | "failed" = "ok";
+    let breakdownByModel = new Map<string, { confidence: number; rationale: string }>();
 
     if (okDrafts.length === 0) {
       finalContent = `_Swarm failed — all ${drafts.length} models errored._\n\n` +
@@ -300,16 +303,21 @@ export const runSwarm = createServerFn({ method: "POST" })
       swarmStatus = "failed";
     } else {
       if (okDrafts.length < drafts.length) swarmStatus = "degraded";
-      const draftBlock = okDrafts
-        .map((d, i) => {
-          const header = d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label;
-          return `## Draft ${String.fromCharCode(65 + i)} (${header})\n\n${d.content}`;
-        })
-        .join("\n\n---\n\n");
       try {
-        finalContent = (await synthesize(synthModel, data.content, draftBlock)) || okDrafts[0].content;
+        const { answer, breakdown } = await synthesizeWithBreakdown(
+          synthModel,
+          data.content,
+          okDrafts.map((d) => ({
+            model: d.model,
+            label: d.roleLabel ? `${d.roleLabel} · ${d.label}` : d.label,
+            content: d.content,
+          })),
+        );
+        finalContent = answer || okDrafts[0].content;
+        for (const b of breakdown as DraftBreakdown[]) {
+          breakdownByModel.set(b.model, { confidence: b.confidence, rationale: b.rationale });
+        }
       } catch (e: any) {
-        // Synth failed → return the strongest draft
         finalContent = okDrafts[0].content +
           `\n\n---\n_(Synthesizer ${synthLabel} failed: ${e?.message ?? "error"} — showing strongest draft.)_`;
         swarmStatus = "degraded";
@@ -345,20 +353,25 @@ export const runSwarm = createServerFn({ method: "POST" })
       .single();
     if (!rErr && runRow) {
       await supabaseAdmin.from("swarm_drafts").insert(
-        drafts.map((d) => ({
-          run_id: runRow.id,
-          user_id: userId,
-          model_slug: d.model,
-          model_label: d.label,
-          role: d.role ?? null,
-          role_label: d.roleLabel ?? null,
-          content: d.content,
-          status: d.status,
-          error: d.error ?? null,
-          latency_ms: d.latency_ms,
-          tokens_in: d.tokens_in ?? null,
-          tokens_out: d.tokens_out ?? null,
-        })),
+        drafts.map((d) => {
+          const b = breakdownByModel.get(d.model);
+          return {
+            run_id: runRow.id,
+            user_id: userId,
+            model_slug: d.model,
+            model_label: d.label,
+            role: d.role ?? null,
+            role_label: d.roleLabel ?? null,
+            content: d.content,
+            status: d.status,
+            error: d.error ?? null,
+            latency_ms: d.latency_ms,
+            tokens_in: d.tokens_in ?? null,
+            tokens_out: d.tokens_out ?? null,
+            confidence: b?.confidence ?? null,
+            rationale: b?.rationale ?? null,
+          };
+        }),
       );
     }
 

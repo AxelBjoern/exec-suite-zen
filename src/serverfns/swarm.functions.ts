@@ -106,15 +106,10 @@ export function normalizeAgents(raw: any): SwarmAgent[] {
   return list;
 }
 
-export const SYNTH_SYSTEM = `You are the arbiter of a multi-model swarm. You will receive several independent drafts written by other AI models in response to the same user prompt. Your job is to produce ONE final answer that is strictly better than any single draft: more accurate, more complete, better structured, and better calibrated in tone.
-
-Rules:
-- Silently reconcile disagreements. If a claim is contested and material, note the disagreement briefly ("sources differ on X"), don't pretend consensus.
-- Prefer verifiable specifics over vague generalities. Drop hallucinations.
-- Keep the strongest reasoning, examples, and structure from across the drafts. Do not lose useful detail.
-- Do not mention the drafts, the models, "draft A", or the swarm process. Write as one coherent voice.
-- Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
-- If drafts are all weak, answer from your own capability rather than parroting them.`;
+// SYNTH_SYSTEM and draftOne now live in `@/server/swarm-core.server` to keep
+// server-only imports out of this client-reachable module. Re-exporting is
+// safe (types + values are only read from server-side callers).
+export { SYNTH_SYSTEM, draftOne, synthesize, type DraftResult } from "@/server/swarm-core.server";
 
 export function normalizeModels(models: string[] | null | undefined, cap = 6): string[] {
   const list = (models ?? []).filter((m) => typeof m === "string" && ALLOWED_SET.has(m));

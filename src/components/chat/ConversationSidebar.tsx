@@ -1,12 +1,37 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Plus,
+  X,
+  MessageSquare,
+  Pencil,
+  Trash2,
+  ExternalLink,
+  FolderPlus,
+  Folder,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatRelative, type Conversation } from "@/lib/chat-helpers";
+import type { ChatProject } from "@/serverfns/chat-projects.functions";
+
+type ConversationWithProject = Conversation & { project_id?: string | null };
 
 type Props = {
   isOwner: boolean;
-  conversations: Conversation[];
+  conversations: ConversationWithProject[];
   activeId: string | null;
   setActiveId: (id: string) => void;
   sidebarOpen: boolean;
@@ -15,6 +40,11 @@ type Props = {
   newPending: boolean;
   onRename: (c: Conversation) => void;
   onDelete: (c: Conversation) => void;
+  projects: ChatProject[];
+  onNewProject: () => void;
+  onEditProject: (p: ChatProject) => void;
+  onDeleteProject: (p: ChatProject) => void;
+  onAssignProject: (c: Conversation, projectId: string | null) => void;
 };
 
 export function ConversationSidebar({

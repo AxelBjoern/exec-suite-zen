@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, X, MessageSquare, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatRelative, type Conversation } from "@/lib/chat-helpers";
@@ -113,6 +113,17 @@ export function ConversationSidebar({
                   </div>
                 </button>
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <a
+                    href={`/chat/${c.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80"
+                    aria-label="Open in new tab"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -136,6 +147,7 @@ export function ConversationSidebar({
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
+
               </div>
             );
           })}

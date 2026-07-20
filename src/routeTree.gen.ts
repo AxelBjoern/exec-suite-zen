@@ -29,6 +29,7 @@ import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api
 import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
 import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
 import { Route as AuthenticatedOutboundArchiveRouteImport } from './routes/_authenticated/outbound.archive'
+import { Route as AuthenticatedChatSessionIdRouteImport } from './routes/_authenticated/chat.$sessionId'
 import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
 import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
 import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
@@ -155,6 +156,12 @@ const AuthenticatedOutboundArchiveRoute =
     path: '/archive',
     getParentRoute: () => AuthenticatedOutboundRoute,
   } as any)
+const AuthenticatedChatSessionIdRoute =
+  AuthenticatedChatSessionIdRouteImport.update({
+    id: '/$sessionId',
+    path: '/$sessionId',
+    getParentRoute: () => AuthenticatedChatRoute,
+  } as any)
 const AuthenticatedBudgetStatementsRoute =
   AuthenticatedBudgetStatementsRouteImport.update({
     id: '/statements',
@@ -278,7 +285,7 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/automate': typeof AuthenticatedAutomateRoute
   '/budget': typeof AuthenticatedBudgetRouteWithChildren
-  '/chat': typeof AuthenticatedChatRoute
+  '/chat': typeof AuthenticatedChatRouteWithChildren
   '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
@@ -293,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/chat/$sessionId': typeof AuthenticatedChatSessionIdRoute
   '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
@@ -316,7 +324,7 @@ export interface FileRoutesByTo {
   '/agents-models': typeof AuthenticatedAgentsModelsRoute
   '/approvals': typeof AuthenticatedApprovalsRoute
   '/automate': typeof AuthenticatedAutomateRoute
-  '/chat': typeof AuthenticatedChatRoute
+  '/chat': typeof AuthenticatedChatRouteWithChildren
   '/cowork': typeof AuthenticatedCoworkRoute
   '/forge': typeof AuthenticatedForgeRoute
   '/outbound': typeof AuthenticatedOutboundRouteWithChildren
@@ -332,6 +340,7 @@ export interface FileRoutesByTo {
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/chat/$sessionId': typeof AuthenticatedChatSessionIdRoute
   '/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/settings/models': typeof AuthenticatedSettingsModelsRoute
@@ -358,7 +367,7 @@ export interface FileRoutesById {
   '/_authenticated/approvals': typeof AuthenticatedApprovalsRoute
   '/_authenticated/automate': typeof AuthenticatedAutomateRoute
   '/_authenticated/budget': typeof AuthenticatedBudgetRouteWithChildren
-  '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/chat': typeof AuthenticatedChatRouteWithChildren
   '/_authenticated/cowork': typeof AuthenticatedCoworkRoute
   '/_authenticated/forge': typeof AuthenticatedForgeRoute
   '/_authenticated/outbound': typeof AuthenticatedOutboundRouteWithChildren
@@ -374,6 +383,7 @@ export interface FileRoutesById {
   '/_authenticated/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/_authenticated/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/_authenticated/budget/statements': typeof AuthenticatedBudgetStatementsRoute
+  '/_authenticated/chat/$sessionId': typeof AuthenticatedChatSessionIdRoute
   '/_authenticated/outbound/archive': typeof AuthenticatedOutboundArchiveRoute
   '/_authenticated/settings/connections': typeof AuthenticatedSettingsConnectionsRoute
   '/_authenticated/settings/models': typeof AuthenticatedSettingsModelsRoute
@@ -416,6 +426,7 @@ export interface FileRouteTypes {
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
+    | '/chat/$sessionId'
     | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
@@ -455,6 +466,7 @@ export interface FileRouteTypes {
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
+    | '/chat/$sessionId'
     | '/outbound/archive'
     | '/settings/connections'
     | '/settings/models'
@@ -496,6 +508,7 @@ export interface FileRouteTypes {
     | '/_authenticated/budget/scenarios'
     | '/_authenticated/budget/sensitivity'
     | '/_authenticated/budget/statements'
+    | '/_authenticated/chat/$sessionId'
     | '/_authenticated/outbound/archive'
     | '/_authenticated/settings/connections'
     | '/_authenticated/settings/models'
@@ -672,6 +685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOutboundArchiveRouteImport
       parentRoute: typeof AuthenticatedOutboundRoute
     }
+    '/_authenticated/chat/$sessionId': {
+      id: '/_authenticated/chat/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/chat/$sessionId'
+      preLoaderRoute: typeof AuthenticatedChatSessionIdRouteImport
+      parentRoute: typeof AuthenticatedChatRoute
+    }
     '/_authenticated/budget/statements': {
       id: '/_authenticated/budget/statements'
       path: '/statements'
@@ -839,6 +859,17 @@ const AuthenticatedBudgetRouteChildren: AuthenticatedBudgetRouteChildren = {
 const AuthenticatedBudgetRouteWithChildren =
   AuthenticatedBudgetRoute._addFileChildren(AuthenticatedBudgetRouteChildren)
 
+interface AuthenticatedChatRouteChildren {
+  AuthenticatedChatSessionIdRoute: typeof AuthenticatedChatSessionIdRoute
+}
+
+const AuthenticatedChatRouteChildren: AuthenticatedChatRouteChildren = {
+  AuthenticatedChatSessionIdRoute: AuthenticatedChatSessionIdRoute,
+}
+
+const AuthenticatedChatRouteWithChildren =
+  AuthenticatedChatRoute._addFileChildren(AuthenticatedChatRouteChildren)
+
 interface AuthenticatedOutboundRouteChildren {
   AuthenticatedOutboundArchiveRoute: typeof AuthenticatedOutboundArchiveRoute
 }
@@ -857,7 +888,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovalsRoute: typeof AuthenticatedApprovalsRoute
   AuthenticatedAutomateRoute: typeof AuthenticatedAutomateRoute
   AuthenticatedBudgetRoute: typeof AuthenticatedBudgetRouteWithChildren
-  AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedChatRoute: typeof AuthenticatedChatRouteWithChildren
   AuthenticatedCoworkRoute: typeof AuthenticatedCoworkRoute
   AuthenticatedForgeRoute: typeof AuthenticatedForgeRoute
   AuthenticatedOutboundRoute: typeof AuthenticatedOutboundRouteWithChildren
@@ -873,7 +904,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApprovalsRoute: AuthenticatedApprovalsRoute,
   AuthenticatedAutomateRoute: AuthenticatedAutomateRoute,
   AuthenticatedBudgetRoute: AuthenticatedBudgetRouteWithChildren,
-  AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedChatRoute: AuthenticatedChatRouteWithChildren,
   AuthenticatedCoworkRoute: AuthenticatedCoworkRoute,
   AuthenticatedForgeRoute: AuthenticatedForgeRoute,
   AuthenticatedOutboundRoute: AuthenticatedOutboundRouteWithChildren,
@@ -906,13 +937,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

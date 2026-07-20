@@ -3,9 +3,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink } from "lucide-react";
+import { Mail, Linkedin, CheckCircle2, XCircle, Github, ExternalLink, MessageSquare, Trash2 } from "lucide-react";
 import { getConnectorStatus } from "@/lib/connections.functions";
 import { getMyGithubStatus, saveMyGithubToken, deleteMyGithubToken, testMyRepoAccess } from "@/lib/user-github.functions";
+import {
+  listChannelBindings,
+  createTelegramLinkCode,
+  setChannelAutoReply,
+  deleteChannelBinding,
+} from "@/serverfns/channel-inbox.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

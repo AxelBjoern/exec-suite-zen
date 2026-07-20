@@ -103,6 +103,87 @@ function SwarmBenchPage() {
     return [...runs].sort((a, b) => a.cost_credits - b.cost_credits)[0];
   }, [runs]);
 
+  function safeName(r: BenchRow) {
+    const base = (r.label || r.prompt || "swarm-run").slice(0, 40).trim();
+    return base.replace(/[^a-z0-9-_]+/gi, "_") + "_" + r.id.slice(0, 8);
+  }
+  function download(name: string, mime: string, data: string) {
+    const blob = new Blob([data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function exportJson(r: BenchRow) {
+    try {
+      const full: any = await getRun({ data: { id: r.id } });
+      download(safeName(r) + ".json", "application/json", JSON.stringify(full, null, 2));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    }
+  }
+  async function exportPdf(r: BenchRow) {
+    try {
+      const full: any = await getRun({ data: { id: r.id } });
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 40;
+      const maxW = pageW - margin * 2;
+      let y = margin;
+      const line = (text: string, size = 10, style: "normal" | "bold" = "normal", gap = 4) => {
+        doc.setFont("helvetica", style);
+        doc.setFontSize(size);
+        const lines = doc.splitTextToSize(String(text ?? ""), maxW);
+        for (const ln of lines) {
+          if (y > pageH - margin) { doc.addPage(); y = margin; }
+          doc.text(ln, margin, y);
+          y += size + gap;
+        }
+      };
+      const hr = () => {
+        if (y > pageH - margin) { doc.addPage(); y = margin; }
+        doc.setDrawColor(200);
+        doc.line(margin, y, pageW - margin, y);
+        y += 10;
+      };
+      line("Swarm Benchmark Report", 18, "bold", 6);
+      line(full.label || full.prompt.slice(0, 80), 11, "normal", 2);
+      line(`Run ${full.id} · ${new Date(full.created_at).toLocaleString()}`, 9, "normal", 8);
+      hr();
+      line("Config", 13, "bold");
+      line(`Synth model: ${full.synth_model}`, 10);
+      line(`Drafters (${(full.drafter_models ?? []).length}): ${(full.drafter_models ?? []).join(", ")}`, 10);
+      line(`Total latency: ${fmtMs(full.latency_ms)} · tokens ${full.tokens_in}/${full.tokens_out} · cost ${fmtCost(full.cost_credits)} · quality ${full.quality_score ?? "—"}`, 10, "normal", 8);
+      hr();
+      line("Prompt", 13, "bold");
+      line(full.prompt, 10, "normal", 8);
+      hr();
+      line("Final answer (swarm)", 13, "bold");
+      line(full.final_answer || "(no synthesized answer)", 10, "normal", 8);
+      hr();
+      line("Per-model drafts", 13, "bold");
+      for (const m of full.per_model ?? []) {
+        line(`${m.label}  —  ${m.status}${m.quality_score != null ? `  ·  score ${m.quality_score}` : ""}`, 11, "bold", 2);
+        line(`${fmtMs(m.latency_ms)} · tokens ${m.tokens_in}/${m.tokens_out} · cost ${fmtCost(m.cost_credits)}`, 9, "normal", 4);
+        if (m.status === "error") {
+          line(`Error: ${m.error ?? ""}`, 10);
+        } else {
+          line(m.content || "(empty)", 10);
+        }
+        y += 6;
+        hr();
+      }
+      doc.save(safeName(r) + ".pdf");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 space-y-6">
       <Toaster />

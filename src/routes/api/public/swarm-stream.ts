@@ -4,10 +4,10 @@
 // message. Persists the run + drafts + messages identically to runSwarm.
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
 import {
-  SYNTH_SYSTEM,
   draftOne,
+  synthesizeWithBreakdown,
+  type DraftBreakdown,
   type DraftResult,
 } from "@/server/swarm-core.server";
 import {

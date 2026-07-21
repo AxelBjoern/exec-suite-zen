@@ -155,7 +155,7 @@ export const runSwarmBench = createServerFn({ method: "POST" })
       .maybeSingle();
 
     const rawSynth = cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
-    const maxParallel = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
+    const maxParallel = Math.min(20, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
 
     // Prefer the active per-role agents; otherwise the drafters list.
     const agents = Array.isArray(cfg?.swarm_agents) ? cfg.swarm_agents : [];

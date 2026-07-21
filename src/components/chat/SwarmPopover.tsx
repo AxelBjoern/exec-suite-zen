@@ -276,7 +276,7 @@ export function SwarmPopover({ active, onToggle, disabled }: Props) {
             </div>
             <Slider
               min={2}
-              max={6}
+              max={20}
               step={1}
               value={[maxParallel]}
               onValueChange={(v) => setMaxParallel(v[0] ?? 4)}

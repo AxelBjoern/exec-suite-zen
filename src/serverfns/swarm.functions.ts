@@ -218,7 +218,7 @@ export const getSwarmConfig = createServerFn({ method: "GET" })
     const allowed = allowedSetFrom(available);
     const models = normalizeModels(rawModels, DEFAULT_MAX_PARALLEL, allowed);
     const synth = allowed.has(rawSynth) ? rawSynth : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
-    const maxParallel = Math.min(6, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
+    const maxParallel = Math.min(20, Math.max(2, Number(data?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL)));
     const agents = normalizeAgents(data?.swarm_agents, allowed);
 
     return {
@@ -256,7 +256,7 @@ export const saveSwarmConfig = createServerFn({ method: "POST" })
     const cleaned = normalizeModels(data.models, DEFAULT_MAX_PARALLEL, allowed);
     if (cleaned.length < 2) throw new Error("Pick at least 2 models for swarm mode.");
     const synth = allowed.has(data.synthModel) ? data.synthModel : (available[0]?.slug ?? DEFAULT_SYNTH_MODEL);
-    const cap = Math.min(6, Math.max(2, data.maxParallel || DEFAULT_MAX_PARALLEL));
+    const cap = Math.min(20, Math.max(2, data.maxParallel || DEFAULT_MAX_PARALLEL));
     const agents = data.agents ? normalizeAgents(data.agents, allowed) : null;
     const patch: any = {
       user_id: userId,
@@ -312,7 +312,7 @@ export const runSwarm = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
 
-    const cap = Math.min(6, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
+    const cap = Math.min(20, Math.max(2, cfg?.swarm_max_parallel ?? DEFAULT_MAX_PARALLEL));
     const rawModels = Array.isArray(data.models) && data.models.length ? data.models : (cfg?.swarm_models ?? DEFAULT_SWARM_MODELS);
     const rawSynth = data.synthModel || cfg?.swarm_synth_model || DEFAULT_SYNTH_MODEL;
     const rawAgents = normalizeAgents(data.agents ?? cfg?.swarm_agents);

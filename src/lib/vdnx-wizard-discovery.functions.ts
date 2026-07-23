@@ -49,7 +49,7 @@ export const discoverVdnxWizardRoutes = createServerFn({ method: "POST" })
       });
     }
 
-    const { searchRepoCode } = await import("@/lib/github.server");
+    const { searchRepoCode } = await import("@/server/github.server");
     const results: DiscoveredWizardRoute[] = [];
 
     for (const w of KNOWN_WIZARDS) {

@@ -118,7 +118,7 @@ export async function runWorkflowStep(payload: { run_id: string; node_index: num
         break;
       }
       case "tool_call": {
-        const { executeToolCall } = await import("@/lib/agent-tools.server");
+        const { executeToolCall } = await import("@/server/agent-tools.server");
         const toolName: string = node.config?.tool;
         if (!toolName) throw new Error("tool_call node missing config.tool");
         const result = await executeToolCall(toolName, node.config?.input ?? {}, {

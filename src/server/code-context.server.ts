@@ -3,7 +3,7 @@
 // short multi-turn loop.
 
 import { chatCompletion, type ChatMessage } from "@/lib/llm.server";
-import { listRepoDir, readRepoFile, searchRepoCode } from "@/lib/github.server";
+import { listRepoDir, readRepoFile, searchRepoCode } from "@/server/github.server";
 
 const TOOLS = [
   {

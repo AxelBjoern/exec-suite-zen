@@ -15,8 +15,8 @@ import {
   type DocOutline,
 } from "@/server/doc-generator.server";
 import { generateCeoVideo } from "@/serverfns/video.functions";
-import { webSearch, webFetch, extractUrls } from "@/lib/web.server";
-import { listRepoDir, readRepoFile, searchRepoCode, parseRepoTarget } from "@/lib/github.server";
+import { webSearch, webFetch, extractUrls } from "@/server/web.server";
+import { listRepoDir, readRepoFile, searchRepoCode, parseRepoTarget } from "@/server/github.server";
 import { isVdnxOwner } from "@/server/designRules.server";
 import { assertModelAllowedForUser } from "@/lib/models.functions";
 
@@ -1215,7 +1215,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
         if (!target) throw new Error("Missing repo. Use owner/repo or a GitHub URL.");
 
         const { repo, path } = parseRepoTarget(target);
-        const { getUserGithubToken } = await import("@/lib/user-github.server");
+        const { getUserGithubToken } = await import("@/server/user-github.server");
         const ghToken = await getUserGithubToken(context.userId);
 
         let contextBlock = "";
@@ -1581,7 +1581,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     }
 
     // Load the operator's saved GitHub PAT (if any) so tools can read their private repos.
-    const { getUserGithubToken } = await import("@/lib/user-github.server");
+    const { getUserGithubToken } = await import("@/server/user-github.server");
     const ghToken = await getUserGithubToken(context.userId);
 
     // If the operator pasted a github URL/slug (now or earlier in this conversation), pre-resolve
@@ -1590,7 +1590,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
     let repoOverview = "";
     if (effectiveHasGithubTarget) {
       try {
-        const { parseRepoTarget, findReadableRepoAlias, listRepoDir, readRepoFile } = await import("@/lib/github.server");
+        const { parseRepoTarget, findReadableRepoAlias, listRepoDir, readRepoFile } = await import("@/server/github.server");
         const { repo: pastedRepo, path } = parseRepoTarget(activeGithubTarget!);
         let resolvedRepo = pastedRepo;
         let aliasNote = "";

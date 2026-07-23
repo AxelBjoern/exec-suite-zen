@@ -4,7 +4,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { verifyGithubToken, parseRepoTarget, findReadableRepoAlias } from "@/lib/github.server";
+import { verifyGithubToken, parseRepoTarget, findReadableRepoAlias } from "@/server/github.server";
 
 function encKey(): Buffer {
   const raw = process.env.GITHUB_TOKEN_ENC_KEY;

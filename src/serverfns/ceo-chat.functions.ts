@@ -942,6 +942,54 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
           buffer: bytes,
         } as any);
         extracted = value;
+      } else if (lower.endsWith(".csv") || lower.endsWith(".tsv")) {
+        extracted = bytes.toString("utf-8");
+      } else if (lower.endsWith(".rtf")) {
+        // Minimal RTF → text: strip control words and braces.
+        extracted = bytes
+          .toString("utf-8")
+          .replace(/\\'[0-9a-fA-F]{2}/g, "")
+          .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+          .replace(/[{}]/g, "")
+          .replace(/\r?\n{2,}/g, "\n\n")
+          .trim();
+      } else if (lower.endsWith(".pptx")) {
+        const JSZip = (await import("jszip")).default;
+        const zip = await JSZip.loadAsync(bytes);
+        const slideNames = Object.keys(zip.files)
+          .filter((n) => /^ppt\/slides\/slide\d+\.xml$/i.test(n))
+          .sort((a, b) => {
+            const na = Number(a.match(/slide(\d+)\.xml/i)?.[1] ?? 0);
+            const nb = Number(b.match(/slide(\d+)\.xml/i)?.[1] ?? 0);
+            return na - nb;
+          });
+        const parts: string[] = [];
+        for (let i = 0; i < slideNames.length; i++) {
+          const xml = await zip.files[slideNames[i]].async("string");
+          const text = xml
+            .replace(/<a:br\s*\/?>/gi, "\n")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/[ \t]+/g, " ")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+          parts.push(`--- Slide ${i + 1} ---\n${text}`);
+        }
+        extracted = parts.join("\n\n");
+      } else if (lower.endsWith(".xlsx")) {
+        const XLSX = await import("xlsx");
+        const wb = XLSX.read(bytes, { type: "buffer" });
+        const parts: string[] = [];
+        for (const name of wb.SheetNames) {
+          const ws = wb.Sheets[name];
+          const csv = XLSX.utils.sheet_to_csv(ws).trim();
+          if (csv) parts.push(`--- Sheet: ${name} ---\n${csv}`);
+        }
+        extracted = parts.join("\n\n");
       } else {
         extracted = `[Unsupported file type: ${data.mimeType || lower}]`;
       }

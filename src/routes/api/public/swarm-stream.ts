@@ -252,6 +252,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                   const r = await draftOne(u.model, augmentedContent, u.systemPrompt, {
                     fallbackModel: u.fallbackModel,
                     timeoutMs: u.timeoutMs,
+                    imageParts,
                   });
                   const finalLabel = labelForModel(r.model, available) || u.label;
                   const draft: DraftResult = { ...r, label: finalLabel, role: u.role, roleLabel: u.roleLabel };

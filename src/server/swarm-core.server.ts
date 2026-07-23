@@ -149,11 +149,6 @@ export async function draftOne(
     attempted.push(fallback);
     const fbLabel = LABEL_BY_SLUG.get(fallback) ?? fallback;
     const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs, imageParts);
-
-  if (fallback) {
-    attempted.push(fallback);
-    const fbLabel = LABEL_BY_SLUG.get(fallback) ?? fallback;
-    const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs);
     if (fb.ok) {
       return {
         model: fallback,

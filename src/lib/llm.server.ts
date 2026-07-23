@@ -325,7 +325,7 @@ import {
   executeToolCall,
   type ToolDef,
   type ToolCtx,
-} from "@/server/agent-tools.server";
+} from "@/lib/agent-tools.server";
 
 const AGENT_TOOL_DEFAULT_MODEL = "deepseek/deepseek-v4-pro";
 const HERMES_SLUG = "nousresearch/hermes-4-405b";

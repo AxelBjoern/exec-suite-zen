@@ -144,18 +144,11 @@ export async function draftOne(
       used_fallback: false,
     };
   }
-    return {
-      model,
-      label,
-      status: "ok",
-      content: primary.content,
-      latency_ms: Date.now() - started,
-      tokens_in: primary.tokens_in,
-      tokens_out: primary.tokens_out,
-      attempted_models: attempted,
-      used_fallback: false,
-    };
-  }
+
+  if (fallback) {
+    attempted.push(fallback);
+    const fbLabel = LABEL_BY_SLUG.get(fallback) ?? fallback;
+    const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs, imageParts);
 
   if (fallback) {
     attempted.push(fallback);

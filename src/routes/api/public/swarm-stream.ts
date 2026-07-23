@@ -50,7 +50,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
 
         const body = (await request.json().catch(() => ({}))) as Body;
         const content = (body.content ?? "").trim();
-        if (!content) return new Response("Empty prompt", { status: 400 });
+        const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
+        if (!content && attachmentIds.length === 0) return new Response("Empty prompt", { status: 400 });
         if (content.length > 8000) return new Response("Prompt too long", { status: 400 });
 
         const userId = user.id;
@@ -161,10 +162,9 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           units = units.map((u) => ({ ...u, systemPrompt: `${projectPrompt}\n\n${u.systemPrompt}` }));
         }
 
-        // Load attachments (extracted_text for docs; signed URLs for images)
+        // Load attachments (extracted_text for docs; visual inputs for images/image-heavy docs)
         let attachmentBlock = "";
         const imageParts: Array<{ type: "image_url"; image_url: { url: string } }> = [];
-        const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
         if (attachmentIds.length) {
           const { data: atts } = await admin
             .from("ceo_chat_attachments")
@@ -173,7 +173,6 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             .is("message_id", null);
           const rows = atts ?? [];
           const textRows = rows.filter((a: any) => !(a.mime_type ?? "").startsWith("image/"));
-          const imgRows = rows.filter((a: any) => (a.mime_type ?? "").startsWith("image/"));
           if (textRows.length) {
             attachmentBlock =
               "\n\n## Attached documents\n" +
@@ -184,17 +183,27 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 )
                 .join("\n\n---\n\n");
           }
-          for (const a of imgRows as any[]) {
-            if (!a.storage_path) continue;
-            const { data: signed } = await admin.storage
-              .from("chat-uploads")
-              .createSignedUrl(a.storage_path, 3600);
-            if (signed?.signedUrl) {
-              imageParts.push({ type: "image_url", image_url: { url: signed.signedUrl } });
+          if (rows.length) {
+            const { collectAttachmentVisionParts } = await import("@/server/attachment-vision.server");
+            const visual = await collectAttachmentVisionParts({
+              storage: admin,
+              attachments: rows.map((a: any) => ({
+                filename: a.filename,
+                mime_type: a.mime_type,
+                storage_path: a.storage_path,
+              })),
+            });
+            imageParts.push(...visual.parts);
+            if (visual.notes.length) {
+              attachmentBlock +=
+                "\n\n## Attached visuals\n" +
+                visual.notes.map((note) => `- ${note}`).join("\n") +
+                "\n\nUse these visual inputs together with extracted text. If text extraction says no readable text was embedded, inspect the visual inputs instead of saying no document was attached.";
             }
           }
         }
-        const augmentedContent = content + attachmentBlock;
+        const userPrompt = content || "Analyze the attached file(s).";
+        const augmentedContent = userPrompt + attachmentBlock;
 
         // Save user message (original content only; attachments linked below)
         const { data: userRow } = await admin
@@ -203,7 +212,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             user_id: userId,
             conversation_id: convId,
             role: "user",
-            content,
+                  content: userPrompt,
           })
           .select("id")
           .single();
@@ -411,7 +420,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 const { maybeAutoTitleConversation } = await import("@/serverfns/ceo-chat.functions");
                 await maybeAutoTitleConversation({
                   conversationId: convId!,
-                  userText: content,
+                  userText: userPrompt,
                   assistantText: finalContent,
                 });
               } catch { /* best-effort */ }

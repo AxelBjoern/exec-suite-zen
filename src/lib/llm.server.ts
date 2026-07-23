@@ -319,10 +319,23 @@ export async function callTool<T>(opts: {
 //     We parse via tryParse / repairJson and dispatch server-side.
 // ─────────────────────────────────────────────────────────────────────────
 
-import type {
-  ToolDef,
-  ToolCtx,
-} from "@/server/agent-tools.server";
+// Types inlined (avoid static import of @/server/** which is blocked in client env)
+type ToolCtx = {
+  agent_slug: string;
+  task_id?: string | null;
+  thread_id?: string | null;
+  owner_user_id?: string | null;
+};
+type ToolDef<T = any> = {
+  name: string;
+  description: string;
+  parameters: T;
+  readOnly: boolean;
+  externalSideEffect?: boolean;
+  allowedAgents: string[] | "*";
+  execute: (args: any, ctx: ToolCtx) => Promise<unknown>;
+};
+
 
 
 const AGENT_TOOL_DEFAULT_MODEL = "deepseek/deepseek-v4-pro";

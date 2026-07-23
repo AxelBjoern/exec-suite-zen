@@ -35,11 +35,25 @@ Rules:
 - Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
 - If drafts are all weak, answer from your own capability rather than parroting them.`;
 
+export type ImagePart = { type: "image_url"; image_url: { url: string } };
+
+// Models that cannot process image inputs. Used to skip drafts cleanly
+// when images are attached instead of failing the whole swarm.
+const NO_VISION_MODELS = new Set<string>([
+  "nousresearch/hermes-4-405b",
+]);
+
+function buildUserContent(text: string, imageParts: ImagePart[] | undefined) {
+  if (!imageParts || imageParts.length === 0) return text;
+  return [{ type: "text" as const, text }, ...imageParts];
+}
+
 async function attemptDraft(
   model: string,
   userContent: string,
   systemPrompt: string,
   timeoutMs: number,
+  imageParts?: ImagePart[],
 ): Promise<{ ok: true; content: string; tokens_in?: number; tokens_out?: number } | { ok: false; error: string }> {
   try {
     const json = await Promise.race([
@@ -48,7 +62,7 @@ async function attemptDraft(
         temperature: 0.6,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
+          { role: "user", content: buildUserContent(userContent, imageParts) as any },
         ],
       }),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs)),

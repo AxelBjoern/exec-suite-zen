@@ -161,7 +161,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           units = units.map((u) => ({ ...u, systemPrompt: `${projectPrompt}\n\n${u.systemPrompt}` }));
         }
 
-        // Load attachments (extracted_text for docs; signed URLs for images)
+        // Load attachments (extracted_text for docs; visual inputs for images/image-heavy docs)
         let attachmentBlock = "";
         const imageParts: Array<{ type: "image_url"; image_url: { url: string } }> = [];
         const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
@@ -173,7 +173,6 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             .is("message_id", null);
           const rows = atts ?? [];
           const textRows = rows.filter((a: any) => !(a.mime_type ?? "").startsWith("image/"));
-          const imgRows = rows.filter((a: any) => (a.mime_type ?? "").startsWith("image/"));
           if (textRows.length) {
             attachmentBlock =
               "\n\n## Attached documents\n" +
@@ -184,13 +183,22 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 )
                 .join("\n\n---\n\n");
           }
-          for (const a of imgRows as any[]) {
-            if (!a.storage_path) continue;
-            const { data: signed } = await admin.storage
-              .from("chat-uploads")
-              .createSignedUrl(a.storage_path, 3600);
-            if (signed?.signedUrl) {
-              imageParts.push({ type: "image_url", image_url: { url: signed.signedUrl } });
+          if (rows.length) {
+            const { collectAttachmentVisionParts } = await import("@/server/attachment-vision.server");
+            const visual = await collectAttachmentVisionParts({
+              storage: admin,
+              attachments: rows.map((a: any) => ({
+                filename: a.filename,
+                mime_type: a.mime_type,
+                storage_path: a.storage_path,
+              })),
+            });
+            imageParts.push(...visual.parts);
+            if (visual.notes.length) {
+              attachmentBlock +=
+                "\n\n## Attached visuals\n" +
+                visual.notes.map((note) => `- ${note}`).join("\n") +
+                "\n\nUse these visual inputs together with extracted text. If text extraction says no readable text was embedded, inspect the visual inputs instead of saying no document was attached.";
             }
           }
         }

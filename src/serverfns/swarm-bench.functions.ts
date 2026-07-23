@@ -3,12 +3,12 @@
 // arbiter, estimate cost, and persist to swarm_bench_runs for comparison.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-// `@/server/llm.server` cannot be imported at module scope: swarm-bench.tsx
+// `@/lib/llm.server` cannot be imported at module scope: swarm-bench.tsx
 // pulls this file into the client graph and the import-protection plugin
 // blocks any `.server` imports from client-reachable modules. Load lazily.
-let _llmModPromise: Promise<typeof import("@/server/llm.server")> | null = null;
+let _llmModPromise: Promise<typeof import("@/lib/llm.server")> | null = null;
 async function llm() {
-  if (!_llmModPromise) _llmModPromise = import("@/server/llm.server");
+  if (!_llmModPromise) _llmModPromise = import("@/lib/llm.server");
   return _llmModPromise;
 }
 async function chatCompletion(...args: Parameters<Awaited<ReturnType<typeof llm>>["chatCompletion"]>) {

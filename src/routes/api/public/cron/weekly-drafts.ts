@@ -4,7 +4,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { checkCronAuth } from "@/server/cron-auth.server";
-import { callAgentTool } from "@/server/llm.server";
+import { callAgentTool } from "@/lib/llm.server";
 import { buildSystemPrompt, renderCompanyContext } from "@/lib/agent-prompts";
 
 const OUTBOUND_SLUGS = ["linkedin", "social", "cmo"];

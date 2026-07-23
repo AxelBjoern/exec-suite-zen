@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callTool } from "@/server/llm.server";
+import { callTool } from "@/lib/llm.server";
 
 const TOOL = {
   type: "function" as const,

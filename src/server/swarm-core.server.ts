@@ -1,8 +1,8 @@
 // Server-only swarm primitives. Kept out of `swarm.functions.ts` because
 // that file is reachable from the client bundle (routes import server-fn
 // wrappers from it), and the import-protection plugin blocks any file that
-// pulls `@/server/llm.server` at module scope into the client graph.
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+// pulls `@/lib/llm.server` at module scope into the client graph.
+import { chatCompletion, resolveTextChatModel } from "@/lib/llm.server";
 import { LABEL_BY_SLUG, type SwarmRole } from "@/serverfns/swarm.functions";
 
 export type DraftResult = {

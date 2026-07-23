@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PDFDocument } from "pdf-lib";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { chatCompletion } from "@/server/llm.server";
+import { chatCompletion } from "@/lib/llm.server";
 
 // ── Workspace connectors (shared, Lovable Connectors) ────────────────────
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev/google_mail/gmail/v1";

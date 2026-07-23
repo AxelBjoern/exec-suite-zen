@@ -3,7 +3,7 @@
 // Flash as the router (per memory core rule). Never affects the swarm path.
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+import { chatCompletion, resolveTextChatModel } from "@/lib/llm.server";
 
 const ROUTER_MODEL = "deepseek/deepseek-v4-flash";
 

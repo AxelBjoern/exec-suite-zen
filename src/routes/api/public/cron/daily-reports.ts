@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callTool } from "@/server/llm.server";
+import { callTool } from "@/lib/llm.server";
 import { CHAT_TOOL, type ChatReply } from "@/lib/agent-schemas";
 import { buildSystemPrompt } from "@/lib/agent-prompts";
 import { loadContext } from "@/server/cadence.server";

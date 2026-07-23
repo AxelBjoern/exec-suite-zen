@@ -2,7 +2,7 @@
 // before producing its final artifact. Uses OpenRouter tool-calling in a
 // short multi-turn loop.
 
-import { chatCompletion, type ChatMessage } from "@/server/llm.server";
+import { chatCompletion, type ChatMessage } from "@/lib/llm.server";
 import { listRepoDir, readRepoFile, searchRepoCode } from "@/server/github.server";
 
 const TOOLS = [

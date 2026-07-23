@@ -2,7 +2,7 @@
 // Server-only. Importable from cron routes and server functions.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callTool } from "@/server/llm.server";
+import { callTool } from "@/lib/llm.server";
 import {
   ARTIFACT_TOOL,
   CONSULT_TOOL,

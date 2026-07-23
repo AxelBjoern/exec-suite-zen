@@ -427,6 +427,7 @@ async function callAgentToolHermes(args: {
   system: string; user: string; model: string; maxTurns: number;
   tools: ToolDef<any>[]; ctx: ToolCtx;
 }): Promise<AgentToolResult> {
+  const { executeToolCall } = await import("@/server/agent-tools.server");
   const toolSpec = args.tools.map(t => `- ${t.name}: ${t.description}`).join("\n");
   const envelope =
     `You can call tools by replying with ONLY a JSON object, no prose:\n` +

@@ -319,13 +319,11 @@ export async function callTool<T>(opts: {
 //     We parse via tryParse / repairJson and dispatch server-side.
 // ─────────────────────────────────────────────────────────────────────────
 
-import {
-  toolsForAgent,
-  toOpenRouterTools,
-  executeToolCall,
-  type ToolDef,
-  type ToolCtx,
+import type {
+  ToolDef,
+  ToolCtx,
 } from "@/server/agent-tools.server";
+
 
 const AGENT_TOOL_DEFAULT_MODEL = "deepseek/deepseek-v4-pro";
 const HERMES_SLUG = "nousresearch/hermes-4-405b";

@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const getMyGithubStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { getUserGithubStatus } = await import("@/server/user-github.server");
+    const { getUserGithubStatus } = await import("@/lib/user-github.server");
     return getUserGithubStatus(context.userId);
   });
 
@@ -15,7 +15,7 @@ export const saveMyGithubToken = createServerFn({ method: "POST" })
     return { token: data.token, testRepoUrl: typeof data.testRepoUrl === "string" ? data.testRepoUrl : "" };
   })
   .handler(async ({ context, data }) => {
-    const { saveUserGithubTokenValue, testUserRepoAccess } = await import("@/server/user-github.server");
+    const { saveUserGithubTokenValue, testUserRepoAccess } = await import("@/lib/user-github.server");
     const status = await saveUserGithubTokenValue(context.userId, data.token);
     const test = data.testRepoUrl.trim()
       ? await testUserRepoAccess(context.userId, data.testRepoUrl.trim())
@@ -30,14 +30,14 @@ export const testMyRepoAccess = createServerFn({ method: "POST" })
     return { repoUrl: data.repoUrl.trim() };
   })
   .handler(async ({ context, data }) => {
-    const { testUserRepoAccess } = await import("@/server/user-github.server");
+    const { testUserRepoAccess } = await import("@/lib/user-github.server");
     return testUserRepoAccess(context.userId, data.repoUrl);
   });
 
 export const deleteMyGithubToken = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { deleteUserGithubToken } = await import("@/server/user-github.server");
+    const { deleteUserGithubToken } = await import("@/lib/user-github.server");
     await deleteUserGithubToken(context.userId);
     return { ok: true };
   });

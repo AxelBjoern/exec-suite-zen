@@ -28,7 +28,7 @@ export type Conversation = {
 
 export const MODEL_STORAGE_KEY = "ceo-chat-model";
 export const ACTIVE_CONVO_KEY = "ceo-chat-active";
-export const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md";
+export const ACCEPTED_TYPES = ".pdf,.docx,.txt,.md,.csv,.tsv,.rtf,.pptx,.xlsx,image/*";
 export const PENDING_NONE_KEY = "__none__";
 
 export function readFileAsBase64(file: File): Promise<string> {

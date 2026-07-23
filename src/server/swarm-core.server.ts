@@ -35,11 +35,25 @@ Rules:
 - Match the user's requested length/format. If they asked for markdown, code, or a list, deliver that.
 - If drafts are all weak, answer from your own capability rather than parroting them.`;
 
+export type ImagePart = { type: "image_url"; image_url: { url: string } };
+
+// Models that cannot process image inputs. Used to skip drafts cleanly
+// when images are attached instead of failing the whole swarm.
+const NO_VISION_MODELS = new Set<string>([
+  "nousresearch/hermes-4-405b",
+]);
+
+function buildUserContent(text: string, imageParts: ImagePart[] | undefined) {
+  if (!imageParts || imageParts.length === 0) return text;
+  return [{ type: "text" as const, text }, ...imageParts];
+}
+
 async function attemptDraft(
   model: string,
   userContent: string,
   systemPrompt: string,
   timeoutMs: number,
+  imageParts?: ImagePart[],
 ): Promise<{ ok: true; content: string; tokens_in?: number; tokens_out?: number } | { ok: false; error: string }> {
   try {
     const json = await Promise.race([
@@ -48,7 +62,7 @@ async function attemptDraft(
         temperature: 0.6,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
+          { role: "user", content: buildUserContent(userContent, imageParts) as any },
         ],
       }),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs)),
@@ -70,16 +84,53 @@ export async function draftOne(
   model: string,
   userContent: string,
   systemPrompt: string,
-  opts?: { fallbackModel?: string | null; timeoutMs?: number; fallbackTimeoutMs?: number },
+  opts?: { fallbackModel?: string | null; timeoutMs?: number; fallbackTimeoutMs?: number; imageParts?: ImagePart[] },
 ): Promise<DraftResult> {
   const label = LABEL_BY_SLUG.get(model) ?? model;
   const started = Date.now();
   const timeoutMs = Math.min(180_000, Math.max(15_000, opts?.timeoutMs ?? PRIMARY_TIMEOUT_MS));
   const fallbackTimeoutMs = Math.min(120_000, Math.max(15_000, opts?.fallbackTimeoutMs ?? FALLBACK_TIMEOUT_MS));
-  const fallback = opts?.fallbackModel && opts.fallbackModel !== model ? opts.fallbackModel : null;
+  const requestedFallback = opts?.fallbackModel && opts.fallbackModel !== model ? opts.fallbackModel : null;
+  const imageParts = opts?.imageParts;
+  const hasImages = !!imageParts && imageParts.length > 0;
   const attempted: string[] = [model];
 
-  const primary = await attemptDraft(model, userContent, systemPrompt, timeoutMs);
+  // Skip vision-incapable models cleanly when images are attached so the
+  // rest of the swarm still runs.
+  if (hasImages && NO_VISION_MODELS.has(model)) {
+    const fb = requestedFallback && !NO_VISION_MODELS.has(requestedFallback) ? requestedFallback : null;
+    if (!fb) {
+      return {
+        model,
+        label,
+        status: "error",
+        content: "",
+        error: `${label} cannot read images. Pick a vision-capable fallback (Grok 4.3, ChatGPT 5.3, Claude Opus 4.7, or DeepSeek V4 Pro).`,
+        latency_ms: Date.now() - started,
+        attempted_models: attempted,
+        used_fallback: false,
+        primary_error: "no_vision",
+      };
+    }
+    attempted.push(fb);
+    const fbLabel = LABEL_BY_SLUG.get(fb) ?? fb;
+    const fbRes = await attemptDraft(fb, userContent, systemPrompt, fallbackTimeoutMs, imageParts);
+    if (fbRes.ok) {
+      return {
+        model: fb, label: fbLabel, status: "ok", content: fbRes.content,
+        latency_ms: Date.now() - started, tokens_in: fbRes.tokens_in, tokens_out: fbRes.tokens_out,
+        attempted_models: attempted, used_fallback: true, primary_error: "no_vision",
+      };
+    }
+    return {
+      model, label, status: "error", content: "",
+      error: `${label} has no vision → fallback ${fbLabel}: ${fbRes.error}`,
+      latency_ms: Date.now() - started, attempted_models: attempted, used_fallback: true, primary_error: "no_vision",
+    };
+  }
+
+  const fallback = requestedFallback;
+  const primary = await attemptDraft(model, userContent, systemPrompt, timeoutMs, imageParts);
   if (primary.ok) {
     return {
       model,
@@ -97,7 +148,7 @@ export async function draftOne(
   if (fallback) {
     attempted.push(fallback);
     const fbLabel = LABEL_BY_SLUG.get(fallback) ?? fallback;
-    const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs);
+    const fb = await attemptDraft(fallback, userContent, systemPrompt, fallbackTimeoutMs, imageParts);
     if (fb.ok) {
       return {
         model: fallback,

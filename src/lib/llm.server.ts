@@ -319,13 +319,11 @@ export async function callTool<T>(opts: {
 //     We parse via tryParse / repairJson and dispatch server-side.
 // ─────────────────────────────────────────────────────────────────────────
 
-import {
-  toolsForAgent,
-  toOpenRouterTools,
-  executeToolCall,
-  type ToolDef,
-  type ToolCtx,
+import type {
+  ToolDef,
+  ToolCtx,
 } from "@/server/agent-tools.server";
+
 
 const AGENT_TOOL_DEFAULT_MODEL = "deepseek/deepseek-v4-pro";
 const HERMES_SLUG = "nousresearch/hermes-4-405b";
@@ -355,6 +353,7 @@ export async function callAgentTool(opts: {
   model?: string;
   context?: { task_id?: string | null; thread_id?: string | null; owner_user_id?: string | null };
 }): Promise<AgentToolResult> {
+  const { toolsForAgent } = await import("@/server/agent-tools.server");
   const model = opts.model ?? AGENT_TOOL_DEFAULT_MODEL;
   const maxTurns = opts.max_turns ?? AGENT_TOOL_MAX_TURNS;
   const tools = toolsForAgent(opts.agent_slug, opts.tools_to_use);
@@ -372,6 +371,7 @@ async function callAgentToolNative(args: {
   system: string; user: string; model: string; maxTurns: number;
   tools: ToolDef<any>[]; ctx: ToolCtx;
 }): Promise<AgentToolResult> {
+  const { toOpenRouterTools, executeToolCall } = await import("@/server/agent-tools.server");
   const orTools = toOpenRouterTools(args.tools);
   const messages: any[] = [
     { role: "system", content: args.system },
@@ -427,6 +427,7 @@ async function callAgentToolHermes(args: {
   system: string; user: string; model: string; maxTurns: number;
   tools: ToolDef<any>[]; ctx: ToolCtx;
 }): Promise<AgentToolResult> {
+  const { executeToolCall } = await import("@/server/agent-tools.server");
   const toolSpec = args.tools.map(t => `- ${t.name}: ${t.description}`).join("\n");
   const envelope =
     `You can call tools by replying with ONLY a JSON object, no prose:\n` +

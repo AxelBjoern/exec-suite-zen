@@ -1,59 +1,36 @@
-## The bug
+## Plan: make file reading reliable for single chat and swarm
 
-File reading in the chat has three concrete gaps, hitting both single and swarm:
+### Goal
+Fix the case shown in the screenshot where an attached PDF/deck has no selectable text, causing the agent to say it cannot read the document.
 
-1. **PPTX / XLSX / CSV / RTF fall through to `[Unsupported file type]`.** `uploadCeoAttachment` in `src/serverfns/ceo-chat.functions.ts` (lines 926–947) only handles txt/md, pdf, docx, and images. Anything else is stored with `extracted_text = "[Unsupported file type: …]"`, so the model literally sees that string.
-2. **Swarm ignores images entirely.** `src/routes/api/public/swarm-stream.ts` (lines 164–185) only appends `extracted_text` into `augmentedContent`. Images have empty `extracted_text`, so every agent sees `[no extracted text available for this file]`. There is no image_url multimodal path like single chat has.
-3. **The file picker `accept` string blocks pptx/xlsx/images.** `ACCEPTED_TYPES` in `src/lib/chat-helpers.ts` is `.pdf,.docx,.txt,.md`. Users can only get images in via paste; pptx/xlsx can't be attached at all from the picker.
+### What I will change
+1. **Add OCR fallback for PDFs with no extracted text**
+   - Keep the current fast text extraction path for normal text PDFs.
+   - If PDF extraction returns empty/near-empty text, render PDF pages to images and run OCR on them server-side.
+   - Store the OCR result in `ceo_chat_attachments.extracted_text` so both single chat and swarm reuse the same readable content.
 
-## Fix
+2. **Add better fallback for image-heavy decks**
+   - For `.pptx`, keep the current slide XML text extraction.
+   - If slide text is empty, mark the attachment clearly as image-heavy instead of silently providing unusable text.
+   - If feasible in the runtime, add slide image/OCR extraction; otherwise route image-based deck/PDF pages through multimodal model input where supported.
 
-### 1. Extend extraction in `uploadCeoAttachment` (`src/serverfns/ceo-chat.functions.ts`)
+3. **Make image-based attachments work in both paths**
+   - Single chat already passes `imageParts` to the selected model; I will ensure PDFs/decks that become page images are treated similarly when OCR is unavailable.
+   - Swarm already has `imageParts` support; I will extend it to include generated page/slide image URLs or OCR text from the same attachment rows.
 
-Add branches before the `else` in the extraction block (~line 932):
+4. **Improve attachment status/error text**
+   - Replace `[no extracted text available]` style messages with explicit statuses such as:
+     - `OCR extracted text from image-based PDF`
+     - `No selectable text found; sent pages as images to vision-capable models`
+     - `No readable content could be extracted`
+   - This prevents the agent from incorrectly claiming no file was attached.
 
-- **.pptx** → dynamic `import("jszip")`, unzip, read every `ppt/slides/slide*.xml`, strip XML tags, join per-slide with `\n\n--- Slide N ---\n`. No new heavy dep — `jszip` is already transitively present; if not, add it (single small pure-JS package, edge-safe).
-- **.xlsx** → dynamic `import("xlsx")` if available; otherwise same jszip route parsing `xl/sharedStrings.xml` + `xl/worksheets/sheet*.xml` into a plain-text table. Prefer `xlsx` when installed.
-- **.csv / .tsv** → decode as utf-8 (same path as `.txt`).
-- **.rtf** → decode utf-8 and strip `\{...}` control words with a simple regex.
+5. **Validate with the failing scenario**
+   - Test a text PDF, image-only PDF/deck, image attachment, and normal docx/pptx/xlsx.
+   - Verify single chat and swarm both receive readable attachment context and quality breakdown still renders.
 
-Keep the 30k-char cap. Everything runs inside the handler, so no client-graph issue.
-
-Verify jszip/xlsx availability first; add via `bun add` only if missing (constraint: no unneeded deps — jszip is tiny and standard).
-
-### 2. Wire images into swarm (`src/routes/api/public/swarm-stream.ts`)
-
-Mirror the single-chat pattern:
-
-- Select `storage_path` too when loading attachments.
-- Split rows into text vs `mime_type.startsWith("image/")`.
-- For image rows, create a signed URL via `admin.storage.from("chat-uploads").createSignedUrl(path, 3600)` and collect `imageParts`.
-- Pass `imageParts` down into `draftOne` and `synthesizeWithBreakdown`.
-
-Update `src/server/swarm-core.server.ts` `draftOne` (and the synth call) so the user message becomes a multimodal array `[{type:"text",text},...imageParts]` when `imageParts.length > 0`, otherwise the current string. This is the same shape single chat already uses.
-
-Filter out image-incapable models per-unit before dispatch when `imageParts.length > 0` (skip Hermes 4 405B, mark that draft as `skipped_no_vision` with a clear error). Do NOT hard-fail the whole swarm — degrade gracefully so vision-capable agents still answer.
-
-### 3. Expand accepted upload types (`src/lib/chat-helpers.ts`)
-
-Change `ACCEPTED_TYPES` to:
-```
-.pdf,.docx,.txt,.md,.csv,.tsv,.rtf,.pptx,.xlsx,image/*
-```
-
-No other UI changes; the composer already handles the file list generically.
-
-## Non-goals / safety
-
-- No schema changes.
-- No new server functions, no changes to auth, swarm dispatch shape, quality-breakdown pipeline, or Auto/Swarm toggles.
-- No touching `src/integrations/supabase/*`, `.functions.ts` server modules other than the two files above and `swarm-core.server.ts`.
-- Extraction failures continue to store a `[Failed to extract text: …]` string so the model can still respond.
-
-## Verify
-
-After the edits:
-- Upload a `.pptx` in single chat → agent quotes slide content.
-- Upload the same `.pptx` in swarm → drafts reference it.
-- Paste/attach a `.png` in swarm → vision-capable agents describe it, Hermes draft shows a clean "skipped (no vision)" error, run still completes.
-- Existing `.pdf` / `.docx` / `.txt` flows unchanged.
+### Technical notes
+- I will keep all LLM calls on the existing OpenRouter path through `src/lib/llm.server.ts`.
+- I will not import server-only modules into client files.
+- I will avoid changing the existing swarm quality breakdown behavior except where attachment context is passed into it.
+- If the server runtime cannot safely render PDFs to images directly, I will implement the best supported fallback: page-image multimodal routing and clearer attachment errors, rather than adding a Node-only package that would break deployment.

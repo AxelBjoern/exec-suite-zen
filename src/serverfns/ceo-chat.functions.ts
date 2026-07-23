@@ -768,6 +768,15 @@ export const generateCeoDocument = createServerFn({ method: "POST" })
 const MAX_EXTRACTED_CHARS = 30_000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+function hasMeaningfulExtractedText(text: string) {
+  const cleaned = text
+    .replace(/---\s*(?:Slide|Sheet)[^\n]*---/gi, "")
+    .replace(/\[[^\]]+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /[\p{L}\p{N}]{12,}/u.test(cleaned);
+}
+
 // ── Conversations ───────────────────────────────────────────────────────────
 
 export const listCeoConversations = createServerFn({ method: "GET" }).handler(
@@ -992,6 +1001,14 @@ export const uploadCeoAttachment = createServerFn({ method: "POST" })
         extracted = parts.join("\n\n");
       } else {
         extracted = `[Unsupported file type: ${data.mimeType || lower}]`;
+      }
+      const needsVisualNotice =
+        !isImage &&
+        (lower.endsWith(".pdf") || lower.endsWith(".pptx") || lower.endsWith(".docx") || lower.endsWith(".xlsx")) &&
+        !hasMeaningfulExtractedText(extracted);
+      if (needsVisualNotice) {
+        const { emptyExtractionNotice } = await import("@/server/attachment-vision.server");
+        extracted = emptyExtractionNotice(data.filename);
       }
     } catch (e: any) {
       extracted = `[Failed to extract text: ${e?.message ?? "unknown error"}]`;
@@ -1279,9 +1296,7 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
       const textAtts = (atts ?? []).filter(
         (a) => !(a.mime_type ?? "").startsWith("image/"),
       );
-      const imgAtts = (atts ?? []).filter((a) =>
-        (a.mime_type ?? "").startsWith("image/"),
-      );
+      const visualAtts = atts ?? [];
 
       if (textAtts.length) {
         attachmentBlock =
@@ -1294,16 +1309,23 @@ export const sendCeoMessage = createServerFn({ method: "POST" })
             .join("\n\n---\n\n");
       }
 
-      for (const a of imgAtts) {
-        if (!a.storage_path) continue;
-        const { data: signed, error: signErr } = await supabaseAdmin.storage
-          .from("chat-uploads")
-          .createSignedUrl(a.storage_path, 3600);
-        if (signErr || !signed?.signedUrl) continue;
-        imageParts.push({
-          type: "image_url",
-          image_url: { url: signed.signedUrl },
+      if (visualAtts.length) {
+        const { collectAttachmentVisionParts } = await import("@/server/attachment-vision.server");
+        const visual = await collectAttachmentVisionParts({
+          storage: supabaseAdmin as any,
+          attachments: visualAtts.map((a) => ({
+            filename: a.filename,
+            mime_type: a.mime_type,
+            storage_path: a.storage_path,
+          })),
         });
+        imageParts.push(...visual.parts);
+        if (visual.notes.length) {
+          attachmentBlock +=
+            "\n\n## Attached visuals\n" +
+            visual.notes.map((note) => `- ${note}`).join("\n") +
+            "\n\nUse these visual inputs together with the extracted text. If text extraction says no readable text was embedded, inspect the attached visual inputs instead of saying no file was attached.";
+        }
       }
     }
 

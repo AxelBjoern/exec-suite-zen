@@ -50,7 +50,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
 
         const body = (await request.json().catch(() => ({}))) as Body;
         const content = (body.content ?? "").trim();
-        if (!content) return new Response("Empty prompt", { status: 400 });
+        const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
+        if (!content && attachmentIds.length === 0) return new Response("Empty prompt", { status: 400 });
         if (content.length > 8000) return new Response("Prompt too long", { status: 400 });
 
         const userId = user.id;
@@ -164,7 +165,6 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
         // Load attachments (extracted_text for docs; visual inputs for images/image-heavy docs)
         let attachmentBlock = "";
         const imageParts: Array<{ type: "image_url"; image_url: { url: string } }> = [];
-        const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
         if (attachmentIds.length) {
           const { data: atts } = await admin
             .from("ceo_chat_attachments")
@@ -202,7 +202,8 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             }
           }
         }
-        const augmentedContent = content + attachmentBlock;
+        const userPrompt = content || "Analyze the attached file(s).";
+        const augmentedContent = userPrompt + attachmentBlock;
 
         // Save user message (original content only; attachments linked below)
         const { data: userRow } = await admin
@@ -211,7 +212,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
             user_id: userId,
             conversation_id: convId,
             role: "user",
-            content,
+                  content: userPrompt,
           })
           .select("id")
           .single();
@@ -419,7 +420,7 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 const { maybeAutoTitleConversation } = await import("@/serverfns/ceo-chat.functions");
                 await maybeAutoTitleConversation({
                   conversationId: convId!,
-                  userText: content,
+                  userText: userPrompt,
                   assistantText: finalContent,
                 });
               } catch { /* best-effort */ }

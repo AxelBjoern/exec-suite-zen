@@ -15,7 +15,7 @@ import {
   INTERNAL_VERBS,
 } from "@/lib/agent-schemas";
 import { buildSystemPrompt, buildRouterPrompt, renderCompanyContext, DEFAULT_COMPANY_CONTEXT, NEUTRAL_COMPANY_CONTEXT } from "@/lib/agent-prompts";
-import { callTool, resolveTextChatModel } from "@/server/llm.server";
+import { callTool, resolveTextChatModel } from "@/lib/llm.server";
 import { gatherVdnxContext } from "@/server/code-context.server";
 import { isVdnxOwner } from "@/server/designRules.server";
 import { assertModelAllowedForUser } from "@/lib/models.functions";

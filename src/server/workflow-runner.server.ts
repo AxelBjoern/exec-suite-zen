@@ -4,7 +4,7 @@
 // the run completed/failed when there are no more nodes.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+import { chatCompletion, resolveTextChatModel } from "@/lib/llm.server";
 import { VIBE_CODER_AUTOMATOR_PROMPT } from "@/lib/vibe-coder-prompt";
 
 async function sha256Hex(s: string): Promise<string> {

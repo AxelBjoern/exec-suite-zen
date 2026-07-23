@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { chatCompletion, resolveTextChatModel } from "@/server/llm.server";
+import { chatCompletion, resolveTextChatModel } from "@/lib/llm.server";
 import { VIBE_CODER_AUTOMATOR_PROMPT } from "@/lib/vibe-coder-prompt";
 
 const MessageSchema = z.object({
@@ -161,7 +161,7 @@ export const vibeChat = createServerFn({ method: "POST" })
     const model = resolveTextChatModel(data.model ?? "grok");
     const nonSystem = data.messages.filter((m) => m.role !== "system");
     if (data.use_tools !== false) {
-      const { callAgentTool } = await import("@/server/llm.server");
+      const { callAgentTool } = await import("@/lib/llm.server");
       const lastUser = [...nonSystem].reverse().find((m) => m.role === "user");
       const history = nonSystem.slice(0, -1)
         .map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 4000)}`).join("\n\n");

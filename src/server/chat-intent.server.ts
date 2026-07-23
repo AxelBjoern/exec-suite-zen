@@ -1,6 +1,6 @@
 // Outbound intent classifier — server-only helper used by chat.
 // Uses OpenRouter via src/server/llm.server.ts (project memory rule).
-import { callTool } from "@/server/llm.server";
+import { callTool } from "@/lib/llm.server";
 
 export type OutboundAction = "file" | "generate" | "unknown";
 

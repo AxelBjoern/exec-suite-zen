@@ -6,7 +6,7 @@ import {
   resolveChatModel,
   resolveTextChatModel,
   type ChatMessage,
-} from "@/server/llm.server";
+} from "@/lib/llm.server";
 import { DEFAULT_COMPANY_CONTEXT, getCompanyContextForEmail } from "@/lib/agent-prompts";
 import { dispatch, routePrompt } from "@/serverfns/terminal.functions";
 import {

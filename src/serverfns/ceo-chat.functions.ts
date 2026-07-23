@@ -431,7 +431,7 @@ function sanitizeAutoTitle(raw: string): string {
  * Generate a 2–4 word title for a conversation using a cheap allowed model.
  * Fire-and-forget; failures are swallowed so naming never breaks the chat.
  */
-async function maybeAutoTitleConversation(opts: {
+export async function maybeAutoTitleConversation(opts: {
   conversationId: string;
   userText: string;
   assistantText: string;

@@ -394,6 +394,15 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
                 .update({ updated_at: new Date().toISOString() })
                 .eq("id", convId);
 
+              try {
+                const { maybeAutoTitleConversation } = await import("@/serverfns/ceo-chat.functions");
+                await maybeAutoTitleConversation({
+                  conversationId: convId!,
+                  userText: content,
+                  assistantText: finalContent,
+                });
+              } catch { /* best-effort */ }
+
               send("breakdown", {
                 items: drafts.map((d) => {
                   const cr = confByModel.get(d.model + "|" + d.label);

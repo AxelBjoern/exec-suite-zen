@@ -161,25 +161,37 @@ export const Route = createFileRoute("/api/public/swarm-stream")({
           units = units.map((u) => ({ ...u, systemPrompt: `${projectPrompt}\n\n${u.systemPrompt}` }));
         }
 
-        // Load attachments (extracted_text for docx/pptx/pdf/images with OCR)
+        // Load attachments (extracted_text for docs; signed URLs for images)
         let attachmentBlock = "";
+        const imageParts: Array<{ type: "image_url"; image_url: { url: string } }> = [];
         const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds.filter(Boolean) : [];
         if (attachmentIds.length) {
           const { data: atts } = await admin
             .from("ceo_chat_attachments")
-            .select("id, filename, mime_type, extracted_text")
+            .select("id, filename, mime_type, storage_path, extracted_text")
             .in("id", attachmentIds)
             .is("message_id", null);
           const rows = atts ?? [];
-          if (rows.length) {
+          const textRows = rows.filter((a: any) => !(a.mime_type ?? "").startsWith("image/"));
+          const imgRows = rows.filter((a: any) => (a.mime_type ?? "").startsWith("image/"));
+          if (textRows.length) {
             attachmentBlock =
               "\n\n## Attached documents\n" +
-              rows
+              textRows
                 .map(
                   (a: any) =>
                     `### ${a.filename}${a.mime_type ? ` (${a.mime_type})` : ""}\n\n${a.extracted_text ?? "[no extracted text available for this file]"}`,
                 )
                 .join("\n\n---\n\n");
+          }
+          for (const a of imgRows as any[]) {
+            if (!a.storage_path) continue;
+            const { data: signed } = await admin.storage
+              .from("chat-uploads")
+              .createSignedUrl(a.storage_path, 3600);
+            if (signed?.signedUrl) {
+              imageParts.push({ type: "image_url", image_url: { url: signed.signedUrl } });
+            }
           }
         }
         const augmentedContent = content + attachmentBlock;

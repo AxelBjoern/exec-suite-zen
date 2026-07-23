@@ -353,6 +353,7 @@ export async function callAgentTool(opts: {
   model?: string;
   context?: { task_id?: string | null; thread_id?: string | null; owner_user_id?: string | null };
 }): Promise<AgentToolResult> {
+  const { toolsForAgent } = await import("@/server/agent-tools.server");
   const model = opts.model ?? AGENT_TOOL_DEFAULT_MODEL;
   const maxTurns = opts.max_turns ?? AGENT_TOOL_MAX_TURNS;
   const tools = toolsForAgent(opts.agent_slug, opts.tools_to_use);

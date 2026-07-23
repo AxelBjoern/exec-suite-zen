@@ -371,6 +371,7 @@ async function callAgentToolNative(args: {
   system: string; user: string; model: string; maxTurns: number;
   tools: ToolDef<any>[]; ctx: ToolCtx;
 }): Promise<AgentToolResult> {
+  const { toOpenRouterTools, executeToolCall } = await import("@/server/agent-tools.server");
   const orTools = toOpenRouterTools(args.tools);
   const messages: any[] = [
     { role: "system", content: args.system },

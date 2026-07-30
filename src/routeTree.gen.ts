@@ -36,6 +36,7 @@ import { Route as AuthenticatedChatSessionIdRouteImport } from './routes/_authen
 import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
 import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
 import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
+import { Route as AuthenticatedBudgetSalariesRouteImport } from './routes/_authenticated/budget.salaries'
 import { Route as AuthenticatedBudgetResultsRouteImport } from './routes/_authenticated/budget.results'
 import { Route as AuthenticatedBudgetMonthlyRouteImport } from './routes/_authenticated/budget.monthly'
 import { Route as AuthenticatedBudgetFinancingRouteImport } from './routes/_authenticated/budget.financing'
@@ -199,6 +200,12 @@ const AuthenticatedBudgetScenariosRoute =
     path: '/scenarios',
     getParentRoute: () => AuthenticatedBudgetRoute,
   } as any)
+const AuthenticatedBudgetSalariesRoute =
+  AuthenticatedBudgetSalariesRouteImport.update({
+    id: '/salaries',
+    path: '/salaries',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
 const AuthenticatedBudgetResultsRoute =
   AuthenticatedBudgetResultsRouteImport.update({
     id: '/results',
@@ -324,6 +331,7 @@ export interface FileRoutesByFullPath {
   '/budget/financing': typeof AuthenticatedBudgetFinancingRoute
   '/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
   '/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/budget/salaries': typeof AuthenticatedBudgetSalariesRoute
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
@@ -368,6 +376,7 @@ export interface FileRoutesByTo {
   '/budget/financing': typeof AuthenticatedBudgetFinancingRoute
   '/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
   '/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/budget/salaries': typeof AuthenticatedBudgetSalariesRoute
   '/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/budget/statements': typeof AuthenticatedBudgetStatementsRoute
@@ -415,6 +424,7 @@ export interface FileRoutesById {
   '/_authenticated/budget/financing': typeof AuthenticatedBudgetFinancingRoute
   '/_authenticated/budget/monthly': typeof AuthenticatedBudgetMonthlyRoute
   '/_authenticated/budget/results': typeof AuthenticatedBudgetResultsRoute
+  '/_authenticated/budget/salaries': typeof AuthenticatedBudgetSalariesRoute
   '/_authenticated/budget/scenarios': typeof AuthenticatedBudgetScenariosRoute
   '/_authenticated/budget/sensitivity': typeof AuthenticatedBudgetSensitivityRoute
   '/_authenticated/budget/statements': typeof AuthenticatedBudgetStatementsRoute
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/budget/financing'
     | '/budget/monthly'
     | '/budget/results'
+    | '/budget/salaries'
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
@@ -506,6 +517,7 @@ export interface FileRouteTypes {
     | '/budget/financing'
     | '/budget/monthly'
     | '/budget/results'
+    | '/budget/salaries'
     | '/budget/scenarios'
     | '/budget/sensitivity'
     | '/budget/statements'
@@ -552,6 +564,7 @@ export interface FileRouteTypes {
     | '/_authenticated/budget/financing'
     | '/_authenticated/budget/monthly'
     | '/_authenticated/budget/results'
+    | '/_authenticated/budget/salaries'
     | '/_authenticated/budget/scenarios'
     | '/_authenticated/budget/sensitivity'
     | '/_authenticated/budget/statements'
@@ -785,6 +798,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBudgetScenariosRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
+    '/_authenticated/budget/salaries': {
+      id: '/_authenticated/budget/salaries'
+      path: '/salaries'
+      fullPath: '/budget/salaries'
+      preLoaderRoute: typeof AuthenticatedBudgetSalariesRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
     '/_authenticated/budget/results': {
       id: '/_authenticated/budget/results'
       path: '/results'
@@ -915,6 +935,7 @@ interface AuthenticatedBudgetRouteChildren {
   AuthenticatedBudgetFinancingRoute: typeof AuthenticatedBudgetFinancingRoute
   AuthenticatedBudgetMonthlyRoute: typeof AuthenticatedBudgetMonthlyRoute
   AuthenticatedBudgetResultsRoute: typeof AuthenticatedBudgetResultsRoute
+  AuthenticatedBudgetSalariesRoute: typeof AuthenticatedBudgetSalariesRoute
   AuthenticatedBudgetScenariosRoute: typeof AuthenticatedBudgetScenariosRoute
   AuthenticatedBudgetSensitivityRoute: typeof AuthenticatedBudgetSensitivityRoute
   AuthenticatedBudgetStatementsRoute: typeof AuthenticatedBudgetStatementsRoute
@@ -929,6 +950,7 @@ const AuthenticatedBudgetRouteChildren: AuthenticatedBudgetRouteChildren = {
   AuthenticatedBudgetFinancingRoute: AuthenticatedBudgetFinancingRoute,
   AuthenticatedBudgetMonthlyRoute: AuthenticatedBudgetMonthlyRoute,
   AuthenticatedBudgetResultsRoute: AuthenticatedBudgetResultsRoute,
+  AuthenticatedBudgetSalariesRoute: AuthenticatedBudgetSalariesRoute,
   AuthenticatedBudgetScenariosRoute: AuthenticatedBudgetScenariosRoute,
   AuthenticatedBudgetSensitivityRoute: AuthenticatedBudgetSensitivityRoute,
   AuthenticatedBudgetStatementsRoute: AuthenticatedBudgetStatementsRoute,

@@ -232,6 +232,29 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
     return sc;
   },
 
+  createScenarioWith: async (name, assumptions) => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) throw new Error("Not signed in");
+    const { data, error } = await (supabase as any)
+      .from("budget_scenarios")
+      .insert({
+        owner_id: u.user.id,
+        is_system: false,
+        is_base: false,
+        is_locked: false,
+        name,
+        assumptions,
+        actuals: { rows: [] },
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    const sc = rowToScenario(data as RemoteRow);
+    set((s) => ({ scenarios: [sc, ...s.scenarios.filter((x) => x.id !== sc.id)] }));
+    logAudit(sc, "scenario", `Seeded "${name}"`);
+    return sc;
+  },
+
   duplicateScenario: async (id) => {
     const src = get().scenarios.find((s) => s.id === id);
     if (!src) return null;

@@ -90,7 +90,10 @@ export interface Assumptions {
   dpo?: number;
   opening?: OpeningBalance;
   financing?: FinancingAssumptions;
+  /** Scenario-level employee roster with raise timelines. Supersedes per-year `salaries`. */
+  employees?: Employee[];
 }
+
 
 export interface FinancingAssumptions {
   enabled: boolean;

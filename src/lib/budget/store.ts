@@ -118,6 +118,8 @@ interface RemoteState {
   addScenario: (name: string, from?: string) => Promise<Scenario | null>;
   /** Insert a scenario with full assumptions in a single write (used by seeding). */
   createScenarioWith: (name: string, assumptions: Assumptions) => Promise<Scenario>;
+  /** Replace a scenario's full assumptions immediately (used to repair/reseed stale rows). */
+  replaceScenarioWith: (id: string, name: string, assumptions: Assumptions) => Promise<Scenario>;
   duplicateScenario: (id: string) => Promise<Scenario | null>;
   renameScenario: (id: string, name: string) => Promise<void>;
   deleteScenario: (id: string) => Promise<void>;
@@ -252,6 +254,22 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
     const sc = rowToScenario(data as RemoteRow);
     set((s) => ({ scenarios: [sc, ...s.scenarios.filter((x) => x.id !== sc.id)] }));
     logAudit(sc, "scenario", `Seeded "${name}"`);
+    return sc;
+  },
+
+  replaceScenarioWith: async (id, name, assumptions) => {
+    const { data, error } = await (supabase as any)
+      .from("budget_scenarios")
+      .update({ name, assumptions, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    const sc = rowToScenario(data as RemoteRow);
+    set((s) => ({
+      scenarios: s.scenarios.map((existing) => (existing.id === id ? sc : existing)),
+    }));
+    logAudit(sc, "scenario", `Reseeded "${name}"`);
     return sc;
   },
 

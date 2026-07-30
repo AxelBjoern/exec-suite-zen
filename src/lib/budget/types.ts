@@ -29,6 +29,28 @@ export interface SalaryRole {
   endMonth?: number;
 }
 
+/** A scheduled raise: from (year, month) the per-person monthly salary changes. */
+export interface SalaryRaise {
+  year: number;
+  month: number; // 1..12
+  monthlySalary: number;
+}
+
+/** Scenario-level employee record with a salary timeline. */
+export interface Employee {
+  id: string;
+  name?: string;
+  title: string;
+  count: number;
+  baseMonthlySalary: number;
+  startYear?: number;
+  startMonth?: number;
+  endYear?: number;
+  endMonth?: number;
+  raises: SalaryRaise[];
+}
+
+
 export interface YearAssumptions {
   newCustomersByChannel: Record<ChannelKey, number>;
   churnRate: number;

@@ -139,7 +139,7 @@ export function compute(a: Assumptions): ComputedModel {
       const endCust = startCust + newCust - churned;
       const avgCust = (startCust + endCust) / 2;
 
-      const salaryMonth = monthlySalaryCost(ya, a.startYear, yearLabel, m);
+      const salaryMonth = monthlySalaryCost(a, ya, a.startYear, yearLabel, m);
 
       const surcharge = 1 + ya.surchargePct;
       const extraServicesIncome = (avgCust * ya.extraServicesPerCustomerYear * sellMult * surcharge) / 12;

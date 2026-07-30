@@ -92,7 +92,20 @@ export interface Assumptions {
   financing?: FinancingAssumptions;
   /** Scenario-level employee roster with raise timelines. Supersedes per-year `salaries`. */
   employees?: Employee[];
+  /** Reporting currency code, e.g. "AED". */
+  currency?: string;
+  /** Free-form scenario notes shown on the Board tab. */
+  notes?: ScenarioNote[];
 }
+
+export type NoteChip = "ACTUAL" | "TARGET" | "MODEL" | "PLACEHOLDER";
+
+export interface ScenarioNote {
+  chip: NoteChip;
+  label: string;
+  detail?: string;
+}
+
 
 
 export interface FinancingAssumptions {

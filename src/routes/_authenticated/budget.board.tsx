@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useActiveScenario, useBudgetStore } from "@/lib/budget/store";
 import { compute } from "@/lib/budget/engine";
-import { fmtSEK, fmtNum, fmtPct } from "@/lib/budget/format";
+import { fmtSEK, fmtNum, fmtPct, CURRENCY } from "@/lib/budget/format";
 import { SectionHeader } from "@/components/budget/SectionHeader";
 import { KpiCard } from "@/components/budget/KpiCard";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ function BoardPage() {
   }), { revenue: 0, ebitda: 0, cash: 0 });
   const endCust = model.yearly[model.yearly.length - 1].endingCustomers;
   const margin = totals.revenue ? totals.ebitda / totals.revenue : 0;
+  const notes = active.assumptions.notes ?? [];
 
   async function withBusy(kind: string, fn: () => Promise<void> | void) {
     try {

@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { supabase } from "@/integrations/supabase/client";
-import type { ActualMonth, Assumptions, Scenario } from "./types";
+import type { ActualMonth, Assumptions, Employee, SalaryRaise, Scenario } from "./types";
 import { SEED_ASSUMPTIONS } from "./seed";
 
 export interface AuditEntry {

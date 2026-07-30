@@ -72,12 +72,33 @@ interface RemoteRow {
   updated_at: string;
 }
 
+const LEGACY_YEAR_KEYS = [
+  "kwhPerCustomerYear", "pricePerKwh", "costPerKwh", "certificateCostPerKwh",
+  "priceAreaShare", "priceAreaPricing", "useAreaPricing", "streams",
+] as const;
+
+/** Strip legacy energy-model fields from stored scenarios and fill new defaults. */
+function migrateAssumptions(a: unknown): Assumptions {
+  const base = structuredClone(SEED_ASSUMPTIONS);
+  if (!a || typeof a !== "object") return base;
+  const src = structuredClone(a) as Record<string, unknown>;
+  const years = Array.isArray(src.perYear) ? (src.perYear as Record<string, unknown>[]) : [];
+  src.perYear = years.map((y) => {
+    const next = { ...y };
+    for (const k of LEGACY_YEAR_KEYS) delete next[k];
+    if (typeof next.cogsPct !== "number") next.cogsPct = 0;
+    return next;
+  });
+  return src as unknown as Assumptions;
+}
+
+
 function rowToScenario(r: RemoteRow): Scenario {
   return {
     id: r.id,
     name: r.name,
     createdAt: new Date(r.created_at).getTime(),
-    assumptions: r.assumptions ?? structuredClone(SEED_ASSUMPTIONS),
+    assumptions: migrateAssumptions(r.assumptions),
     actuals: r.actuals ?? { rows: [] },
     contractStartDate: r.contract_start_date ?? undefined,
     isSystem: r.is_system,
@@ -85,6 +106,7 @@ function rowToScenario(r: RemoteRow): Scenario {
     isLocked: r.is_locked || r.is_system,
   };
 }
+
 
 interface RemoteState {
   loading: boolean;

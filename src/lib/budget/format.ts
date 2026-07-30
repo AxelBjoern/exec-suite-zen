@@ -19,15 +19,6 @@ export function fmtPct(n: number, digits = 1): string {
   return `${(n * 100).toFixed(digits)}%`;
 }
 
-export function fmtOre(n: number, digits = 2): string {
-  if (!isFinite(n)) return "—";
-  return `${n.toFixed(digits)} öre`;
-}
-
-export function fmtSekPerKwh(n: number, digits = 3): string {
-  if (!isFinite(n)) return "—";
-  return `${n.toFixed(digits)} SEK/kWh`;
-}
 
 export function fmtSigned(n: number): string {
   if (n < 0) return `(${fmtSEK(-n)})`;

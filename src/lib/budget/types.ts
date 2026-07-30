@@ -1,4 +1,4 @@
-// Domain types for the Nordic retail energy budget model.
+// Domain types for the generic subscription business budget model.
 
 export type ChannelKey =
   | "internet"
@@ -19,34 +19,6 @@ export const CHANNELS: { key: ChannelKey; label: string }[] = [
   { key: "other", label: "Other" },
 ];
 
-export type StreamKey = "solar" | "battery" | "vpp" | "saas";
-
-export const STREAMS: { key: StreamKey; label: string; unitLabel: string }[] = [
-  { key: "solar", label: "Solar installations", unitLabel: "systems" },
-  { key: "battery", label: "Battery storage", unitLabel: "systems" },
-  { key: "vpp", label: "VPP enrollment", unitLabel: "assets" },
-  { key: "saas", label: "Energy SaaS", unitLabel: "subscribers" },
-];
-
-export interface StreamAssumptions {
-  enabled: boolean;
-  newUnitsPerYear: number;
-  oneTimeRevenuePerUnit: number;
-  oneTimeCogsPct: number;
-  recurringMonthlyPerUnit: number;
-  recurringCogsPct: number;
-  annualChurnPct: number;
-  startingUnits?: number;
-}
-
-export type PriceAreaKey = "SE1" | "SE2" | "SE3" | "SE4";
-
-export interface AreaPricing {
-  avgPurchaseOre: number;
-  pslagOre: number;
-  elcertOre: number;
-}
-
 export interface SalaryRole {
   title: string;
   count: number;
@@ -61,24 +33,18 @@ export interface YearAssumptions {
   newCustomersByChannel: Record<ChannelKey, number>;
   churnRate: number;
   acquisitionCostPerCustomer: number;
-  kwhPerCustomerYear: number;
   subscriptionPerCustomerYear: number;
-  pricePerKwh: number;
-  costPerKwh: number;
-  certificateCostPerKwh: number;
-  surchargePct: number;
   extraServicesPerCustomerYear: number;
+  /** Direct cost of delivery as a share of revenue (0–1). */
+  cogsPct: number;
+  surchargePct: number;
   otherExternalExpenses: number;
   socialFeesPct: number;
   loanInterest: number;
   invoicingCostPerCustomer: number;
   salaries: SalaryRole[];
-  priceAreaShare: Record<PriceAreaKey, number>;
   startingCustomers: number;
-  priceAreaPricing?: Record<PriceAreaKey, AreaPricing>;
-  useAreaPricing?: boolean;
   salesStartMonth?: number;
-  streams?: Record<StreamKey, StreamAssumptions>;
 }
 
 export interface OpeningBalance {
@@ -213,22 +179,16 @@ export interface MonthlyRow {
   newCustomers: number;
   churnedCustomers: number;
   endingCustomers: number;
-  electricityIncome: number;
-  certificateIncome: number;
   extraServicesIncome: number;
   subscriptionIncome: number;
   totalIncome: number;
-  electricityCost: number;
-  certificateCost: number;
+  cogs: number;
   invoicingCost: number;
   salesCost: number;
   salaryCost: number;
   otherExternal: number;
   loanInterest: number;
   totalCost: number;
-  streamIncome: number;
-  streamCost: number;
-  streamsBreakdown?: Record<StreamKey, { revenue: number; cost: number; activeUnits: number }>;
   financingIncome: number;
   financingCost: number;
   financingOutstanding: number;
@@ -251,23 +211,14 @@ export interface YearlyRow {
   cashFlow: number;
   cac: number;
   churnRate: number;
-  electricityIncome: number;
-  certificateIncome: number;
   extraServicesIncome: number;
   subscriptionIncome: number;
-  electricityCost: number;
-  certificateCost: number;
+  cogs: number;
   salesCost: number;
   salaryCost: number;
   otherExternal: number;
   invoicingCost: number;
   loanInterest: number;
-  volumeByArea: Record<PriceAreaKey, number>;
-  revenueByArea: Record<PriceAreaKey, number>;
-  cogsByArea: Record<PriceAreaKey, number>;
-  streamIncome: number;
-  streamCost: number;
-  streamsBreakdown: Record<StreamKey, { revenue: number; cost: number; endingUnits: number }>;
   financingIncome: number;
   financingCost: number;
   financingEndingOutstanding: number;
@@ -298,7 +249,6 @@ export interface ActualMonth {
   customers?: number;
   totalIncome?: number;
   totalCost?: number;
-  volumeByArea?: Partial<Record<PriceAreaKey, number>>;
 }
 
 export interface Actuals {

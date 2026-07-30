@@ -116,6 +116,8 @@ interface RemoteState {
   load: () => Promise<void>;
   refresh: () => Promise<void>;
   addScenario: (name: string, from?: string) => Promise<Scenario | null>;
+  /** Insert a scenario with full assumptions in a single write (used by seeding). */
+  createScenarioWith: (name: string, assumptions: Assumptions) => Promise<Scenario>;
   duplicateScenario: (id: string) => Promise<Scenario | null>;
   renameScenario: (id: string, name: string) => Promise<void>;
   deleteScenario: (id: string) => Promise<void>;

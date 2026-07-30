@@ -81,15 +81,17 @@ const LEGACY_YEAR_KEYS = [
 function migrateAssumptions(a: unknown): Assumptions {
   const base = structuredClone(SEED_ASSUMPTIONS);
   if (!a || typeof a !== "object") return base;
-  const src = structuredClone(a) as Assumptions & { perYear?: Record<string, unknown>[] };
-  src.perYear = (src.perYear ?? []).map((y) => {
-    const next = { ...y } as Record<string, unknown>;
+  const src = structuredClone(a) as Record<string, unknown>;
+  const years = Array.isArray(src.perYear) ? (src.perYear as Record<string, unknown>[]) : [];
+  src.perYear = years.map((y) => {
+    const next = { ...y };
     for (const k of LEGACY_YEAR_KEYS) delete next[k];
     if (typeof next.cogsPct !== "number") next.cogsPct = 0;
     return next;
   });
-  return src as Assumptions;
+  return src as unknown as Assumptions;
 }
+
 
 function rowToScenario(r: RemoteRow): Scenario {
   return {

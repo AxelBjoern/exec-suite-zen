@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useBudgetStore, useBudgetUi } from "@/lib/budget/store";
 import { Button } from "@/components/ui/button";
-import { Copy, Lock, Star, Trash2 } from "lucide-react";
+import { Copy, Lock, Sparkles, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SectionHeader } from "@/components/budget/SectionHeader";
+import { VDNX_SEED_SCENARIOS } from "@/lib/budget/vdnx-seed";
 
 export const Route = createFileRoute("/_authenticated/budget/scenarios")({
   ssr: false,
@@ -16,12 +18,50 @@ function ScenariosPage() {
   const remove = useBudgetStore((s) => s.deleteScenario);
   const toggleLock = useBudgetStore((s) => s.toggleLock);
   const setBase = useBudgetStore((s) => s.setBaseScenario);
+  const addScenario = useBudgetStore((s) => s.addScenario);
+  const updateAssumptions = useBudgetStore((s) => s.updateAssumptions);
+  const flush = useBudgetStore((s) => s.flush);
   const setActive = useBudgetUi((s) => s.setActiveScenario);
   const activeId = useBudgetUi((s) => s.activeScenarioId);
+  const [seeding, setSeeding] = useState(false);
+
+  async function seedVdnx() {
+    try {
+      setSeeding(true);
+      let baseId: string | null = null;
+      for (const spec of VDNX_SEED_SCENARIOS) {
+        if (scenarios.some((s) => s.name === spec.name)) continue;
+        const sc = await addScenario(spec.name);
+        if (!sc) continue;
+        updateAssumptions(sc.id, structuredClone(spec.assumptions));
+        if (spec.isBase) baseId = sc.id;
+      }
+      await flush();
+      if (baseId) {
+        await setBase(baseId);
+        setActive(baseId);
+      }
+      toast.success("VDNX scenarios seeded (AED)");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Seeding failed");
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <SectionHeader title="Scenarios" description="All scenarios in your workspace" />
+      <SectionHeader
+        title="Scenarios"
+        description="All scenarios in your workspace · currency AED"
+        action={
+          <Button size="sm" variant="outline" disabled={seeding} onClick={seedVdnx}>
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            Seed VDNX scenarios
+          </Button>
+        }
+      />
+
       <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">

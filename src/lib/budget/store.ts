@@ -123,6 +123,10 @@ interface RemoteState {
   setBaseScenario: (id: string) => Promise<void>;
   updateAssumptions: (id: string, patch: Partial<Assumptions>) => void;
   updateYear: (id: string, yearIndex: number, patch: Partial<Assumptions["perYear"][number]>) => void;
+  addEmployee: (id: string, partial?: Partial<Employee>) => void;
+  updateEmployee: (id: string, employeeId: string, patch: Partial<Employee>) => void;
+  removeEmployee: (id: string, employeeId: string) => void;
+  setEmployeeRaises: (id: string, employeeId: string, raises: SalaryRaise[]) => void;
   setActual: (id: string, year: number, month: number, patch: Partial<ActualMonth>) => void;
   clearActuals: (id: string, year?: number) => void;
   setContractStartDate: (id: string, date: string | undefined) => Promise<void>;

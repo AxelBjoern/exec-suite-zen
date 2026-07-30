@@ -330,6 +330,70 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
     logAudit(sc, `Y${yearIndex + 1}.${Object.keys(patch).join(", ")}`, `Y${yearIndex + 1}: ${Object.keys(patch).join(", ")}`);
   },
 
+  addEmployee: (id, partial) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const emp: Employee = {
+      id: crypto.randomUUID(),
+      name: "",
+      title: "New role",
+      count: 1,
+      baseMonthlySalary: 0,
+      raises: [],
+      ...partial,
+    };
+    const employees = [...(sc.assumptions.employees ?? []), emp];
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Added employee "${emp.title}"`);
+  },
+
+  updateEmployee: (id, employeeId, patch) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const employees = (sc.assumptions.employees ?? []).map((e) =>
+      e.id === employeeId ? { ...e, ...patch } : e,
+    );
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Updated employee ${patch.title ?? employeeId}`);
+  },
+
+  removeEmployee: (id, employeeId) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const employees = (sc.assumptions.employees ?? []).filter((e) => e.id !== employeeId);
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", "Removed employee");
+  },
+
+  setEmployeeRaises: (id, employeeId, raises) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const sorted = [...raises].sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month));
+    const employees = (sc.assumptions.employees ?? []).map((e) =>
+      e.id === employeeId ? { ...e, raises: sorted } : e,
+    );
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Updated raises (${sorted.length})`);
+  },
+
+
+
   setActual: (id, year, month, patch) => {
     const sc = get().scenarios.find((s) => s.id === id);
     if (!sc || sc.isLocked) return;

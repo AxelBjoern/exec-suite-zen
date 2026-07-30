@@ -9,22 +9,12 @@ import type {
   ComputedModel,
   MonthlyRow,
   PnLRow,
-  PriceAreaKey,
   SalaryRole,
   Statements,
-  StreamAssumptions,
-  StreamKey,
   YearAssumptions,
   YearlyRow,
   ChannelKey,
 } from "./types";
-
-const PRICE_AREAS: PriceAreaKey[] = ["SE1", "SE2", "SE3", "SE4"];
-const STREAM_KEYS: StreamKey[] = ["solar", "battery", "vpp", "saas"];
-
-function emptyStreamBreakdown<T extends { revenue: number; cost: number }>(extra: (k: StreamKey) => T): Record<StreamKey, T> {
-  return { solar: extra("solar"), battery: extra("battery"), vpp: extra("vpp"), saas: extra("saas") };
-}
 
 function sumChannels(by: Record<ChannelKey, number>): number {
   return Object.values(by).reduce((a, b) => a + b, 0);
@@ -56,13 +46,6 @@ export function compute(a: Assumptions): ComputedModel {
   let runningStart = a.perYear[0].startingCustomers;
   const appreciation = a.salesAppreciationPct ?? 0;
 
-  const streamActive: Record<StreamKey, number> = {
-    solar: a.perYear[0].streams?.solar?.startingUnits ?? 0,
-    battery: a.perYear[0].streams?.battery?.startingUnits ?? 0,
-    vpp: a.perYear[0].streams?.vpp?.startingUnits ?? 0,
-    saas: a.perYear[0].streams?.saas?.startingUnits ?? 0,
-  };
-
   const financing = buildFinancing(a);
   const finByKey = new Map<string, ReturnType<typeof buildFinancing>["monthly"][number]>();
   for (const r of financing.monthly) finByKey.set(`${r.year}-${r.month}`, r);
@@ -83,6 +66,7 @@ export function compute(a: Assumptions): ComputedModel {
     const loanMonth = ya.loanInterest / 12;
     const salesCostYear = newCustomersYear * ya.acquisitionCostPerCustomer;
     const salesPerActiveMonth = activeMonths > 0 ? salesCostYear / activeMonths : 0;
+    const cogsPct = ya.cogsPct ?? 0;
 
     let active = yearStartCustomers;
     const yearAgg: YearlyRow = {
@@ -91,14 +75,9 @@ export function compute(a: Assumptions): ComputedModel {
       endingCustomers: 0, newCustomers: 0, churnedCustomers: 0,
       totalIncome: 0, totalCost: 0, ebitda: 0, cashFlow: 0,
       cac: ya.acquisitionCostPerCustomer, churnRate: ya.churnRate,
-      electricityIncome: 0, certificateIncome: 0, extraServicesIncome: 0, subscriptionIncome: 0,
-      electricityCost: 0, certificateCost: 0, salesCost: 0, salaryCost: 0,
+      extraServicesIncome: 0, subscriptionIncome: 0,
+      cogs: 0, salesCost: 0, salaryCost: 0,
       otherExternal: 0, invoicingCost: 0, loanInterest: 0,
-      volumeByArea: { SE1: 0, SE2: 0, SE3: 0, SE4: 0 },
-      revenueByArea: { SE1: 0, SE2: 0, SE3: 0, SE4: 0 },
-      cogsByArea: { SE1: 0, SE2: 0, SE3: 0, SE4: 0 },
-      streamIncome: 0, streamCost: 0,
-      streamsBreakdown: emptyStreamBreakdown((k) => ({ revenue: 0, cost: 0, endingUnits: streamActive[k] })),
       financingIncome: 0, financingCost: 0, financingEndingOutstanding: 0,
     };
 
@@ -112,93 +91,30 @@ export function compute(a: Assumptions): ComputedModel {
       const avgCust = (startCust + endCust) / 2;
 
       const salaryMonth = monthlySalaryCost(ya, a.startYear, yearLabel, m);
-      const kwhMonth = (avgCust * ya.kwhPerCustomerYear) / 12;
 
-      const useArea = !!(ya.useAreaPricing && ya.priceAreaPricing);
-      let electricityIncome = 0;
-      let certificateIncome = 0;
-      let electricityCost = 0;
-      let certificateCost = 0;
-      const monthRevenueByArea: Record<PriceAreaKey, number> = { SE1: 0, SE2: 0, SE3: 0, SE4: 0 };
-      const monthCogsByArea: Record<PriceAreaKey, number> = { SE1: 0, SE2: 0, SE3: 0, SE4: 0 };
-
-      if (useArea) {
-        for (const k of PRICE_AREAS) {
-          const p = ya.priceAreaPricing![k];
-          const kwhArea = kwhMonth * ya.priceAreaShare[k];
-          const sellSEK = ((p.avgPurchaseOre + p.pslagOre) / 100) * sellMult;
-          const costSEK = p.avgPurchaseOre / 100;
-          const certSEK = p.elcertOre / 100;
-          const eIncA = kwhArea * sellSEK * (1 + ya.surchargePct);
-          const cIncA = kwhArea * certSEK;
-          const eCostA = kwhArea * costSEK;
-          const cCostA = kwhArea * certSEK;
-          electricityIncome += eIncA;
-          certificateIncome += cIncA;
-          electricityCost += eCostA;
-          certificateCost += cCostA;
-          monthRevenueByArea[k] = eIncA + cIncA;
-          monthCogsByArea[k] = eCostA + cCostA;
-        }
-      } else {
-        electricityIncome = kwhMonth * ya.pricePerKwh * sellMult * (1 + ya.surchargePct);
-        certificateIncome = kwhMonth * ya.certificateCostPerKwh;
-        electricityCost = kwhMonth * ya.costPerKwh;
-        certificateCost = kwhMonth * ya.certificateCostPerKwh;
-      }
-
-      const extraServicesIncome = (avgCust * ya.extraServicesPerCustomerYear * sellMult) / 12;
-      const subscriptionIncome = (avgCust * ya.subscriptionPerCustomerYear * sellMult) / 12;
+      const surcharge = 1 + ya.surchargePct;
+      const extraServicesIncome = (avgCust * ya.extraServicesPerCustomerYear * sellMult * surcharge) / 12;
+      const subscriptionIncome = (avgCust * ya.subscriptionPerCustomerYear * sellMult * surcharge) / 12;
       const invoicingCost = (avgCust * ya.invoicingCostPerCustomer) / 12;
-
-      let streamIncome = 0;
-      let streamCost = 0;
-      const streamsMonth: Record<StreamKey, { revenue: number; cost: number; activeUnits: number }> =
-        emptyStreamBreakdown((k) => ({ revenue: 0, cost: 0, activeUnits: streamActive[k] }));
-      for (const sk of STREAM_KEYS) {
-        const s: StreamAssumptions | undefined = ya.streams?.[sk];
-        if (!s || !s.enabled) {
-          streamsMonth[sk] = { revenue: 0, cost: 0, activeUnits: streamActive[sk] };
-          continue;
-        }
-        const newU = s.newUnitsPerYear / 12;
-        const mChurn = s.annualChurnPct > 0 ? 1 - Math.pow(1 - s.annualChurnPct, 1 / 12) : 0;
-        const startU = streamActive[sk];
-        const churnU = (startU + newU / 2) * mChurn;
-        const endU = startU + newU - churnU;
-        const avgU = (startU + endU) / 2;
-        const oneTimeRev = newU * s.oneTimeRevenuePerUnit;
-        const oneTimeCost = oneTimeRev * s.oneTimeCogsPct;
-        const recRev = avgU * s.recurringMonthlyPerUnit;
-        const recCost = recRev * s.recurringCogsPct;
-        const rev = oneTimeRev + recRev;
-        const cost = oneTimeCost + recCost;
-        streamsMonth[sk] = { revenue: rev, cost, activeUnits: endU };
-        streamIncome += rev;
-        streamCost += cost;
-        streamActive[sk] = endU;
-      }
 
       const fin = finByKey.get(`${yearLabel}-${m}`);
       const financingIncome = fin?.totalIncome ?? 0;
       const financingCost = fin?.totalCost ?? 0;
       const financingOutstanding = fin?.outstanding ?? 0;
 
-      const totalIncome =
-        electricityIncome + certificateIncome + extraServicesIncome +
-        subscriptionIncome + streamIncome + financingIncome;
+      const operatingRevenue = extraServicesIncome + subscriptionIncome;
+      const cogs = operatingRevenue * cogsPct;
+      const totalIncome = operatingRevenue + financingIncome;
 
       const totalCost =
-        electricityCost + certificateCost + invoicingCost + salesMonth +
-        salaryMonth + otherExtMonth + loanMonth + streamCost + financingCost;
+        cogs + invoicingCost + salesMonth +
+        salaryMonth + otherExtMonth + loanMonth + financingCost;
 
       const ebitda = totalIncome - totalCost + loanMonth;
       const cashFlow = totalIncome - totalCost;
 
       const vatOut = totalIncome * a.vatRate;
-      const vatIn =
-        (electricityCost + certificateCost + invoicingCost +
-         otherExtMonth + salesMonth + streamCost) * a.vatRate;
+      const vatIn = (cogs + invoicingCost + otherExtMonth + salesMonth) * a.vatRate;
 
       const row: MonthlyRow = {
         year: yearLabel, month: m,
@@ -206,13 +122,12 @@ export function compute(a: Assumptions): ComputedModel {
         newCustomers: Math.round(newCust),
         churnedCustomers: Math.round(churned),
         endingCustomers: Math.round(endCust),
-        electricityIncome, certificateIncome, extraServicesIncome, subscriptionIncome,
+        extraServicesIncome, subscriptionIncome,
         totalIncome,
-        electricityCost, certificateCost, invoicingCost,
+        cogs, invoicingCost,
         salesCost: salesMonth, salaryCost: salaryMonth,
         otherExternal: otherExtMonth, loanInterest: loanMonth,
         totalCost,
-        streamIncome, streamCost, streamsBreakdown: streamsMonth,
         financingIncome, financingCost, financingOutstanding,
         ebitda, cashFlow,
         vatOut, vatIn, vatNet: vatOut - vatIn,
@@ -225,32 +140,17 @@ export function compute(a: Assumptions): ComputedModel {
       yearAgg.totalCost += totalCost;
       yearAgg.ebitda += ebitda;
       yearAgg.cashFlow += cashFlow;
-      yearAgg.electricityIncome += electricityIncome;
-      yearAgg.certificateIncome += certificateIncome;
       yearAgg.extraServicesIncome += extraServicesIncome;
       yearAgg.subscriptionIncome += subscriptionIncome;
-      yearAgg.electricityCost += electricityCost;
-      yearAgg.certificateCost += certificateCost;
+      yearAgg.cogs += cogs;
       yearAgg.salesCost += salesMonth;
       yearAgg.salaryCost += salaryMonth;
       yearAgg.otherExternal += otherExtMonth;
       yearAgg.invoicingCost += invoicingCost;
       yearAgg.loanInterest += loanMonth;
-      yearAgg.streamIncome += streamIncome;
-      yearAgg.streamCost += streamCost;
       yearAgg.financingIncome += financingIncome;
       yearAgg.financingCost += financingCost;
       yearAgg.financingEndingOutstanding = financingOutstanding;
-      for (const sk of STREAM_KEYS) {
-        yearAgg.streamsBreakdown[sk].revenue += streamsMonth[sk].revenue;
-        yearAgg.streamsBreakdown[sk].cost += streamsMonth[sk].cost;
-        yearAgg.streamsBreakdown[sk].endingUnits = streamsMonth[sk].activeUnits;
-      }
-      for (const k of PRICE_AREAS) {
-        yearAgg.volumeByArea[k] += kwhMonth * ya.priceAreaShare[k];
-        yearAgg.revenueByArea[k] += monthRevenueByArea[k];
-        yearAgg.cogsByArea[k] += monthCogsByArea[k];
-      }
 
       active = endCust;
     }
@@ -352,7 +252,7 @@ export function buildStatements(model: ComputedModel, a: Assumptions): Statement
 
   for (const m of model.monthly) {
     const revenue = m.totalIncome;
-    const cogs = m.electricityCost + m.certificateCost + m.streamCost + m.financingCost;
+    const cogs = m.cogs + m.financingCost;
     const opex = m.invoicingCost + m.salesCost + m.salaryCost + m.otherExternal;
     const ebitda = revenue - cogs - opex;
     const depreciation = Math.max(0, Math.min(monthlyDep, fixedAssets));

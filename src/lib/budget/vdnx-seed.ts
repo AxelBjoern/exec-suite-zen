@@ -121,8 +121,8 @@ export const VDNX_BASE: Assumptions = base([
   // 2026 — TARGET: first revenue Aug–Dec; 5 live entities (ACTUAL) + founding-partner pilot cohort
   // onboarded so the 160-company base is live for the full 2027 run-rate year.
   year({
-    startingCustomers: 5, // ACTUAL — live founder-network entities
-    collaborations: END_2027 - 5, // 155 — TARGET (pilot cohort to reach 160)
+    startingCustomers: 0, // ACTUAL — 5 live founder-network entities exist but are pre-revenue; first revenue is Aug 2026
+    collaborations: END_2027, // 160 — TARGET (5 live entities converting + founding-partner pilot cohort)
     subscriptionPerCustomerYear: LAUNCH_YEAR, // ACTUAL price list
     extraServicesPerCustomerYear: EXTRA_PER_CLIENT_8_FIRMS, // TARGET
     salesStartMonth: 8, // TARGET — Aug–Dec 2026 first revenue window
@@ -143,8 +143,8 @@ export const VDNX_BASE: Assumptions = base([
 export const VDNX_PILOT_ONLY: Assumptions = base([
   // 2026 — 5 live entities only; no founding-partner cohort conversion.
   year({
-    startingCustomers: 5, // ACTUAL
-    collaborations: 0, // PLACEHOLDER — needs input (pilot cohort size not stated)
+    startingCustomers: 0, // ACTUAL — 5 live founder-network entities exist but are pre-revenue; first revenue is Aug 2026
+    collaborations: 5, // ACTUAL — the 5 live founder-network entities convert to paying in the Aug–Dec 2026 window
     subscriptionPerCustomerYear: LAUNCH_YEAR, // ACTUAL price list
     extraServicesPerCustomerYear: 0, // PLACEHOLDER — needs input (no advisor firm live in 2026)
     salesStartMonth: 8, // TARGET
@@ -164,8 +164,8 @@ export const VDNX_PILOT_ONLY: Assumptions = base([
 /** VDNX — Upside: same price list, faster founding-partner ramp. Volume only, never price. */
 export const VDNX_UPSIDE: Assumptions = base([
   year({
-    startingCustomers: 5, // ACTUAL
-    collaborations: END_2027 - 5, // 155 — TARGET
+    startingCustomers: 0, // ACTUAL — 5 live founder-network entities exist but are pre-revenue; first revenue is Aug 2026
+    collaborations: END_2027, // 160 — TARGET
     subscriptionPerCustomerYear: LAUNCH_YEAR,
     extraServicesPerCustomerYear: EXTRA_PER_CLIENT_8_FIRMS,
     salesStartMonth: 8, // TARGET

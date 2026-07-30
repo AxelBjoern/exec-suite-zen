@@ -116,6 +116,8 @@ interface RemoteState {
   load: () => Promise<void>;
   refresh: () => Promise<void>;
   addScenario: (name: string, from?: string) => Promise<Scenario | null>;
+  /** Insert a scenario with full assumptions in a single write (used by seeding). */
+  createScenarioWith: (name: string, assumptions: Assumptions) => Promise<Scenario>;
   duplicateScenario: (id: string) => Promise<Scenario | null>;
   renameScenario: (id: string, name: string) => Promise<void>;
   deleteScenario: (id: string) => Promise<void>;
@@ -227,6 +229,29 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
     set((s) => ({ scenarios: [sc, ...s.scenarios] }));
     useBudgetUi.getState().setActiveScenario(sc.id);
     logAudit(sc, "scenario", `Created "${name}"`);
+    return sc;
+  },
+
+  createScenarioWith: async (name, assumptions) => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) throw new Error("Not signed in");
+    const { data, error } = await (supabase as any)
+      .from("budget_scenarios")
+      .insert({
+        owner_id: u.user.id,
+        is_system: false,
+        is_base: false,
+        is_locked: false,
+        name,
+        assumptions,
+        actuals: { rows: [] },
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    const sc = rowToScenario(data as RemoteRow);
+    set((s) => ({ scenarios: [sc, ...s.scenarios.filter((x) => x.id !== sc.id)] }));
+    logAudit(sc, "scenario", `Seeded "${name}"`);
     return sc;
   },
 

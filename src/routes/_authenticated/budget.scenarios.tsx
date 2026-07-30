@@ -18,9 +18,7 @@ function ScenariosPage() {
   const remove = useBudgetStore((s) => s.deleteScenario);
   const toggleLock = useBudgetStore((s) => s.toggleLock);
   const setBase = useBudgetStore((s) => s.setBaseScenario);
-  const addScenario = useBudgetStore((s) => s.addScenario);
-  const updateAssumptions = useBudgetStore((s) => s.updateAssumptions);
-  const flush = useBudgetStore((s) => s.flush);
+  const createScenarioWith = useBudgetStore((s) => s.createScenarioWith);
   const setActive = useBudgetUi((s) => s.setActiveScenario);
   const activeId = useBudgetUi((s) => s.activeScenarioId);
   const [seeding, setSeeding] = useState(false);
@@ -29,25 +27,30 @@ function ScenariosPage() {
     try {
       setSeeding(true);
       let baseId: string | null = null;
+      let created = 0;
       for (const spec of VDNX_SEED_SCENARIOS) {
-        if (scenarios.some((s) => s.name === spec.name)) continue;
-        const sc = await addScenario(spec.name);
-        if (!sc) continue;
-        updateAssumptions(sc.id, structuredClone(spec.assumptions));
+        const existing = scenarios.find((s) => s.name === spec.name);
+        if (existing) {
+          if (spec.isBase) baseId = existing.id;
+          continue;
+        }
+        const sc = await createScenarioWith(spec.name, structuredClone(spec.assumptions));
+        created++;
         if (spec.isBase) baseId = sc.id;
       }
-      await flush();
       if (baseId) {
         await setBase(baseId);
         setActive(baseId);
       }
-      toast.success("VDNX scenarios seeded (AED)");
+      toast.success(created ? `Seeded ${created} VDNX scenario(s) · AED` : "VDNX scenarios already present");
     } catch (e: any) {
+      console.error("[seedVdnx]", e);
       toast.error(e?.message ?? "Seeding failed");
     } finally {
       setSeeding(false);
     }
   }
+
 
   return (
     <div className="space-y-4">

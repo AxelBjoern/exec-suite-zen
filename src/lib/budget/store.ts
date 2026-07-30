@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { supabase } from "@/integrations/supabase/client";
-import type { ActualMonth, Assumptions, Scenario } from "./types";
+import type { ActualMonth, Assumptions, Employee, SalaryRaise, Scenario } from "./types";
 import { SEED_ASSUMPTIONS } from "./seed";
 
 export interface AuditEntry {
@@ -123,6 +123,10 @@ interface RemoteState {
   setBaseScenario: (id: string) => Promise<void>;
   updateAssumptions: (id: string, patch: Partial<Assumptions>) => void;
   updateYear: (id: string, yearIndex: number, patch: Partial<Assumptions["perYear"][number]>) => void;
+  addEmployee: (id: string, partial?: Partial<Employee>) => void;
+  updateEmployee: (id: string, employeeId: string, patch: Partial<Employee>) => void;
+  removeEmployee: (id: string, employeeId: string) => void;
+  setEmployeeRaises: (id: string, employeeId: string, raises: SalaryRaise[]) => void;
   setActual: (id: string, year: number, month: number, patch: Partial<ActualMonth>) => void;
   clearActuals: (id: string, year?: number) => void;
   setContractStartDate: (id: string, date: string | undefined) => Promise<void>;
@@ -325,6 +329,70 @@ export const useBudgetStore = create<RemoteState>()((set, get) => ({
     queueWrite(id, { assumptions: nextAssumptions });
     logAudit(sc, `Y${yearIndex + 1}.${Object.keys(patch).join(", ")}`, `Y${yearIndex + 1}: ${Object.keys(patch).join(", ")}`);
   },
+
+  addEmployee: (id, partial) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const emp: Employee = {
+      id: crypto.randomUUID(),
+      name: "",
+      title: "New role",
+      count: 1,
+      baseMonthlySalary: 0,
+      raises: [],
+      ...partial,
+    };
+    const employees = [...(sc.assumptions.employees ?? []), emp];
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Added employee "${emp.title}"`);
+  },
+
+  updateEmployee: (id, employeeId, patch) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const employees = (sc.assumptions.employees ?? []).map((e) =>
+      e.id === employeeId ? { ...e, ...patch } : e,
+    );
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Updated employee ${patch.title ?? employeeId}`);
+  },
+
+  removeEmployee: (id, employeeId) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const employees = (sc.assumptions.employees ?? []).filter((e) => e.id !== employeeId);
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", "Removed employee");
+  },
+
+  setEmployeeRaises: (id, employeeId, raises) => {
+    const sc = get().scenarios.find((s) => s.id === id);
+    if (!sc || sc.isLocked) return;
+    const sorted = [...raises].sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month));
+    const employees = (sc.assumptions.employees ?? []).map((e) =>
+      e.id === employeeId ? { ...e, raises: sorted } : e,
+    );
+    const nextAssumptions: Assumptions = { ...sc.assumptions, employees };
+    set((s) => ({
+      scenarios: s.scenarios.map((x) => (x.id === id ? { ...x, assumptions: nextAssumptions } : x)),
+    }));
+    queueWrite(id, { assumptions: nextAssumptions });
+    logAudit(sc, "employees", `Updated raises (${sorted.length})`);
+  },
+
+
 
   setActual: (id, year, month, patch) => {
     const sc = get().scenarios.find((s) => s.id === id);

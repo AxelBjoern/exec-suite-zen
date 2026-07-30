@@ -29,6 +29,28 @@ export interface SalaryRole {
   endMonth?: number;
 }
 
+/** A scheduled raise: from (year, month) the per-person monthly salary changes. */
+export interface SalaryRaise {
+  year: number;
+  month: number; // 1..12
+  monthlySalary: number;
+}
+
+/** Scenario-level employee record with a salary timeline. */
+export interface Employee {
+  id: string;
+  name?: string;
+  title: string;
+  count: number;
+  baseMonthlySalary: number;
+  startYear?: number;
+  startMonth?: number;
+  endYear?: number;
+  endMonth?: number;
+  raises: SalaryRaise[];
+}
+
+
 export interface YearAssumptions {
   newCustomersByChannel: Record<ChannelKey, number>;
   churnRate: number;
@@ -68,7 +90,23 @@ export interface Assumptions {
   dpo?: number;
   opening?: OpeningBalance;
   financing?: FinancingAssumptions;
+  /** Scenario-level employee roster with raise timelines. Supersedes per-year `salaries`. */
+  employees?: Employee[];
+  /** Reporting currency code, e.g. "AED". */
+  currency?: string;
+  /** Free-form scenario notes shown on the Board tab. */
+  notes?: ScenarioNote[];
 }
+
+export type NoteChip = "ACTUAL" | "TARGET" | "MODEL" | "PLACEHOLDER";
+
+export interface ScenarioNote {
+  chip: NoteChip;
+  label: string;
+  detail?: string;
+}
+
+
 
 export interface FinancingAssumptions {
   enabled: boolean;

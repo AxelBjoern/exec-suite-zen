@@ -54,7 +54,15 @@ function applyDriver(a: Assumptions, key: DriverKey, factor: number): Assumption
     case "churnRate": mut((y) => { y.churnRate = Math.min(0.99, Math.max(0, y.churnRate * factor)); }); break;
     case "acquisitionCost": mut((y) => { y.acquisitionCostPerCustomer *= factor; }); break;
     case "salaryCost":
-      mut((y) => { y.salaries = y.salaries.map((r) => ({ ...r, monthlySalary: r.monthlySalary * factor })); });
+      if (next.employees && next.employees.length > 0) {
+        next.employees = next.employees.map((e) => ({
+          ...e,
+          baseMonthlySalary: e.baseMonthlySalary * factor,
+          raises: (e.raises ?? []).map((r) => ({ ...r, monthlySalary: r.monthlySalary * factor })),
+        }));
+      } else {
+        mut((y) => { y.salaries = y.salaries.map((r) => ({ ...r, monthlySalary: r.monthlySalary * factor })); });
+      }
       break;
     case "financingAPR": if (next.financing) next.financing.customerAPR *= factor; break;
     case "financingOriginations":

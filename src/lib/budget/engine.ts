@@ -7,6 +7,7 @@ import type {
   BalanceSheetRow,
   CashFlowRow,
   ComputedModel,
+  Employee,
   MonthlyRow,
   PnLRow,
   SalaryRole,
@@ -20,7 +21,12 @@ function sumChannels(by: Record<ChannelKey, number>): number {
   return Object.values(by).reduce((a, b) => a + b, 0);
 }
 
-function roleActive(r: SalaryRole, startYear: number, year: number, month: number): boolean {
+function windowActive(
+  r: { startYear?: number; startMonth?: number; endYear?: number; endMonth?: number },
+  startYear: number,
+  year: number,
+  month: number,
+): boolean {
   const sY = r.startYear ?? startYear;
   const sM = r.startMonth ?? 1;
   const eY = r.endYear;
@@ -31,13 +37,56 @@ function roleActive(r: SalaryRole, startYear: number, year: number, month: numbe
   return true;
 }
 
-function monthlySalaryCost(y: YearAssumptions, startYear: number, year: number, month: number): number {
+function roleActive(r: SalaryRole, startYear: number, year: number, month: number): boolean {
+  return windowActive(r, startYear, year, month);
+}
+
+/** Per-person salary in force at (year, month): base, then the latest raise on/before it. */
+export function salaryInForce(emp: Employee, year: number, month: number): number {
+  const ymKey = year * 12 + month;
+  let salary = emp.baseMonthlySalary;
+  let bestKey = -Infinity;
+  for (const r of emp.raises ?? []) {
+    const k = r.year * 12 + Math.min(12, Math.max(1, r.month));
+    if (k <= ymKey && k >= bestKey) {
+      bestKey = k;
+      salary = r.monthlySalary;
+    }
+  }
+  return salary;
+}
+
+function employeeMonthlyCost(
+  employees: Employee[],
+  socialFeesPct: number,
+  startYear: number,
+  year: number,
+  month: number,
+): number {
+  const base = employees.reduce((acc, e) => {
+    if (!windowActive(e, startYear, year, month)) return acc;
+    return acc + e.count * salaryInForce(e, year, month);
+  }, 0);
+  return base * (1 + socialFeesPct);
+}
+
+function monthlySalaryCost(
+  a: Assumptions,
+  y: YearAssumptions,
+  startYear: number,
+  year: number,
+  month: number,
+): number {
+  if (a.employees && a.employees.length > 0) {
+    return employeeMonthlyCost(a.employees, y.socialFeesPct, startYear, year, month);
+  }
   const base = y.salaries.reduce((acc, r) => {
     if (!roleActive(r, startYear, year, month)) return acc;
     return acc + r.count * r.monthlySalary;
   }, 0);
   return base * (1 + y.socialFeesPct);
 }
+
 
 export function compute(a: Assumptions): ComputedModel {
   const monthly: MonthlyRow[] = [];
@@ -90,7 +139,7 @@ export function compute(a: Assumptions): ComputedModel {
       const endCust = startCust + newCust - churned;
       const avgCust = (startCust + endCust) / 2;
 
-      const salaryMonth = monthlySalaryCost(ya, a.startYear, yearLabel, m);
+      const salaryMonth = monthlySalaryCost(a, ya, a.startYear, yearLabel, m);
 
       const surcharge = 1 + ya.surchargePct;
       const extraServicesIncome = (avgCust * ya.extraServicesPerCustomerYear * sellMult * surcharge) / 12;

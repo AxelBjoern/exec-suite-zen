@@ -72,7 +72,7 @@ function AssumptionsPage() {
             onChange={(v) => updateYear(active.id, yearIndex, { extraServicesPerCustomerYear: num(v) })} />
           <Field label="Churn rate" value={y.churnRate} step="0.01" disabled={locked}
             onChange={(v) => updateYear(active.id, yearIndex, { churnRate: num(v) })} />
-          <Field label="CAC (SEK)" value={y.acquisitionCostPerCustomer} disabled={locked}
+          <Field label="CAC (AED)" value={y.acquisitionCostPerCustomer} disabled={locked}
             onChange={(v) => updateYear(active.id, yearIndex, { acquisitionCostPerCustomer: num(v) })} />
           <Field label="Invoicing /cust" value={y.invoicingCostPerCustomer} disabled={locked}
             onChange={(v) => updateYear(active.id, yearIndex, { invoicingCostPerCustomer: num(v) })} />

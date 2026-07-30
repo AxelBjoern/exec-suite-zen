@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { to: "/budget", label: "Overview", exact: true },
   { to: "/budget/board", label: "Board" },
   { to: "/budget/assumptions", label: "Assumptions" },
+  { to: "/budget/salaries", label: "Salaries" },
   { to: "/budget/monthly", label: "Monthly" },
   { to: "/budget/statements", label: "Statements" },
   { to: "/budget/financing", label: "Financing" },

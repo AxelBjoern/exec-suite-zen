@@ -116,7 +116,7 @@ export function exportPDF(ctx: BoardPackContext): void {
   doc.text("Board Pack", 40, 50);
   doc.setFontSize(11);
   doc.text(
-    `Scenario: ${ctx.scenarioName}  ·  Generated ${ctx.generatedAt.toLocaleDateString("sv-SE")}  ·  SEK`,
+    `Scenario: ${ctx.scenarioName}  ·  Generated ${ctx.generatedAt.toLocaleDateString("sv-SE")}  ·  AED`,
     40, 70,
   );
   doc.setTextColor(0);

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useActiveScenario, useBudgetStore } from "@/lib/budget/store";
 import { compute } from "@/lib/budget/engine";
-import { fmtSEK, fmtNum, fmtPct } from "@/lib/budget/format";
+import { fmtSEK, fmtNum, fmtPct, CURRENCY } from "@/lib/budget/format";
 import { SectionHeader } from "@/components/budget/SectionHeader";
 import { KpiCard } from "@/components/budget/KpiCard";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ function BoardPage() {
   }), { revenue: 0, ebitda: 0, cash: 0 });
   const endCust = model.yearly[model.yearly.length - 1].endingCustomers;
   const margin = totals.revenue ? totals.ebitda / totals.revenue : 0;
+  const notes = active.assumptions.notes ?? [];
 
   async function withBusy(kind: string, fn: () => Promise<void> | void) {
     try {
@@ -85,12 +86,34 @@ function BoardPage() {
           </div>
         }
       />
+      <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary">
+        Proof by 2027 · Machine by 2029 · Print by 2031
+      </p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard label="Ending customers" value={fmtNum(endCust)} />
-        <KpiCard label="Horizon revenue" value={fmtSEK(totals.revenue, { compact: true })} />
+        <KpiCard label="Horizon revenue" value={fmtSEK(totals.revenue, { compact: true })} hint={CURRENCY} />
         <KpiCard label="Horizon EBITDA" value={fmtSEK(totals.ebitda, { compact: true })} hint={fmtPct(margin)} />
-        <KpiCard label="Horizon cash" value={fmtSEK(totals.cash, { compact: true })} />
+        <KpiCard label="Horizon cash" value={fmtSEK(totals.cash, { compact: true })} hint={CURRENCY} />
       </div>
+      {notes.length > 0 && (
+        <div className="rounded-lg border border-border p-4">
+          <h3 className="mb-3 text-[10px] uppercase tracking-wider text-muted-foreground">Scenario notes</h3>
+          <ul className="space-y-2">
+            {notes.map((n, i) => (
+              <li key={i} className="flex gap-2 text-xs">
+                <span className="mt-0.5 h-fit shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+                  {n.chip}
+                </span>
+                <span>
+                  <span className="font-medium">{n.label}</span>
+                  {n.detail ? <span className="text-muted-foreground"> — {n.detail}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full text-sm tabular-nums">
           <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">

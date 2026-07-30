@@ -61,14 +61,9 @@ function AssumptionsPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Field label="Starting customers" value={y.startingCustomers} disabled={locked || yearIndex > 0}
             onChange={(v) => updateYear(active.id, yearIndex, { startingCustomers: num(v) })} />
-          <Field label="kWh / customer / yr" value={y.kwhPerCustomerYear} disabled={locked}
-            onChange={(v) => updateYear(active.id, yearIndex, { kwhPerCustomerYear: num(v) })} />
-          <Field label="Price SEK/kWh" value={y.pricePerKwh} step="0.001" disabled={locked}
-            onChange={(v) => updateYear(active.id, yearIndex, { pricePerKwh: num(v) })} />
-          <Field label="Cost SEK/kWh" value={y.costPerKwh} step="0.001" disabled={locked}
-            onChange={(v) => updateYear(active.id, yearIndex, { costPerKwh: num(v) })} />
-          <Field label="Cert SEK/kWh" value={y.certificateCostPerKwh} step="0.001" disabled={locked}
-            onChange={(v) => updateYear(active.id, yearIndex, { certificateCostPerKwh: num(v) })} />
+          <Field label="COGS % of revenue" value={y.cogsPct} step="0.01" disabled={locked}
+            onChange={(v) => updateYear(active.id, yearIndex, { cogsPct: Math.max(0, Math.min(1, num(v))) })} />
+
           <Field label="Surcharge %" value={y.surchargePct} step="0.01" disabled={locked}
             onChange={(v) => updateYear(active.id, yearIndex, { surchargePct: num(v) })} />
           <Field label="Subscription /cust/yr" value={y.subscriptionPerCustomerYear} disabled={locked}

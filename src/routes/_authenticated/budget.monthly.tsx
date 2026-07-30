@@ -38,7 +38,7 @@ function MonthlyPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((r) => {
-              const cogs = r.electricityCost + r.certificateCost + r.streamCost + r.financingCost;
+              const cogs = r.cogs + r.financingCost;
               const opex = r.invoicingCost + r.salesCost + r.salaryCost + r.otherExternal;
               return (
                 <tr key={r.month}>

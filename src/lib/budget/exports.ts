@@ -50,9 +50,10 @@ export function exportExcel(ctx: BoardPackContext): void {
     Year: y.year,
     "Ending customers": y.endingCustomers,
     Revenue: y.totalIncome,
-    "Cost of goods": y.electricityCost + y.certificateCost,
-    "Stream revenue": y.streamIncome,
-    "Stream cost": y.streamCost,
+    "Cost of goods": y.cogs,
+    Subscriptions: y.subscriptionIncome,
+    "Extra services": y.extraServicesIncome,
+
     "Financing income": y.financingIncome,
     "Financing cost": y.financingCost,
     EBITDA: y.ebitda,
@@ -95,7 +96,7 @@ export function exportExcel(ctx: BoardPackContext): void {
       "Starting cust": m.startingCustomers, New: m.newCustomers,
       Churned: m.churnedCustomers, "Ending cust": m.endingCustomers,
       Income: m.totalIncome, Cost: m.totalCost, EBITDA: m.ebitda,
-      "Stream rev": m.streamIncome, "Stream cost": m.streamCost,
+      Subscriptions: m.subscriptionIncome, "Extra services": m.extraServicesIncome,
       "Financing in": m.financingIncome, "Financing cost": m.financingCost,
       "Financing out.": m.financingOutstanding,
     })),
@@ -134,12 +135,13 @@ export function exportPDF(ctx: BoardPackContext): void {
   });
 
   autoTable(doc, {
-    head: [["Year", "Customers", "Revenue", "EBITDA", "Cash flow", "Stream rev", "Financing out."]],
+    head: [["Year", "Customers", "Revenue", "EBITDA", "Cash flow", "COGS", "Financing out."]],
     body: ctx.model.yearly.map((y) => [
       y.year, fmt(y.endingCustomers),
       fmtCompact(y.totalIncome), fmtCompact(y.ebitda), fmtCompact(y.cashFlow),
-      fmtCompact(y.streamIncome), fmtCompact(y.financingEndingOutstanding),
+      fmtCompact(y.cogs), fmtCompact(y.financingEndingOutstanding),
     ]),
+
     styles: { fontSize: 9 },
     headStyles: { fillColor: [30, 41, 59], textColor: 255 },
   });

@@ -61,6 +61,7 @@ function ArchivePage() {
     <main className="mx-auto max-w-3xl px-4 py-10 md:py-16">
       <Link
         to="/outbound"
+        search={{ draft: undefined, queue: undefined }}
         className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary"
       >
         <ArrowLeft className="h-3 w-3" /> Back to outbound

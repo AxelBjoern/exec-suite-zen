@@ -651,8 +651,7 @@ function OutboundPage() {
             <div className="ml-auto flex items-center gap-2">
               <Link
                 to="/outbound/archive"
-              search={{}}
-                search={{}}
+              search={{ draft: undefined, queue: undefined }}
                 className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
               >
                 <Archive className="h-3 w-3" />
@@ -858,7 +857,7 @@ function OutboundPage() {
           headerRight={
             <Link
               to="/outbound/archive"
-              search={{}}
+              search={{ draft: undefined, queue: undefined }}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted"
             >
               <Archive className="h-3 w-3" />

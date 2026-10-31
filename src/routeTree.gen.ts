@@ -9,60 +9,54 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
-import { Route as AuthenticatedSwarmBenchRouteImport } from './routes/_authenticated/swarm-bench'
-import { Route as AuthenticatedSwarmAuditRouteImport } from './routes/_authenticated/swarm-audit'
-import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
-import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
-import { Route as AuthenticatedCoworkRouteImport } from './routes/_authenticated/cowork'
-import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
-import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
-import { Route as AuthenticatedAutomateRouteImport } from './routes/_authenticated/automate'
-import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
 import { Route as AuthenticatedAgentsModelsRouteImport } from './routes/_authenticated/agents-models'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedApprovalsRouteImport } from './routes/_authenticated/approvals'
+import { Route as AuthenticatedAutomateRouteImport } from './routes/_authenticated/automate'
+import { Route as AuthenticatedBudgetRouteImport } from './routes/_authenticated/budget'
+import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
+import { Route as AuthenticatedCoworkRouteImport } from './routes/_authenticated/cowork'
+import { Route as AuthenticatedForgeRouteImport } from './routes/_authenticated/forge'
+import { Route as AuthenticatedOutboundRouteImport } from './routes/_authenticated/outbound'
+import { Route as AuthenticatedSwarmAuditRouteImport } from './routes/_authenticated/swarm-audit'
+import { Route as AuthenticatedSwarmBenchRouteImport } from './routes/_authenticated/swarm-bench'
+import { Route as AuthenticatedTerminalRouteImport } from './routes/_authenticated/terminal'
 import { Route as AuthenticatedBudgetIndexRouteImport } from './routes/_authenticated/budget.index'
-import { Route as ApiPublicSwarmStreamRouteImport } from './routes/api/public/swarm-stream'
-import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
-import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
-import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
-import { Route as AuthenticatedOutboundArchiveRouteImport } from './routes/_authenticated/outbound.archive'
-import { Route as AuthenticatedChatSessionIdRouteImport } from './routes/_authenticated/chat.$sessionId'
-import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
-import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
-import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
-import { Route as AuthenticatedBudgetSalariesRouteImport } from './routes/_authenticated/budget.salaries'
-import { Route as AuthenticatedBudgetResultsRouteImport } from './routes/_authenticated/budget.results'
-import { Route as AuthenticatedBudgetMonthlyRouteImport } from './routes/_authenticated/budget.monthly'
-import { Route as AuthenticatedBudgetFinancingRouteImport } from './routes/_authenticated/budget.financing'
-import { Route as AuthenticatedBudgetCompareRouteImport } from './routes/_authenticated/budget.compare'
-import { Route as AuthenticatedBudgetChangelogRouteImport } from './routes/_authenticated/budget.changelog'
-import { Route as AuthenticatedBudgetBoardRouteImport } from './routes/_authenticated/budget.board'
 import { Route as AuthenticatedBudgetAssumptionsRouteImport } from './routes/_authenticated/budget.assumptions'
-import { Route as ApiPublicCronWeeklyDraftsRouteImport } from './routes/api/public/cron/weekly-drafts'
-import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
-import { Route as ApiPublicCronScheduleTickRouteImport } from './routes/api/public/cron/schedule-tick'
-import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
-import { Route as ApiPublicCronLeadReplyTriageRouteImport } from './routes/api/public/cron/lead-reply-triage'
-import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
-import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
-import { Route as ApiPublicCronDailyReminderRouteImport } from './routes/api/public/cron/daily-reminder'
-import { Route as ApiPublicCronApprovalSweeperRouteImport } from './routes/api/public/cron/approval-sweeper'
+import { Route as AuthenticatedBudgetBoardRouteImport } from './routes/_authenticated/budget.board'
+import { Route as AuthenticatedBudgetChangelogRouteImport } from './routes/_authenticated/budget.changelog'
+import { Route as AuthenticatedBudgetCompareRouteImport } from './routes/_authenticated/budget.compare'
+import { Route as AuthenticatedBudgetFinancingRouteImport } from './routes/_authenticated/budget.financing'
+import { Route as AuthenticatedBudgetMonthlyRouteImport } from './routes/_authenticated/budget.monthly'
+import { Route as AuthenticatedBudgetResultsRouteImport } from './routes/_authenticated/budget.results'
+import { Route as AuthenticatedBudgetSalariesRouteImport } from './routes/_authenticated/budget.salaries'
+import { Route as AuthenticatedBudgetScenariosRouteImport } from './routes/_authenticated/budget.scenarios'
+import { Route as AuthenticatedBudgetSensitivityRouteImport } from './routes/_authenticated/budget.sensitivity'
+import { Route as AuthenticatedBudgetStatementsRouteImport } from './routes/_authenticated/budget.statements'
+import { Route as AuthenticatedChatSessionIdRouteImport } from './routes/_authenticated/chat.$sessionId'
+import { Route as AuthenticatedOutboundArchiveRouteImport } from './routes/_authenticated/outbound.archive'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsConnectionsRouteImport } from './routes/_authenticated/settings/connections'
+import { Route as AuthenticatedSettingsModelsRouteImport } from './routes/_authenticated/settings/models'
+import { Route as ApiPublicGenerateLinkedinImageRouteImport } from './routes/api/public/generate-linkedin-image'
+import { Route as ApiPublicSwarmStreamRouteImport } from './routes/api/public/swarm-stream'
 import { Route as ApiPublicChannelsTelegramRouteImport } from './routes/api/public/channels/telegram'
+import { Route as ApiPublicCronApprovalSweeperRouteImport } from './routes/api/public/cron/approval-sweeper'
+import { Route as ApiPublicCronDailyReminderRouteImport } from './routes/api/public/cron/daily-reminder'
+import { Route as ApiPublicCronDailyReportsRouteImport } from './routes/api/public/cron/daily-reports'
+import { Route as ApiPublicCronJobTickRouteImport } from './routes/api/public/cron/job-tick'
+import { Route as ApiPublicCronLeadReplyTriageRouteImport } from './routes/api/public/cron/lead-reply-triage'
+import { Route as ApiPublicCronMondayBoardRouteImport } from './routes/api/public/cron/monday-board'
+import { Route as ApiPublicCronScheduleTickRouteImport } from './routes/api/public/cron/schedule-tick'
+import { Route as ApiPublicCronScheduledOutboundRouteImport } from './routes/api/public/cron/scheduled-outbound'
+import { Route as ApiPublicCronWeeklyDraftsRouteImport } from './routes/api/public/cron/weekly-drafts'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -70,63 +64,19 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
-  id: '/terminal',
-  path: '/terminal',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedSwarmBenchRoute = AuthenticatedSwarmBenchRouteImport.update({
-  id: '/swarm-bench',
-  path: '/swarm-bench',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedSwarmAuditRoute = AuthenticatedSwarmAuditRouteImport.update({
-  id: '/swarm-audit',
-  path: '/swarm-audit',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedOutboundRoute = AuthenticatedOutboundRouteImport.update({
-  id: '/outbound',
-  path: '/outbound',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedForgeRoute = AuthenticatedForgeRouteImport.update({
-  id: '/forge',
-  path: '/forge',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedCoworkRoute = AuthenticatedCoworkRouteImport.update({
-  id: '/cowork',
-  path: '/cowork',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBudgetRoute = AuthenticatedBudgetRouteImport.update({
-  id: '/budget',
-  path: '/budget',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAutomateRoute = AuthenticatedAutomateRouteImport.update({
-  id: '/automate',
-  path: '/automate',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
-  id: '/approvals',
-  path: '/approvals',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAgentsModelsRoute =
@@ -135,111 +85,60 @@ const AuthenticatedAgentsModelsRoute =
     path: '/agents-models',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSettingsIndexRoute =
-  AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
+const AuthenticatedApprovalsRoute = AuthenticatedApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAutomateRoute = AuthenticatedAutomateRouteImport.update({
+  id: '/automate',
+  path: '/automate',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBudgetRoute = AuthenticatedBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCoworkRoute = AuthenticatedCoworkRouteImport.update({
+  id: '/cowork',
+  path: '/cowork',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedForgeRoute = AuthenticatedForgeRouteImport.update({
+  id: '/forge',
+  path: '/forge',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOutboundRoute = AuthenticatedOutboundRouteImport.update({
+  id: '/outbound',
+  path: '/outbound',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSwarmAuditRoute = AuthenticatedSwarmAuditRouteImport.update({
+  id: '/swarm-audit',
+  path: '/swarm-audit',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSwarmBenchRoute = AuthenticatedSwarmBenchRouteImport.update({
+  id: '/swarm-bench',
+  path: '/swarm-bench',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTerminalRoute = AuthenticatedTerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBudgetIndexRoute =
   AuthenticatedBudgetIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const ApiPublicSwarmStreamRoute = ApiPublicSwarmStreamRouteImport.update({
-  id: '/api/public/swarm-stream',
-  path: '/api/public/swarm-stream',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicGenerateLinkedinImageRoute =
-  ApiPublicGenerateLinkedinImageRouteImport.update({
-    id: '/api/public/generate-linkedin-image',
-    path: '/api/public/generate-linkedin-image',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AuthenticatedSettingsModelsRoute =
-  AuthenticatedSettingsModelsRouteImport.update({
-    id: '/settings/models',
-    path: '/settings/models',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedSettingsConnectionsRoute =
-  AuthenticatedSettingsConnectionsRouteImport.update({
-    id: '/settings/connections',
-    path: '/settings/connections',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedOutboundArchiveRoute =
-  AuthenticatedOutboundArchiveRouteImport.update({
-    id: '/archive',
-    path: '/archive',
-    getParentRoute: () => AuthenticatedOutboundRoute,
-  } as any)
-const AuthenticatedChatSessionIdRoute =
-  AuthenticatedChatSessionIdRouteImport.update({
-    id: '/$sessionId',
-    path: '/$sessionId',
-    getParentRoute: () => AuthenticatedChatRoute,
-  } as any)
-const AuthenticatedBudgetStatementsRoute =
-  AuthenticatedBudgetStatementsRouteImport.update({
-    id: '/statements',
-    path: '/statements',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetSensitivityRoute =
-  AuthenticatedBudgetSensitivityRouteImport.update({
-    id: '/sensitivity',
-    path: '/sensitivity',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetScenariosRoute =
-  AuthenticatedBudgetScenariosRouteImport.update({
-    id: '/scenarios',
-    path: '/scenarios',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetSalariesRoute =
-  AuthenticatedBudgetSalariesRouteImport.update({
-    id: '/salaries',
-    path: '/salaries',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetResultsRoute =
-  AuthenticatedBudgetResultsRouteImport.update({
-    id: '/results',
-    path: '/results',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetMonthlyRoute =
-  AuthenticatedBudgetMonthlyRouteImport.update({
-    id: '/monthly',
-    path: '/monthly',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetFinancingRoute =
-  AuthenticatedBudgetFinancingRouteImport.update({
-    id: '/financing',
-    path: '/financing',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetCompareRoute =
-  AuthenticatedBudgetCompareRouteImport.update({
-    id: '/compare',
-    path: '/compare',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetChangelogRoute =
-  AuthenticatedBudgetChangelogRouteImport.update({
-    id: '/changelog',
-    path: '/changelog',
-    getParentRoute: () => AuthenticatedBudgetRoute,
-  } as any)
-const AuthenticatedBudgetBoardRoute =
-  AuthenticatedBudgetBoardRouteImport.update({
-    id: '/board',
-    path: '/board',
     getParentRoute: () => AuthenticatedBudgetRoute,
   } as any)
 const AuthenticatedBudgetAssumptionsRoute =
@@ -248,51 +147,111 @@ const AuthenticatedBudgetAssumptionsRoute =
     path: '/assumptions',
     getParentRoute: () => AuthenticatedBudgetRoute,
   } as any)
-const ApiPublicCronWeeklyDraftsRoute =
-  ApiPublicCronWeeklyDraftsRouteImport.update({
-    id: '/api/public/cron/weekly-drafts',
-    path: '/api/public/cron/weekly-drafts',
+const AuthenticatedBudgetBoardRoute =
+  AuthenticatedBudgetBoardRouteImport.update({
+    id: '/board',
+    path: '/board',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetChangelogRoute =
+  AuthenticatedBudgetChangelogRouteImport.update({
+    id: '/changelog',
+    path: '/changelog',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetCompareRoute =
+  AuthenticatedBudgetCompareRouteImport.update({
+    id: '/compare',
+    path: '/compare',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetFinancingRoute =
+  AuthenticatedBudgetFinancingRouteImport.update({
+    id: '/financing',
+    path: '/financing',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetMonthlyRoute =
+  AuthenticatedBudgetMonthlyRouteImport.update({
+    id: '/monthly',
+    path: '/monthly',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetResultsRoute =
+  AuthenticatedBudgetResultsRouteImport.update({
+    id: '/results',
+    path: '/results',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetSalariesRoute =
+  AuthenticatedBudgetSalariesRouteImport.update({
+    id: '/salaries',
+    path: '/salaries',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetScenariosRoute =
+  AuthenticatedBudgetScenariosRouteImport.update({
+    id: '/scenarios',
+    path: '/scenarios',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetSensitivityRoute =
+  AuthenticatedBudgetSensitivityRouteImport.update({
+    id: '/sensitivity',
+    path: '/sensitivity',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedBudgetStatementsRoute =
+  AuthenticatedBudgetStatementsRouteImport.update({
+    id: '/statements',
+    path: '/statements',
+    getParentRoute: () => AuthenticatedBudgetRoute,
+  } as any)
+const AuthenticatedChatSessionIdRoute =
+  AuthenticatedChatSessionIdRouteImport.update({
+    id: '/$sessionId',
+    path: '/$sessionId',
+    getParentRoute: () => AuthenticatedChatRoute,
+  } as any)
+const AuthenticatedOutboundArchiveRoute =
+  AuthenticatedOutboundArchiveRouteImport.update({
+    id: '/archive',
+    path: '/archive',
+    getParentRoute: () => AuthenticatedOutboundRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsConnectionsRoute =
+  AuthenticatedSettingsConnectionsRouteImport.update({
+    id: '/settings/connections',
+    path: '/settings/connections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsModelsRoute =
+  AuthenticatedSettingsModelsRouteImport.update({
+    id: '/settings/models',
+    path: '/settings/models',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const ApiPublicGenerateLinkedinImageRoute =
+  ApiPublicGenerateLinkedinImageRouteImport.update({
+    id: '/api/public/generate-linkedin-image',
+    path: '/api/public/generate-linkedin-image',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicCronScheduledOutboundRoute =
-  ApiPublicCronScheduledOutboundRouteImport.update({
-    id: '/api/public/cron/scheduled-outbound',
-    path: '/api/public/cron/scheduled-outbound',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicCronScheduleTickRoute =
-  ApiPublicCronScheduleTickRouteImport.update({
-    id: '/api/public/cron/schedule-tick',
-    path: '/api/public/cron/schedule-tick',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicCronMondayBoardRoute =
-  ApiPublicCronMondayBoardRouteImport.update({
-    id: '/api/public/cron/monday-board',
-    path: '/api/public/cron/monday-board',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicCronLeadReplyTriageRoute =
-  ApiPublicCronLeadReplyTriageRouteImport.update({
-    id: '/api/public/cron/lead-reply-triage',
-    path: '/api/public/cron/lead-reply-triage',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicCronJobTickRoute = ApiPublicCronJobTickRouteImport.update({
-  id: '/api/public/cron/job-tick',
-  path: '/api/public/cron/job-tick',
+const ApiPublicSwarmStreamRoute = ApiPublicSwarmStreamRouteImport.update({
+  id: '/api/public/swarm-stream',
+  path: '/api/public/swarm-stream',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicCronDailyReportsRoute =
-  ApiPublicCronDailyReportsRouteImport.update({
-    id: '/api/public/cron/daily-reports',
-    path: '/api/public/cron/daily-reports',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicCronDailyReminderRoute =
-  ApiPublicCronDailyReminderRouteImport.update({
-    id: '/api/public/cron/daily-reminder',
-    path: '/api/public/cron/daily-reminder',
+const ApiPublicChannelsTelegramRoute =
+  ApiPublicChannelsTelegramRouteImport.update({
+    id: '/api/public/channels/telegram',
+    path: '/api/public/channels/telegram',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicCronApprovalSweeperRoute =
@@ -301,10 +260,51 @@ const ApiPublicCronApprovalSweeperRoute =
     path: '/api/public/cron/approval-sweeper',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicChannelsTelegramRoute =
-  ApiPublicChannelsTelegramRouteImport.update({
-    id: '/api/public/channels/telegram',
-    path: '/api/public/channels/telegram',
+const ApiPublicCronDailyReminderRoute =
+  ApiPublicCronDailyReminderRouteImport.update({
+    id: '/api/public/cron/daily-reminder',
+    path: '/api/public/cron/daily-reminder',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronDailyReportsRoute =
+  ApiPublicCronDailyReportsRouteImport.update({
+    id: '/api/public/cron/daily-reports',
+    path: '/api/public/cron/daily-reports',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronJobTickRoute = ApiPublicCronJobTickRouteImport.update({
+  id: '/api/public/cron/job-tick',
+  path: '/api/public/cron/job-tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCronLeadReplyTriageRoute =
+  ApiPublicCronLeadReplyTriageRouteImport.update({
+    id: '/api/public/cron/lead-reply-triage',
+    path: '/api/public/cron/lead-reply-triage',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronMondayBoardRoute =
+  ApiPublicCronMondayBoardRouteImport.update({
+    id: '/api/public/cron/monday-board',
+    path: '/api/public/cron/monday-board',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronScheduleTickRoute =
+  ApiPublicCronScheduleTickRouteImport.update({
+    id: '/api/public/cron/schedule-tick',
+    path: '/api/public/cron/schedule-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronScheduledOutboundRoute =
+  ApiPublicCronScheduledOutboundRouteImport.update({
+    id: '/api/public/cron/scheduled-outbound',
+    path: '/api/public/cron/scheduled-outbound',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronWeeklyDraftsRoute =
+  ApiPublicCronWeeklyDraftsRouteImport.update({
+    id: '/api/public/cron/weekly-drafts',
+    path: '/api/public/cron/weekly-drafts',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -609,18 +609,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -630,11 +623,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -644,67 +644,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/terminal': {
-      id: '/_authenticated/terminal'
-      path: '/terminal'
-      fullPath: '/terminal'
-      preLoaderRoute: typeof AuthenticatedTerminalRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/swarm-bench': {
-      id: '/_authenticated/swarm-bench'
-      path: '/swarm-bench'
-      fullPath: '/swarm-bench'
-      preLoaderRoute: typeof AuthenticatedSwarmBenchRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/swarm-audit': {
-      id: '/_authenticated/swarm-audit'
-      path: '/swarm-audit'
-      fullPath: '/swarm-audit'
-      preLoaderRoute: typeof AuthenticatedSwarmAuditRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/outbound': {
-      id: '/_authenticated/outbound'
-      path: '/outbound'
-      fullPath: '/outbound'
-      preLoaderRoute: typeof AuthenticatedOutboundRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/forge': {
-      id: '/_authenticated/forge'
-      path: '/forge'
-      fullPath: '/forge'
-      preLoaderRoute: typeof AuthenticatedForgeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/cowork': {
-      id: '/_authenticated/cowork'
-      path: '/cowork'
-      fullPath: '/cowork'
-      preLoaderRoute: typeof AuthenticatedCoworkRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/chat': {
-      id: '/_authenticated/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof AuthenticatedChatRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/budget': {
-      id: '/_authenticated/budget'
-      path: '/budget'
-      fullPath: '/budget'
-      preLoaderRoute: typeof AuthenticatedBudgetRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/automate': {
-      id: '/_authenticated/automate'
-      path: '/automate'
-      fullPath: '/automate'
-      preLoaderRoute: typeof AuthenticatedAutomateRouteImport
+    '/_authenticated/agents-models': {
+      id: '/_authenticated/agents-models'
+      path: '/agents-models'
+      fullPath: '/agents-models'
+      preLoaderRoute: typeof AuthenticatedAgentsModelsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/approvals': {
@@ -714,18 +658,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovalsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/agents-models': {
-      id: '/_authenticated/agents-models'
-      path: '/agents-models'
-      fullPath: '/agents-models'
-      preLoaderRoute: typeof AuthenticatedAgentsModelsRouteImport
+    '/_authenticated/automate': {
+      id: '/_authenticated/automate'
+      path: '/automate'
+      fullPath: '/automate'
+      preLoaderRoute: typeof AuthenticatedAutomateRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/settings'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+    '/_authenticated/budget': {
+      id: '/_authenticated/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof AuthenticatedBudgetRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/chat': {
+      id: '/_authenticated/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthenticatedChatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/cowork': {
+      id: '/_authenticated/cowork'
+      path: '/cowork'
+      fullPath: '/cowork'
+      preLoaderRoute: typeof AuthenticatedCoworkRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/forge': {
+      id: '/_authenticated/forge'
+      path: '/forge'
+      fullPath: '/forge'
+      preLoaderRoute: typeof AuthenticatedForgeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/outbound': {
+      id: '/_authenticated/outbound'
+      path: '/outbound'
+      fullPath: '/outbound'
+      preLoaderRoute: typeof AuthenticatedOutboundRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/swarm-audit': {
+      id: '/_authenticated/swarm-audit'
+      path: '/swarm-audit'
+      fullPath: '/swarm-audit'
+      preLoaderRoute: typeof AuthenticatedSwarmAuditRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/swarm-bench': {
+      id: '/_authenticated/swarm-bench'
+      path: '/swarm-bench'
+      fullPath: '/swarm-bench'
+      preLoaderRoute: typeof AuthenticatedSwarmBenchRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/terminal': {
+      id: '/_authenticated/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof AuthenticatedTerminalRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/budget/': {
@@ -735,109 +728,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBudgetIndexRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
-    '/api/public/swarm-stream': {
-      id: '/api/public/swarm-stream'
-      path: '/api/public/swarm-stream'
-      fullPath: '/api/public/swarm-stream'
-      preLoaderRoute: typeof ApiPublicSwarmStreamRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/generate-linkedin-image': {
-      id: '/api/public/generate-linkedin-image'
-      path: '/api/public/generate-linkedin-image'
-      fullPath: '/api/public/generate-linkedin-image'
-      preLoaderRoute: typeof ApiPublicGenerateLinkedinImageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/settings/models': {
-      id: '/_authenticated/settings/models'
-      path: '/settings/models'
-      fullPath: '/settings/models'
-      preLoaderRoute: typeof AuthenticatedSettingsModelsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings/connections': {
-      id: '/_authenticated/settings/connections'
-      path: '/settings/connections'
-      fullPath: '/settings/connections'
-      preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/outbound/archive': {
-      id: '/_authenticated/outbound/archive'
-      path: '/archive'
-      fullPath: '/outbound/archive'
-      preLoaderRoute: typeof AuthenticatedOutboundArchiveRouteImport
-      parentRoute: typeof AuthenticatedOutboundRoute
-    }
-    '/_authenticated/chat/$sessionId': {
-      id: '/_authenticated/chat/$sessionId'
-      path: '/$sessionId'
-      fullPath: '/chat/$sessionId'
-      preLoaderRoute: typeof AuthenticatedChatSessionIdRouteImport
-      parentRoute: typeof AuthenticatedChatRoute
-    }
-    '/_authenticated/budget/statements': {
-      id: '/_authenticated/budget/statements'
-      path: '/statements'
-      fullPath: '/budget/statements'
-      preLoaderRoute: typeof AuthenticatedBudgetStatementsRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/sensitivity': {
-      id: '/_authenticated/budget/sensitivity'
-      path: '/sensitivity'
-      fullPath: '/budget/sensitivity'
-      preLoaderRoute: typeof AuthenticatedBudgetSensitivityRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/scenarios': {
-      id: '/_authenticated/budget/scenarios'
-      path: '/scenarios'
-      fullPath: '/budget/scenarios'
-      preLoaderRoute: typeof AuthenticatedBudgetScenariosRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/salaries': {
-      id: '/_authenticated/budget/salaries'
-      path: '/salaries'
-      fullPath: '/budget/salaries'
-      preLoaderRoute: typeof AuthenticatedBudgetSalariesRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/results': {
-      id: '/_authenticated/budget/results'
-      path: '/results'
-      fullPath: '/budget/results'
-      preLoaderRoute: typeof AuthenticatedBudgetResultsRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/monthly': {
-      id: '/_authenticated/budget/monthly'
-      path: '/monthly'
-      fullPath: '/budget/monthly'
-      preLoaderRoute: typeof AuthenticatedBudgetMonthlyRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/financing': {
-      id: '/_authenticated/budget/financing'
-      path: '/financing'
-      fullPath: '/budget/financing'
-      preLoaderRoute: typeof AuthenticatedBudgetFinancingRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/compare': {
-      id: '/_authenticated/budget/compare'
-      path: '/compare'
-      fullPath: '/budget/compare'
-      preLoaderRoute: typeof AuthenticatedBudgetCompareRouteImport
-      parentRoute: typeof AuthenticatedBudgetRoute
-    }
-    '/_authenticated/budget/changelog': {
-      id: '/_authenticated/budget/changelog'
-      path: '/changelog'
-      fullPath: '/budget/changelog'
-      preLoaderRoute: typeof AuthenticatedBudgetChangelogRouteImport
+    '/_authenticated/budget/assumptions': {
+      id: '/_authenticated/budget/assumptions'
+      path: '/assumptions'
+      fullPath: '/budget/assumptions'
+      preLoaderRoute: typeof AuthenticatedBudgetAssumptionsRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
     '/_authenticated/budget/board': {
@@ -847,67 +742,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBudgetBoardRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
-    '/_authenticated/budget/assumptions': {
-      id: '/_authenticated/budget/assumptions'
-      path: '/assumptions'
-      fullPath: '/budget/assumptions'
-      preLoaderRoute: typeof AuthenticatedBudgetAssumptionsRouteImport
+    '/_authenticated/budget/changelog': {
+      id: '/_authenticated/budget/changelog'
+      path: '/changelog'
+      fullPath: '/budget/changelog'
+      preLoaderRoute: typeof AuthenticatedBudgetChangelogRouteImport
       parentRoute: typeof AuthenticatedBudgetRoute
     }
-    '/api/public/cron/weekly-drafts': {
-      id: '/api/public/cron/weekly-drafts'
-      path: '/api/public/cron/weekly-drafts'
-      fullPath: '/api/public/cron/weekly-drafts'
-      preLoaderRoute: typeof ApiPublicCronWeeklyDraftsRouteImport
+    '/_authenticated/budget/compare': {
+      id: '/_authenticated/budget/compare'
+      path: '/compare'
+      fullPath: '/budget/compare'
+      preLoaderRoute: typeof AuthenticatedBudgetCompareRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/financing': {
+      id: '/_authenticated/budget/financing'
+      path: '/financing'
+      fullPath: '/budget/financing'
+      preLoaderRoute: typeof AuthenticatedBudgetFinancingRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/monthly': {
+      id: '/_authenticated/budget/monthly'
+      path: '/monthly'
+      fullPath: '/budget/monthly'
+      preLoaderRoute: typeof AuthenticatedBudgetMonthlyRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/results': {
+      id: '/_authenticated/budget/results'
+      path: '/results'
+      fullPath: '/budget/results'
+      preLoaderRoute: typeof AuthenticatedBudgetResultsRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/salaries': {
+      id: '/_authenticated/budget/salaries'
+      path: '/salaries'
+      fullPath: '/budget/salaries'
+      preLoaderRoute: typeof AuthenticatedBudgetSalariesRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/scenarios': {
+      id: '/_authenticated/budget/scenarios'
+      path: '/scenarios'
+      fullPath: '/budget/scenarios'
+      preLoaderRoute: typeof AuthenticatedBudgetScenariosRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/sensitivity': {
+      id: '/_authenticated/budget/sensitivity'
+      path: '/sensitivity'
+      fullPath: '/budget/sensitivity'
+      preLoaderRoute: typeof AuthenticatedBudgetSensitivityRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/budget/statements': {
+      id: '/_authenticated/budget/statements'
+      path: '/statements'
+      fullPath: '/budget/statements'
+      preLoaderRoute: typeof AuthenticatedBudgetStatementsRouteImport
+      parentRoute: typeof AuthenticatedBudgetRoute
+    }
+    '/_authenticated/chat/$sessionId': {
+      id: '/_authenticated/chat/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/chat/$sessionId'
+      preLoaderRoute: typeof AuthenticatedChatSessionIdRouteImport
+      parentRoute: typeof AuthenticatedChatRoute
+    }
+    '/_authenticated/outbound/archive': {
+      id: '/_authenticated/outbound/archive'
+      path: '/archive'
+      fullPath: '/outbound/archive'
+      preLoaderRoute: typeof AuthenticatedOutboundArchiveRouteImport
+      parentRoute: typeof AuthenticatedOutboundRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/connections': {
+      id: '/_authenticated/settings/connections'
+      path: '/settings/connections'
+      fullPath: '/settings/connections'
+      preLoaderRoute: typeof AuthenticatedSettingsConnectionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/models': {
+      id: '/_authenticated/settings/models'
+      path: '/settings/models'
+      fullPath: '/settings/models'
+      preLoaderRoute: typeof AuthenticatedSettingsModelsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/generate-linkedin-image': {
+      id: '/api/public/generate-linkedin-image'
+      path: '/api/public/generate-linkedin-image'
+      fullPath: '/api/public/generate-linkedin-image'
+      preLoaderRoute: typeof ApiPublicGenerateLinkedinImageRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/cron/scheduled-outbound': {
-      id: '/api/public/cron/scheduled-outbound'
-      path: '/api/public/cron/scheduled-outbound'
-      fullPath: '/api/public/cron/scheduled-outbound'
-      preLoaderRoute: typeof ApiPublicCronScheduledOutboundRouteImport
+    '/api/public/swarm-stream': {
+      id: '/api/public/swarm-stream'
+      path: '/api/public/swarm-stream'
+      fullPath: '/api/public/swarm-stream'
+      preLoaderRoute: typeof ApiPublicSwarmStreamRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/cron/schedule-tick': {
-      id: '/api/public/cron/schedule-tick'
-      path: '/api/public/cron/schedule-tick'
-      fullPath: '/api/public/cron/schedule-tick'
-      preLoaderRoute: typeof ApiPublicCronScheduleTickRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/monday-board': {
-      id: '/api/public/cron/monday-board'
-      path: '/api/public/cron/monday-board'
-      fullPath: '/api/public/cron/monday-board'
-      preLoaderRoute: typeof ApiPublicCronMondayBoardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/lead-reply-triage': {
-      id: '/api/public/cron/lead-reply-triage'
-      path: '/api/public/cron/lead-reply-triage'
-      fullPath: '/api/public/cron/lead-reply-triage'
-      preLoaderRoute: typeof ApiPublicCronLeadReplyTriageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/job-tick': {
-      id: '/api/public/cron/job-tick'
-      path: '/api/public/cron/job-tick'
-      fullPath: '/api/public/cron/job-tick'
-      preLoaderRoute: typeof ApiPublicCronJobTickRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/daily-reports': {
-      id: '/api/public/cron/daily-reports'
-      path: '/api/public/cron/daily-reports'
-      fullPath: '/api/public/cron/daily-reports'
-      preLoaderRoute: typeof ApiPublicCronDailyReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/daily-reminder': {
-      id: '/api/public/cron/daily-reminder'
-      path: '/api/public/cron/daily-reminder'
-      fullPath: '/api/public/cron/daily-reminder'
-      preLoaderRoute: typeof ApiPublicCronDailyReminderRouteImport
+    '/api/public/channels/telegram': {
+      id: '/api/public/channels/telegram'
+      path: '/api/public/channels/telegram'
+      fullPath: '/api/public/channels/telegram'
+      preLoaderRoute: typeof ApiPublicChannelsTelegramRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/approval-sweeper': {
@@ -917,11 +868,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronApprovalSweeperRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/channels/telegram': {
-      id: '/api/public/channels/telegram'
-      path: '/api/public/channels/telegram'
-      fullPath: '/api/public/channels/telegram'
-      preLoaderRoute: typeof ApiPublicChannelsTelegramRouteImport
+    '/api/public/cron/daily-reminder': {
+      id: '/api/public/cron/daily-reminder'
+      path: '/api/public/cron/daily-reminder'
+      fullPath: '/api/public/cron/daily-reminder'
+      preLoaderRoute: typeof ApiPublicCronDailyReminderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/daily-reports': {
+      id: '/api/public/cron/daily-reports'
+      path: '/api/public/cron/daily-reports'
+      fullPath: '/api/public/cron/daily-reports'
+      preLoaderRoute: typeof ApiPublicCronDailyReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/job-tick': {
+      id: '/api/public/cron/job-tick'
+      path: '/api/public/cron/job-tick'
+      fullPath: '/api/public/cron/job-tick'
+      preLoaderRoute: typeof ApiPublicCronJobTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/lead-reply-triage': {
+      id: '/api/public/cron/lead-reply-triage'
+      path: '/api/public/cron/lead-reply-triage'
+      fullPath: '/api/public/cron/lead-reply-triage'
+      preLoaderRoute: typeof ApiPublicCronLeadReplyTriageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/monday-board': {
+      id: '/api/public/cron/monday-board'
+      path: '/api/public/cron/monday-board'
+      fullPath: '/api/public/cron/monday-board'
+      preLoaderRoute: typeof ApiPublicCronMondayBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/schedule-tick': {
+      id: '/api/public/cron/schedule-tick'
+      path: '/api/public/cron/schedule-tick'
+      fullPath: '/api/public/cron/schedule-tick'
+      preLoaderRoute: typeof ApiPublicCronScheduleTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/scheduled-outbound': {
+      id: '/api/public/cron/scheduled-outbound'
+      path: '/api/public/cron/scheduled-outbound'
+      fullPath: '/api/public/cron/scheduled-outbound'
+      preLoaderRoute: typeof ApiPublicCronScheduledOutboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/weekly-drafts': {
+      id: '/api/public/cron/weekly-drafts'
+      path: '/api/public/cron/weekly-drafts'
+      fullPath: '/api/public/cron/weekly-drafts'
+      preLoaderRoute: typeof ApiPublicCronWeeklyDraftsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

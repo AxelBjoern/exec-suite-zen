@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/swarm-audit")({
   component: SwarmAuditPage,
   errorComponent: ({ error, reset }) => (
     <div className="p-6">
-      <p className="text-destructive">Failed to load audit: {error.message}</p>
+      <p className="text-destructive">Failed to load audit: {error instanceof Error ? error.message : String(error)}</p>
       <button onClick={reset} className="mt-2 underline">Retry</button>
     </div>
   ),

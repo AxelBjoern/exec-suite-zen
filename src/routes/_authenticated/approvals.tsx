@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/approvals")({
   component: ApprovalsPage,
   errorComponent: ({ error }) => (
     <main className="mx-auto max-w-2xl p-8">
-      <p className="text-sm text-destructive">Failed to load: {error.message}</p>
+      <p className="text-sm text-destructive">Failed to load: {error instanceof Error ? error.message : String(error)}</p>
     </main>
   ),
   notFoundComponent: () => <div className="p-8 text-sm">Not found.</div>,
